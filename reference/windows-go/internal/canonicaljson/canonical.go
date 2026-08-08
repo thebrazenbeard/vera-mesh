@@ -69,9 +69,6 @@ func CanonicalizeSyntax(input []byte) ([]byte, error) {
 	if len(input) > MaxInputBytes {
 		return nil, ErrCanonicalResourceLimitExceeded
 	}
-	if !utf8.Valid(input) {
-		return nil, ErrInvalidUTF8
-	}
 	if len(input) >= 3 && input[0] == 0xef && input[1] == 0xbb && input[2] == 0xbf {
 		return nil, ErrMalformedJSON
 	}
@@ -84,7 +81,7 @@ func CanonicalizeSyntax(input []byte) ([]byte, error) {
 	}
 	p.skipWhitespace()
 	if p.pos != len(input) {
-		return nil, ErrMalformedJSON
+		return nil, p.unexpectedError()
 	}
 
 	var out bytes.Buffer
@@ -102,18 +99,18 @@ func (p *parser) parseValue(depth int) (value, error) {
 
 	switch c := p.input[p.pos]; {
 	case c == 'n':
-		if !p.consumeLiteral("null") {
-			return value{}, ErrMalformedJSON
+		if err := p.consumeLiteral("null"); err != nil {
+			return value{}, err
 		}
 		return value{kind: kindNull}, nil
 	case c == 't':
-		if !p.consumeLiteral("true") {
-			return value{}, ErrMalformedJSON
+		if err := p.consumeLiteral("true"); err != nil {
+			return value{}, err
 		}
 		return value{kind: kindBool, b: true}, nil
 	case c == 'f':
-		if !p.consumeLiteral("false") {
-			return value{}, ErrMalformedJSON
+		if err := p.consumeLiteral("false"); err != nil {
+			return value{}, err
 		}
 		return value{kind: kindBool, b: false}, nil
 	case c == '"':
@@ -129,7 +126,7 @@ func (p *parser) parseValue(depth int) (value, error) {
 	case c == '-' || (c >= '0' && c <= '9'):
 		return p.parseNumber()
 	default:
-		return value{}, ErrMalformedJSON
+		return value{}, p.unexpectedError()
 	}
 }
 
@@ -148,8 +145,11 @@ func (p *parser) parseArray(depth int) (value, error) {
 	for {
 		if len(vals) >= MaxArrayElements {
 			p.skipWhitespace()
-			if p.pos >= len(p.input) || !isValueStart(p.input[p.pos]) {
+			if p.pos >= len(p.input) {
 				return value{}, ErrMalformedJSON
+			}
+			if !isValueStart(p.input[p.pos]) {
+				return value{}, p.unexpectedError()
 			}
 			return value{}, ErrCanonicalResourceLimitExceeded
 		}
@@ -163,7 +163,7 @@ func (p *parser) parseArray(depth int) (value, error) {
 			return value{kind: kindArray, a: vals}, nil
 		}
 		if !p.take(',') {
-			return value{}, ErrMalformedJSON
+			return value{}, p.unexpectedError()
 		}
 		p.skipWhitespace()
 		if p.pos >= len(p.input) || p.input[p.pos] == ']' {
@@ -187,8 +187,11 @@ func (p *parser) parseObject(depth int) (value, error) {
 	members := make([]member, 0, min(MaxObjectMembers, 4))
 	for {
 		p.skipWhitespace()
-		if p.pos >= len(p.input) || p.input[p.pos] != '"' {
+		if p.pos >= len(p.input) {
 			return value{}, ErrMalformedJSON
+		}
+		if p.input[p.pos] != '"' {
+			return value{}, p.unexpectedError()
 		}
 		key, err := p.parseString()
 		if err != nil {
@@ -203,7 +206,7 @@ func (p *parser) parseObject(depth int) (value, error) {
 		seen[key] = struct{}{}
 		p.skipWhitespace()
 		if !p.take(':') {
-			return value{}, ErrMalformedJSON
+			return value{}, p.unexpectedError()
 		}
 		val, err := p.parseValue(containerDepth)
 		if err != nil {
@@ -215,7 +218,7 @@ func (p *parser) parseObject(depth int) (value, error) {
 			return value{kind: kindObject, o: members}, nil
 		}
 		if !p.take(',') {
-			return value{}, ErrMalformedJSON
+			return value{}, p.unexpectedError()
 		}
 		p.skipWhitespace()
 		if p.pos >= len(p.input) || p.input[p.pos] == '}' {
@@ -273,7 +276,7 @@ func (p *parser) parseNumber() (value, error) {
 		}
 	}
 	if p.pos < len(p.input) && !isValueTerminator(p.input[p.pos]) {
-		return value{}, ErrMalformedJSON
+		return value{}, p.unexpectedError()
 	}
 	if isFloat {
 		return value{}, ErrFloatForbidden
@@ -409,16 +412,43 @@ func (p *parser) take(c byte) bool {
 	return false
 }
 
-func (p *parser) consumeLiteral(s string) bool {
-	if len(p.input)-p.pos < len(s) || string(p.input[p.pos:p.pos+len(s)]) != s {
-		return false
+func (p *parser) consumeLiteral(s string) error {
+	for i := 0; i < len(s); i++ {
+		if p.pos+i >= len(p.input) {
+			return ErrMalformedJSON
+		}
+		if p.input[p.pos+i] != s[i] {
+			saved := p.pos
+			p.pos += i
+			err := p.unexpectedError()
+			p.pos = saved
+			return err
+		}
 	}
 	end := p.pos + len(s)
 	if end < len(p.input) && !isValueTerminator(p.input[end]) {
-		return false
+		saved := p.pos
+		p.pos = end
+		err := p.unexpectedError()
+		p.pos = saved
+		return err
 	}
 	p.pos = end
-	return true
+	return nil
+}
+
+func (p *parser) unexpectedError() error {
+	if p.pos >= len(p.input) {
+		return ErrMalformedJSON
+	}
+	if p.input[p.pos] < utf8.RuneSelf {
+		return ErrMalformedJSON
+	}
+	r, size := utf8.DecodeRune(p.input[p.pos:])
+	if r == utf8.RuneError && size == 1 {
+		return ErrInvalidUTF8
+	}
+	return ErrMalformedJSON
 }
 
 func isValueStart(c byte) bool {
