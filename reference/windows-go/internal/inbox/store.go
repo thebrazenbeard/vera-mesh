@@ -23,6 +23,7 @@ var (
 	ErrJournalCorrupt          = errors.New("journal corrupt")
 	ErrMalformedEnvelope       = errors.New("malformed envelope")
 	ErrStoreNeedsRecovery      = errors.New("store needs recovery")
+	ErrStoreClosed             = errors.New("store closed")
 )
 
 type Envelope struct {
@@ -101,6 +102,9 @@ func Open(path string) (*Store, error) {
 func (s *Store) Accept(trust TrustContext, env Envelope) (Receipt, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.file == nil {
+		return Receipt{}, ErrStoreClosed
+	}
 	if s.poisoned {
 		return Receipt{}, ErrStoreNeedsRecovery
 	}
