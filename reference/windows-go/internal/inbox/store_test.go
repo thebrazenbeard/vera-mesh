@@ -239,3 +239,19 @@ func TestTrailingPartialFinalFrameRecoversToLastVerifiedBoundary(t *testing.T) {
 		t.Fatalf("journal size after recovery=%d want=%d", after.Size(), before.Size())
 	}
 }
+
+func TestAcceptAfterCloseReturnsTypedErrorInsteadOfPanicking(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inbox.journal")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	env := testEnvelope()
+	_, err = store.Accept(TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}, env)
+	if !errors.Is(err, ErrStoreClosed) {
+		t.Fatalf("err=%v want ErrStoreClosed", err)
+	}
+}
