@@ -91,10 +91,7 @@ func TestReplayRejectsChecksumValidRecordWithInvalidPayloadBinding(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(payload)
-	var header [36]byte
-	binary.BigEndian.PutUint32(header[:4], uint32(len(payload)))
-	copy(header[4:], sum[:])
+	header := makeJournalHeader(payload)
 	data := append(header[:], payload...)
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
@@ -253,5 +250,152 @@ func TestAcceptAfterCloseReturnsTypedErrorInsteadOfPanicking(t *testing.T) {
 	_, err = store.Accept(TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}, env)
 	if !errors.Is(err, ErrStoreClosed) {
 		t.Fatalf("err=%v want ErrStoreClosed", err)
+	}
+}
+
+func TestCorruptCompleteLengthHeaderFailsClosedWithoutTruncation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inbox.journal")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env1 := testEnvelope()
+	env2 := testEnvelope()
+	env2.MessageID = "10010203-0405-4607-8809-0a0b0c0d0e0f"
+	trust := TrustContext{Active: true, PairID: env1.PairID, TrustGeneration: env1.TrustGeneration}
+	if _, err := store.Accept(trust, env1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Accept(trust, env2); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := int64(len(data))
+	binary.BigEndian.PutUint32(data[journalPayloadLengthOffset:journalPayloadLengthOffset+4], uint32(len(data)-journalHeaderSize+1))
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Open(path)
+	if reopened != nil {
+		reopened.Close()
+	}
+	if !errors.Is(err, ErrJournalCorrupt) {
+		t.Fatalf("err=%v want ErrJournalCorrupt", err)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Size() != before {
+		t.Fatalf("corrupt complete header was destructively truncated: size=%d want=%d", st.Size(), before)
+	}
+}
+
+func TestVerifiedCompleteHeaderWithPartialFinalPayloadRecoversTailOnly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inbox.journal")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := testEnvelope()
+	trust := TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}
+	if _, err := store.Accept(trust, env); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env2 := testEnvelope()
+	env2.MessageID = "20010203-0405-4607-8809-0a0b0c0d0e0f"
+	rec := journalRecord{Version: 1, Envelope: env2, Disposition: DurableInboxAccepted}
+	payload, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	header := makeJournalHeader(payload)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write(header[:]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write(payload[:5]); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer reopened.Close()
+	if reopened.Count() != 1 {
+		t.Fatalf("count=%d want1", reopened.Count())
+	}
+	if reopened.Recovery().TrailingPartialDiscardedBytes != int64(journalHeaderSize+5) {
+		t.Fatalf("discarded=%d want=%d", reopened.Recovery().TrailingPartialDiscardedBytes, journalHeaderSize+5)
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Size() != before.Size() {
+		t.Fatalf("size=%d want=%d", after.Size(), before.Size())
+	}
+}
+
+func TestOversizeJournalRecordRejectedBeforeWriteAndStoreRemainsUsable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inbox.journal")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	oversize := testEnvelope()
+	oversize.Payload = make([]byte, 13<<20)
+	sum := sha256.Sum256(oversize.Payload)
+	oversize.PayloadByteCount = uint64(len(oversize.Payload))
+	oversize.PayloadSHA256 = hex.EncodeToString(sum[:])
+	trust := TrustContext{Active: true, PairID: oversize.PairID, TrustGeneration: oversize.TrustGeneration}
+	_, err = store.Accept(trust, oversize)
+	if !errors.Is(err, ErrJournalFrameTooLarge) {
+		t.Fatalf("err=%v want ErrJournalFrameTooLarge", err)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Size() != 0 {
+		t.Fatalf("oversize deterministic rejection mutated journal: size=%d want0", st.Size())
+	}
+
+	normal := testEnvelope()
+	if _, err := store.Accept(trust, normal); err != nil {
+		t.Fatalf("store was poisoned by deterministic oversize rejection: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open after normal record: %v", err)
+	}
+	defer reopened.Close()
+	if reopened.Count() != 1 {
+		t.Fatalf("count=%d want1", reopened.Count())
 	}
 }
