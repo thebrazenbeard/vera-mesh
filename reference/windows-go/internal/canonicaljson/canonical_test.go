@@ -200,3 +200,47 @@ func TestResourceProfileIdentityIsFrozen(t *testing.T) {
 		t.Fatalf("ResourceProfileSHA256=%q", ResourceProfileSHA256)
 	}
 }
+
+func TestResourcePrecedenceMalformedBeforeLaterOversizedString(t *testing.T) {
+	input := []byte(`{? "x":"` + strings.Repeat("a", MaxStringUTF8Bytes+1) + `"}`)
+	got, err := CanonicalizeSyntax(input)
+	if len(got) != 0 {
+		t.Fatalf("failure emitted partial output: %x", got)
+	}
+	if !errors.Is(err, ErrMalformedJSON) {
+		t.Fatalf("err=%v want ErrMalformedJSON", err)
+	}
+}
+
+func TestResourcePrecedenceOversizedStringBeforeLaterMalformed(t *testing.T) {
+	input := []byte(`{"x":"` + strings.Repeat("a", MaxStringUTF8Bytes+1) + `",?}`)
+	got, err := CanonicalizeSyntax(input)
+	if len(got) != 0 {
+		t.Fatalf("failure emitted partial output: %x", got)
+	}
+	if !errors.Is(err, ErrCanonicalResourceLimitExceeded) {
+		t.Fatalf("err=%v want ErrCanonicalResourceLimitExceeded", err)
+	}
+}
+
+func TestResourcePrecedenceInvalidSurrogateBeforeLaterOversizedString(t *testing.T) {
+	input := []byte(`{"x":"\ud800","y":"` + strings.Repeat("a", MaxStringUTF8Bytes+1) + `"}`)
+	got, err := CanonicalizeSyntax(input)
+	if len(got) != 0 {
+		t.Fatalf("failure emitted partial output: %x", got)
+	}
+	if !errors.Is(err, ErrInvalidUnicodeScalar) {
+		t.Fatalf("err=%v want ErrInvalidUnicodeScalar", err)
+	}
+}
+
+func TestResourcePrecedenceOversizedStringBeforeLaterInvalidSurrogate(t *testing.T) {
+	input := []byte(`{"x":"` + strings.Repeat("a", MaxStringUTF8Bytes+1) + `","y":"\ud800"}`)
+	got, err := CanonicalizeSyntax(input)
+	if len(got) != 0 {
+		t.Fatalf("failure emitted partial output: %x", got)
+	}
+	if !errors.Is(err, ErrCanonicalResourceLimitExceeded) {
+		t.Fatalf("err=%v want ErrCanonicalResourceLimitExceeded", err)
+	}
+}
