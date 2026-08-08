@@ -29,6 +29,16 @@ func testEnvelope() Envelope {
 	}
 }
 
+func testTrust(env Envelope) TrustContext {
+	return TrustContext{
+		Active:                  true,
+		PairID:                  env.PairID,
+		TrustGeneration:         env.TrustGeneration,
+		AuthenticatedPeerNodeID: env.SenderNodeID,
+		LocalNodeID:             env.RecipientNodeID,
+	}
+}
+
 func TestAcceptPersistsBeforeReceiptAndReplays(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "inbox.journal")
 	store, err := Open(path)
@@ -36,7 +46,7 @@ func TestAcceptPersistsBeforeReceiptAndReplays(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := testEnvelope()
-	receipt, err := store.Accept(TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}, env)
+	receipt, err := store.Accept(testTrust(env), env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,8 +82,9 @@ func TestMissingRequiredFieldIsMalformedEnvelope(t *testing.T) {
 	}
 	defer store.Close()
 	env := testEnvelope()
+	trust := testTrust(env)
 	env.SenderNodeID = ""
-	_, err = store.Accept(TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}, env)
+	_, err = store.Accept(trust, env)
 	if !errors.Is(err, ErrMalformedEnvelope) {
 		t.Fatalf("err=%v want ErrMalformedEnvelope", err)
 	}
@@ -115,7 +126,7 @@ func TestStoreRejectsMalformedMessageIDBeforeJournalWrite(t *testing.T) {
 	defer store.Close()
 	env := testEnvelope()
 	env.MessageID = "uuidv7-like-ish"
-	_, err = store.Accept(TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}, env)
+	_, err = store.Accept(testTrust(env), env)
 	if !errors.Is(err, ErrMalformedMessageID) {
 		t.Fatalf("err=%v want ErrMalformedMessageID", err)
 	}
@@ -136,11 +147,11 @@ func TestSyncFailurePoisonsStoreUntilRecovery(t *testing.T) {
 	}
 	store.file = syncFailFile{journalFile: store.file}
 	env := testEnvelope()
-	_, err = store.Accept(TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}, env)
+	_, err = store.Accept(testTrust(env), env)
 	if err == nil {
 		t.Fatal("first Accept unexpectedly succeeded")
 	}
-	_, err = store.Accept(TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}, env)
+	_, err = store.Accept(testTrust(env), env)
 	if !errors.Is(err, ErrStoreNeedsRecovery) {
 		t.Fatalf("second Accept err=%v want ErrStoreNeedsRecovery", err)
 	}
@@ -153,7 +164,7 @@ func TestConcurrentExactRetriesProduceOneDurableRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := testEnvelope()
-	trust := TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}
+	trust := testTrust(env)
 
 	const workers = 32
 	start := make(chan struct{})
@@ -194,7 +205,7 @@ func TestTrailingPartialFinalFrameRecoversToLastVerifiedBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := testEnvelope()
-	trust := TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}
+	trust := testTrust(env)
 	if _, err := store.Accept(trust, env); err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +258,7 @@ func TestAcceptAfterCloseReturnsTypedErrorInsteadOfPanicking(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := testEnvelope()
-	_, err = store.Accept(TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}, env)
+	_, err = store.Accept(testTrust(env), env)
 	if !errors.Is(err, ErrStoreClosed) {
 		t.Fatalf("err=%v want ErrStoreClosed", err)
 	}
@@ -262,7 +273,7 @@ func TestCorruptCompleteLengthHeaderFailsClosedWithoutTruncation(t *testing.T) {
 	env1 := testEnvelope()
 	env2 := testEnvelope()
 	env2.MessageID = "10010203-0405-4607-8809-0a0b0c0d0e0f"
-	trust := TrustContext{Active: true, PairID: env1.PairID, TrustGeneration: env1.TrustGeneration}
+	trust := testTrust(env1)
 	if _, err := store.Accept(trust, env1); err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +316,7 @@ func TestVerifiedCompleteHeaderWithPartialFinalPayloadRecoversTailOnly(t *testin
 		t.Fatal(err)
 	}
 	env := testEnvelope()
-	trust := TrustContext{Active: true, PairID: env.PairID, TrustGeneration: env.TrustGeneration}
+	trust := testTrust(env)
 	if _, err := store.Accept(trust, env); err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +381,7 @@ func TestOversizeJournalRecordRejectedBeforeWriteAndStoreRemainsUsable(t *testin
 	sum := sha256.Sum256(oversize.Payload)
 	oversize.PayloadByteCount = uint64(len(oversize.Payload))
 	oversize.PayloadSHA256 = hex.EncodeToString(sum[:])
-	trust := TrustContext{Active: true, PairID: oversize.PairID, TrustGeneration: oversize.TrustGeneration}
+	trust := testTrust(oversize)
 	_, err = store.Accept(trust, oversize)
 	if !errors.Is(err, ErrJournalFrameTooLarge) {
 		t.Fatalf("err=%v want ErrJournalFrameTooLarge", err)
@@ -397,5 +408,98 @@ func TestOversizeJournalRecordRejectedBeforeWriteAndStoreRemainsUsable(t *testin
 	defer reopened.Close()
 	if reopened.Count() != 1 {
 		t.Fatalf("count=%d want1", reopened.Count())
+	}
+}
+
+func TestAcceptRejectsSenderNotBoundToAuthenticatedPeer(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inbox.journal")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	env := testEnvelope()
+	trust := TrustContext{
+		Active:                  true,
+		PairID:                  env.PairID,
+		TrustGeneration:         env.TrustGeneration,
+		AuthenticatedPeerNodeID: "peer-A",
+		LocalNodeID:             env.RecipientNodeID,
+	}
+	env.SenderNodeID = "peer-B"
+	_, err = store.Accept(trust, env)
+	if !errors.Is(err, ErrAuthenticatedPeerNodeMismatch) {
+		t.Fatalf("err=%v want ErrAuthenticatedPeerNodeMismatch", err)
+	}
+	if store.Count() != 0 {
+		t.Fatalf("count=%d want0", store.Count())
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Size() != 0 {
+		t.Fatalf("sender mismatch mutated journal: size=%d want0", st.Size())
+	}
+}
+
+func TestAcceptRejectsRecipientNotBoundToLocalNode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inbox.journal")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	env := testEnvelope()
+	trust := TrustContext{
+		Active:                  true,
+		PairID:                  env.PairID,
+		TrustGeneration:         env.TrustGeneration,
+		AuthenticatedPeerNodeID: env.SenderNodeID,
+		LocalNodeID:             "local-A",
+	}
+	env.RecipientNodeID = "local-B"
+	_, err = store.Accept(trust, env)
+	if !errors.Is(err, ErrLocalRecipientNodeMismatch) {
+		t.Fatalf("err=%v want ErrLocalRecipientNodeMismatch", err)
+	}
+	if store.Count() != 0 {
+		t.Fatalf("count=%d want0", store.Count())
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Size() != 0 {
+		t.Fatalf("recipient mismatch mutated journal: size=%d want0", st.Size())
+	}
+}
+
+func TestAcceptRejectsMissingTrustedNodeContextBeforeJournalWrite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inbox.journal")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	env := testEnvelope()
+	trust := TrustContext{
+		Active:          true,
+		PairID:          env.PairID,
+		TrustGeneration: env.TrustGeneration,
+	}
+	_, err = store.Accept(trust, env)
+	if !errors.Is(err, ErrTrustedNodeContextMissing) {
+		t.Fatalf("err=%v want ErrTrustedNodeContextMissing", err)
+	}
+	if store.Count() != 0 {
+		t.Fatalf("count=%d want0", store.Count())
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Size() != 0 {
+		t.Fatalf("missing trusted node context mutated journal: size=%d want0", st.Size())
 	}
 }
