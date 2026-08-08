@@ -1,9 +1,12 @@
 package canonicaljson
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -81,5 +84,119 @@ func TestAcceptedHostileCorpusTypedFailures(t *testing.T) {
 				t.Fatalf("err=%v want=%v", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestResourceProfileRawInputBoundaryAndPrecedence(t *testing.T) {
+	exact := append([]byte(`{"x":1}`), bytes.Repeat([]byte{' '}, MaxInputBytes-len(`{"x":1}`))...)
+	if len(exact) != MaxInputBytes {
+		t.Fatalf("fixture len=%d want=%d", len(exact), MaxInputBytes)
+	}
+	if _, err := CanonicalizeSyntax(exact); err != nil {
+		t.Fatalf("exact max input rejected: %v", err)
+	}
+	over := append(append([]byte(nil), exact...), ' ')
+	if _, err := CanonicalizeSyntax(over); !errors.Is(err, ErrCanonicalResourceLimitExceeded) {
+		t.Fatalf("over max input err=%v want ErrCanonicalResourceLimitExceeded", err)
+	}
+	invalidOver := bytes.Repeat([]byte{' '}, MaxInputBytes+1)
+	invalidOver[0] = 0xff
+	if _, err := CanonicalizeSyntax(invalidOver); !errors.Is(err, ErrCanonicalResourceLimitExceeded) {
+		t.Fatalf("over-limit invalid UTF8 err=%v want resource-limit precedence", err)
+	}
+	invalidWithin := []byte{0xff}
+	if _, err := CanonicalizeSyntax(invalidWithin); !errors.Is(err, ErrInvalidUTF8) {
+		t.Fatalf("within-limit invalid UTF8 err=%v want ErrInvalidUTF8", err)
+	}
+}
+
+func TestResourceProfileNestingBoundary(t *testing.T) {
+	depth8 := []byte(strings.Repeat("[", MaxNestingDepth) + "0" + strings.Repeat("]", MaxNestingDepth))
+	if _, err := CanonicalizeSyntax(depth8); err != nil {
+		t.Fatalf("depth8 rejected: %v", err)
+	}
+	depth9 := []byte(strings.Repeat("[", MaxNestingDepth+1) + "0" + strings.Repeat("]", MaxNestingDepth+1))
+	if _, err := CanonicalizeSyntax(depth9); !errors.Is(err, ErrCanonicalResourceLimitExceeded) {
+		t.Fatalf("depth9 err=%v want ErrCanonicalResourceLimitExceeded", err)
+	}
+}
+
+func TestResourceProfileObjectAndArrayBoundaries(t *testing.T) {
+	object := func(n int) []byte {
+		parts := make([]string, 0, n)
+		for i := 0; i < n; i++ {
+			parts = append(parts, fmt.Sprintf("%q:%d", fmt.Sprintf("k%02d", i), i))
+		}
+		return []byte("{" + strings.Join(parts, ",") + "}")
+	}
+	if _, err := CanonicalizeSyntax(object(MaxObjectMembers)); err != nil {
+		t.Fatalf("32-member object rejected: %v", err)
+	}
+	if _, err := CanonicalizeSyntax(object(MaxObjectMembers + 1)); !errors.Is(err, ErrCanonicalResourceLimitExceeded) {
+		t.Fatalf("33-member object err=%v want resource limit", err)
+	}
+
+	array := func(n int) []byte {
+		parts := make([]string, n)
+		for i := range parts {
+			parts[i] = "0"
+		}
+		return []byte("[" + strings.Join(parts, ",") + "]")
+	}
+	if _, err := CanonicalizeSyntax(array(MaxArrayElements)); err != nil {
+		t.Fatalf("32-element array rejected: %v", err)
+	}
+	if _, err := CanonicalizeSyntax(array(MaxArrayElements + 1)); !errors.Is(err, ErrCanonicalResourceLimitExceeded) {
+		t.Fatalf("33-element array err=%v want resource limit", err)
+	}
+}
+
+func TestResourceProfileDecodedStringUTF8Boundary(t *testing.T) {
+	asciiExact := []byte(`{"x":"` + strings.Repeat("a", MaxStringUTF8Bytes) + `"}`)
+	if _, err := CanonicalizeSyntax(asciiExact); err != nil {
+		t.Fatalf("exact ASCII string rejected: %v", err)
+	}
+	asciiOver := []byte(`{"x":"` + strings.Repeat("a", MaxStringUTF8Bytes+1) + `"}`)
+	if _, err := CanonicalizeSyntax(asciiOver); !errors.Is(err, ErrCanonicalResourceLimitExceeded) {
+		t.Fatalf("over ASCII string err=%v want resource limit", err)
+	}
+
+	keyOver := []byte(`{"` + strings.Repeat("k", MaxStringUTF8Bytes+1) + `":0}`)
+	if _, err := CanonicalizeSyntax(keyOver); !errors.Is(err, ErrCanonicalResourceLimitExceeded) {
+		t.Fatalf("over key string err=%v want resource limit", err)
+	}
+
+	multiExact := []byte(`{"x":"` + strings.Repeat("😀", MaxStringUTF8Bytes/4) + `"}`)
+	if _, err := CanonicalizeSyntax(multiExact); err != nil {
+		t.Fatalf("exact multibyte string rejected: %v", err)
+	}
+
+	escaped := []byte(`{"x":"` + strings.Repeat(`\u0061`, 6000) + `"}`)
+	if len(escaped) <= MaxStringUTF8Bytes || len(escaped) > MaxInputBytes {
+		t.Fatalf("escaped source fixture length=%d outside intended range", len(escaped))
+	}
+	if _, err := CanonicalizeSyntax(escaped); err != nil {
+		t.Fatalf("escaped long-source short-decoded string rejected: %v", err)
+	}
+}
+
+func TestResourceProfileDuplicatePrecedesMemberLimitWithinBoundary(t *testing.T) {
+	parts := []string{`"k00":0`, `"a":1`}
+	for i := 2; i < MaxObjectMembers-1; i++ {
+		parts = append(parts, fmt.Sprintf("%q:%d", fmt.Sprintf("k%02d", i), i))
+	}
+	parts = append(parts, `"\u0061":31`)
+	input := []byte("{" + strings.Join(parts, ",") + "}")
+	if _, err := CanonicalizeSyntax(input); !errors.Is(err, ErrDuplicateObjectKey) {
+		t.Fatalf("decoded duplicate at member32 err=%v want ErrDuplicateObjectKey", err)
+	}
+}
+
+func TestResourceProfileIdentityIsFrozen(t *testing.T) {
+	if ResourceProfileID != "VERA_MESH_CANONICAL_RESOURCE_LIMITS_FIRST_SLICE_V1" {
+		t.Fatalf("ResourceProfileID=%q", ResourceProfileID)
+	}
+	if ResourceProfileSHA256 != "9bf57f214b2da37dcfaf1c7a8e496496e74981a7efcde7b4ad78bf4b8a5a004b" {
+		t.Fatalf("ResourceProfileSHA256=%q", ResourceProfileSHA256)
 	}
 }
