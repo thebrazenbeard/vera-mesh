@@ -16,15 +16,24 @@ const (
 	CanonicalizationID  = "VERA_MESH_CANONICAL_JSON_V2"
 	ContractSHA256      = "9a9e76d4d4ff8e8f258c8bc1eda1101a10ff467a9ce0ab0cf57f59fd9e71d0d4"
 	FixtureCorpusSHA256 = "bc8d357b3efbb09db44f1dbaf9a6fa18057af85db6ec753e202c6909ea7f5465"
+
+	ResourceProfileID     = "VERA_MESH_CANONICAL_RESOURCE_LIMITS_FIRST_SLICE_V1"
+	ResourceProfileSHA256 = "9bf57f214b2da37dcfaf1c7a8e496496e74981a7efcde7b4ad78bf4b8a5a004b"
+	MaxInputBytes         = 65536
+	MaxNestingDepth       = 8
+	MaxArrayElements      = 32
+	MaxObjectMembers      = 32
+	MaxStringUTF8Bytes    = 32768
 )
 
 var (
-	ErrMalformedJSON        = errors.New("MALFORMED_JSON")
-	ErrInvalidUTF8          = errors.New("INVALID_UTF8")
-	ErrDuplicateObjectKey   = errors.New("DUPLICATE_OBJECT_KEY")
-	ErrFloatForbidden       = errors.New("FLOAT_FORBIDDEN")
-	ErrInvalidUnicodeScalar = errors.New("INVALID_UNICODE_SCALAR")
-	ErrUnsupportedValueType = errors.New("UNSUPPORTED_VALUE_TYPE")
+	ErrMalformedJSON                  = errors.New("MALFORMED_JSON")
+	ErrInvalidUTF8                    = errors.New("INVALID_UTF8")
+	ErrDuplicateObjectKey             = errors.New("DUPLICATE_OBJECT_KEY")
+	ErrFloatForbidden                 = errors.New("FLOAT_FORBIDDEN")
+	ErrInvalidUnicodeScalar           = errors.New("INVALID_UNICODE_SCALAR")
+	ErrUnsupportedValueType           = errors.New("UNSUPPORTED_VALUE_TYPE")
+	ErrCanonicalResourceLimitExceeded = errors.New("CANONICAL_RESOURCE_LIMIT_EXCEEDED")
 )
 
 type kind uint8
@@ -52,9 +61,12 @@ type value struct {
 }
 
 // CanonicalizeSyntax implements the accepted VERA_MESH_CANONICAL_JSON_V2
-// syntax and byte rules. It deliberately does not claim product resource-limit
-// conformance: the first-install resource profile remains separately bound.
+// syntax/byte rules together with the accepted first-slice canonical resource
+// profile. Target performance/conformance remains separately measured.
 func CanonicalizeSyntax(input []byte) ([]byte, error) {
+	if len(input) > MaxInputBytes {
+		return nil, ErrCanonicalResourceLimitExceeded
+	}
 	if !utf8.Valid(input) {
 		return nil, ErrInvalidUTF8
 	}
@@ -67,7 +79,7 @@ func CanonicalizeSyntax(input []byte) ([]byte, error) {
 
 	dec := json.NewDecoder(bytes.NewReader(input))
 	dec.UseNumber()
-	v, err := parseValue(dec)
+	v, err := parseValue(dec, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +97,7 @@ func CanonicalizeSyntax(input []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-func parseValue(dec *json.Decoder) (value, error) {
+func parseValue(dec *json.Decoder, depth int) (value, error) {
 	tok, err := dec.Token()
 	if err != nil {
 		return value{}, fmt.Errorf("%w: %v", ErrMalformedJSON, err)
@@ -99,6 +111,9 @@ func parseValue(dec *json.Decoder) (value, error) {
 		if !scalarString(t) {
 			return value{}, ErrInvalidUnicodeScalar
 		}
+		if len(t) > MaxStringUTF8Bytes {
+			return value{}, ErrCanonicalResourceLimitExceeded
+		}
 		return value{kind: kindString, s: t}, nil
 	case json.Number:
 		raw := t.String()
@@ -111,11 +126,20 @@ func parseValue(dec *json.Decoder) (value, error) {
 		}
 		return value{kind: kindInteger, s: z.String()}, nil
 	case json.Delim:
+		containerDepth := depth + 1
+		if containerDepth > MaxNestingDepth {
+			return value{}, ErrCanonicalResourceLimitExceeded
+		}
 		switch t {
 		case '[':
 			var vals []value
+			count := 0
 			for dec.More() {
-				v, err := parseValue(dec)
+				count++
+				if count > MaxArrayElements {
+					return value{}, ErrCanonicalResourceLimitExceeded
+				}
+				v, err := parseValue(dec, containerDepth)
 				if err != nil {
 					return value{}, err
 				}
@@ -129,6 +153,7 @@ func parseValue(dec *json.Decoder) (value, error) {
 		case '{':
 			seen := make(map[string]struct{})
 			var members []member
+			count := 0
 			for dec.More() {
 				keyTok, err := dec.Token()
 				if err != nil {
@@ -141,11 +166,18 @@ func parseValue(dec *json.Decoder) (value, error) {
 				if !scalarString(key) {
 					return value{}, ErrInvalidUnicodeScalar
 				}
+				if len(key) > MaxStringUTF8Bytes {
+					return value{}, ErrCanonicalResourceLimitExceeded
+				}
+				count++
+				if count > MaxObjectMembers {
+					return value{}, ErrCanonicalResourceLimitExceeded
+				}
 				if _, exists := seen[key]; exists {
 					return value{}, ErrDuplicateObjectKey
 				}
 				seen[key] = struct{}{}
-				val, err := parseValue(dec)
+				val, err := parseValue(dec, containerDepth)
 				if err != nil {
 					return value{}, err
 				}
@@ -259,6 +291,7 @@ func validateRawJSONStrings(input []byte) error {
 		if input[i] != '"' {
 			continue
 		}
+		decodedBytes := 0
 		i++
 		for ; i < len(input); i++ {
 			c := input[i]
@@ -269,6 +302,19 @@ func validateRawJSONStrings(input []byte) error {
 				return ErrMalformedJSON
 			}
 			if c != '\\' {
+				if c < utf8.RuneSelf {
+					decodedBytes++
+				} else {
+					_, size := utf8.DecodeRune(input[i:])
+					if size <= 0 {
+						return ErrInvalidUTF8
+					}
+					decodedBytes += size
+					i += size - 1
+				}
+				if decodedBytes > MaxStringUTF8Bytes {
+					return ErrCanonicalResourceLimitExceeded
+				}
 				continue
 			}
 			i++
@@ -277,6 +323,7 @@ func validateRawJSONStrings(input []byte) error {
 			}
 			switch input[i] {
 			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+				decodedBytes++
 			case 'u':
 				cu, next, ok := parseHex4(input, i+1)
 				if !ok {
@@ -294,12 +341,19 @@ func validateRawJSONStrings(input []byte) error {
 					if low < 0xdc00 || low > 0xdfff {
 						return ErrInvalidUnicodeScalar
 					}
+					r := rune(0x10000 + (uint32(cu)-0xd800)<<10 + (uint32(low) - 0xdc00))
+					decodedBytes += utf8.RuneLen(r)
 					i = afterLow - 1
 				} else if cu >= 0xdc00 && cu <= 0xdfff {
 					return ErrInvalidUnicodeScalar
+				} else {
+					decodedBytes += utf8.RuneLen(rune(cu))
 				}
 			default:
 				return ErrMalformedJSON
+			}
+			if decodedBytes > MaxStringUTF8Bytes {
+				return ErrCanonicalResourceLimitExceeded
 			}
 		}
 		if i >= len(input) || input[i] != '"' {
