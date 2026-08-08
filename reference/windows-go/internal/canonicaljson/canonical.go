@@ -2,10 +2,7 @@ package canonicaljson
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"math/big"
 	"sort"
 	"strings"
@@ -60,6 +57,11 @@ type value struct {
 	o    []member
 }
 
+type parser struct {
+	input []byte
+	pos   int
+}
+
 // CanonicalizeSyntax implements the accepted VERA_MESH_CANONICAL_JSON_V2
 // syntax/byte rules together with the accepted first-slice canonical resource
 // profile. Target performance/conformance remains separately measured.
@@ -73,21 +75,16 @@ func CanonicalizeSyntax(input []byte) ([]byte, error) {
 	if len(input) >= 3 && input[0] == 0xef && input[1] == 0xbb && input[2] == 0xbf {
 		return nil, ErrMalformedJSON
 	}
-	if err := validateRawJSONStrings(input); err != nil {
-		return nil, err
-	}
 
-	dec := json.NewDecoder(bytes.NewReader(input))
-	dec.UseNumber()
-	v, err := parseValue(dec, 0)
+	p := parser{input: input}
+	p.skipWhitespace()
+	v, err := p.parseValue(0)
 	if err != nil {
 		return nil, err
 	}
-	if tok, err := dec.Token(); err != io.EOF {
-		if err == nil {
-			return nil, fmt.Errorf("%w: trailing token %v", ErrMalformedJSON, tok)
-		}
-		return nil, fmt.Errorf("%w: trailing data: %v", ErrMalformedJSON, err)
+	p.skipWhitespace()
+	if p.pos != len(input) {
+		return nil, ErrMalformedJSON
 	}
 
 	var out bytes.Buffer
@@ -97,103 +94,339 @@ func CanonicalizeSyntax(input []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-func parseValue(dec *json.Decoder, depth int) (value, error) {
-	tok, err := dec.Token()
-	if err != nil {
-		return value{}, fmt.Errorf("%w: %v", ErrMalformedJSON, err)
+func (p *parser) parseValue(depth int) (value, error) {
+	p.skipWhitespace()
+	if p.pos >= len(p.input) {
+		return value{}, ErrMalformedJSON
 	}
-	switch t := tok.(type) {
-	case nil:
+
+	switch c := p.input[p.pos]; {
+	case c == 'n':
+		if !p.consumeLiteral("null") {
+			return value{}, ErrMalformedJSON
+		}
 		return value{kind: kindNull}, nil
-	case bool:
-		return value{kind: kindBool, b: t}, nil
-	case string:
-		if !scalarString(t) {
-			return value{}, ErrInvalidUnicodeScalar
-		}
-		if len(t) > MaxStringUTF8Bytes {
-			return value{}, ErrCanonicalResourceLimitExceeded
-		}
-		return value{kind: kindString, s: t}, nil
-	case json.Number:
-		raw := t.String()
-		if strings.ContainsAny(raw, ".eE") {
-			return value{}, ErrFloatForbidden
-		}
-		z := new(big.Int)
-		if _, ok := z.SetString(raw, 10); !ok {
+	case c == 't':
+		if !p.consumeLiteral("true") {
 			return value{}, ErrMalformedJSON
 		}
-		return value{kind: kindInteger, s: z.String()}, nil
-	case json.Delim:
-		containerDepth := depth + 1
-		if containerDepth > MaxNestingDepth {
-			return value{}, ErrCanonicalResourceLimitExceeded
-		}
-		switch t {
-		case '[':
-			var vals []value
-			count := 0
-			for dec.More() {
-				count++
-				if count > MaxArrayElements {
-					return value{}, ErrCanonicalResourceLimitExceeded
-				}
-				v, err := parseValue(dec, containerDepth)
-				if err != nil {
-					return value{}, err
-				}
-				vals = append(vals, v)
-			}
-			end, err := dec.Token()
-			if err != nil || end != json.Delim(']') {
-				return value{}, ErrMalformedJSON
-			}
-			return value{kind: kindArray, a: vals}, nil
-		case '{':
-			seen := make(map[string]struct{})
-			var members []member
-			count := 0
-			for dec.More() {
-				keyTok, err := dec.Token()
-				if err != nil {
-					return value{}, fmt.Errorf("%w: object key: %v", ErrMalformedJSON, err)
-				}
-				key, ok := keyTok.(string)
-				if !ok {
-					return value{}, ErrMalformedJSON
-				}
-				if !scalarString(key) {
-					return value{}, ErrInvalidUnicodeScalar
-				}
-				if len(key) > MaxStringUTF8Bytes {
-					return value{}, ErrCanonicalResourceLimitExceeded
-				}
-				count++
-				if count > MaxObjectMembers {
-					return value{}, ErrCanonicalResourceLimitExceeded
-				}
-				if _, exists := seen[key]; exists {
-					return value{}, ErrDuplicateObjectKey
-				}
-				seen[key] = struct{}{}
-				val, err := parseValue(dec, containerDepth)
-				if err != nil {
-					return value{}, err
-				}
-				members = append(members, member{key: key, val: val})
-			}
-			end, err := dec.Token()
-			if err != nil || end != json.Delim('}') {
-				return value{}, ErrMalformedJSON
-			}
-			return value{kind: kindObject, o: members}, nil
-		default:
+		return value{kind: kindBool, b: true}, nil
+	case c == 'f':
+		if !p.consumeLiteral("false") {
 			return value{}, ErrMalformedJSON
 		}
+		return value{kind: kindBool, b: false}, nil
+	case c == '"':
+		s, err := p.parseString()
+		if err != nil {
+			return value{}, err
+		}
+		return value{kind: kindString, s: s}, nil
+	case c == '[':
+		return p.parseArray(depth)
+	case c == '{':
+		return p.parseObject(depth)
+	case c == '-' || (c >= '0' && c <= '9'):
+		return p.parseNumber()
 	default:
-		return value{}, ErrUnsupportedValueType
+		return value{}, ErrMalformedJSON
 	}
+}
+
+func (p *parser) parseArray(depth int) (value, error) {
+	containerDepth := depth + 1
+	if containerDepth > MaxNestingDepth {
+		return value{}, ErrCanonicalResourceLimitExceeded
+	}
+	p.pos++
+	p.skipWhitespace()
+	if p.take(']') {
+		return value{kind: kindArray}, nil
+	}
+
+	vals := make([]value, 0, min(MaxArrayElements, 4))
+	for {
+		if len(vals) >= MaxArrayElements {
+			p.skipWhitespace()
+			if p.pos >= len(p.input) || !isValueStart(p.input[p.pos]) {
+				return value{}, ErrMalformedJSON
+			}
+			return value{}, ErrCanonicalResourceLimitExceeded
+		}
+		v, err := p.parseValue(containerDepth)
+		if err != nil {
+			return value{}, err
+		}
+		vals = append(vals, v)
+		p.skipWhitespace()
+		if p.take(']') {
+			return value{kind: kindArray, a: vals}, nil
+		}
+		if !p.take(',') {
+			return value{}, ErrMalformedJSON
+		}
+		p.skipWhitespace()
+		if p.pos >= len(p.input) || p.input[p.pos] == ']' {
+			return value{}, ErrMalformedJSON
+		}
+	}
+}
+
+func (p *parser) parseObject(depth int) (value, error) {
+	containerDepth := depth + 1
+	if containerDepth > MaxNestingDepth {
+		return value{}, ErrCanonicalResourceLimitExceeded
+	}
+	p.pos++
+	p.skipWhitespace()
+	if p.take('}') {
+		return value{kind: kindObject}, nil
+	}
+
+	seen := make(map[string]struct{}, min(MaxObjectMembers, 4))
+	members := make([]member, 0, min(MaxObjectMembers, 4))
+	for {
+		p.skipWhitespace()
+		if p.pos >= len(p.input) || p.input[p.pos] != '"' {
+			return value{}, ErrMalformedJSON
+		}
+		key, err := p.parseString()
+		if err != nil {
+			return value{}, err
+		}
+		if len(members) >= MaxObjectMembers {
+			return value{}, ErrCanonicalResourceLimitExceeded
+		}
+		if _, exists := seen[key]; exists {
+			return value{}, ErrDuplicateObjectKey
+		}
+		seen[key] = struct{}{}
+		p.skipWhitespace()
+		if !p.take(':') {
+			return value{}, ErrMalformedJSON
+		}
+		val, err := p.parseValue(containerDepth)
+		if err != nil {
+			return value{}, err
+		}
+		members = append(members, member{key: key, val: val})
+		p.skipWhitespace()
+		if p.take('}') {
+			return value{kind: kindObject, o: members}, nil
+		}
+		if !p.take(',') {
+			return value{}, ErrMalformedJSON
+		}
+		p.skipWhitespace()
+		if p.pos >= len(p.input) || p.input[p.pos] == '}' {
+			return value{}, ErrMalformedJSON
+		}
+	}
+}
+
+func (p *parser) parseNumber() (value, error) {
+	start := p.pos
+	if p.take('-') {
+		if p.pos >= len(p.input) {
+			return value{}, ErrMalformedJSON
+		}
+	}
+
+	if p.pos >= len(p.input) {
+		return value{}, ErrMalformedJSON
+	}
+	if p.input[p.pos] == '0' {
+		p.pos++
+		if p.pos < len(p.input) && p.input[p.pos] >= '0' && p.input[p.pos] <= '9' {
+			return value{}, ErrMalformedJSON
+		}
+	} else if p.input[p.pos] >= '1' && p.input[p.pos] <= '9' {
+		for p.pos < len(p.input) && p.input[p.pos] >= '0' && p.input[p.pos] <= '9' {
+			p.pos++
+		}
+	} else {
+		return value{}, ErrMalformedJSON
+	}
+
+	isFloat := false
+	if p.pos < len(p.input) && p.input[p.pos] == '.' {
+		isFloat = true
+		p.pos++
+		if p.pos >= len(p.input) || p.input[p.pos] < '0' || p.input[p.pos] > '9' {
+			return value{}, ErrMalformedJSON
+		}
+		for p.pos < len(p.input) && p.input[p.pos] >= '0' && p.input[p.pos] <= '9' {
+			p.pos++
+		}
+	}
+	if p.pos < len(p.input) && (p.input[p.pos] == 'e' || p.input[p.pos] == 'E') {
+		isFloat = true
+		p.pos++
+		if p.pos < len(p.input) && (p.input[p.pos] == '+' || p.input[p.pos] == '-') {
+			p.pos++
+		}
+		if p.pos >= len(p.input) || p.input[p.pos] < '0' || p.input[p.pos] > '9' {
+			return value{}, ErrMalformedJSON
+		}
+		for p.pos < len(p.input) && p.input[p.pos] >= '0' && p.input[p.pos] <= '9' {
+			p.pos++
+		}
+	}
+	if p.pos < len(p.input) && !isValueTerminator(p.input[p.pos]) {
+		return value{}, ErrMalformedJSON
+	}
+	if isFloat {
+		return value{}, ErrFloatForbidden
+	}
+
+	raw := string(p.input[start:p.pos])
+	z := new(big.Int)
+	if _, ok := z.SetString(raw, 10); !ok {
+		return value{}, ErrMalformedJSON
+	}
+	return value{kind: kindInteger, s: z.String()}, nil
+}
+
+func (p *parser) parseString() (string, error) {
+	if !p.take('"') {
+		return "", ErrMalformedJSON
+	}
+	var out strings.Builder
+	decodedBytes := 0
+	for p.pos < len(p.input) {
+		c := p.input[p.pos]
+		if c == '"' {
+			p.pos++
+			return out.String(), nil
+		}
+		if c < 0x20 {
+			return "", ErrMalformedJSON
+		}
+		if c != '\\' {
+			r, size := utf8.DecodeRune(p.input[p.pos:])
+			if r == utf8.RuneError && size == 1 {
+				return "", ErrInvalidUTF8
+			}
+			if r >= 0xd800 && r <= 0xdfff {
+				return "", ErrInvalidUnicodeScalar
+			}
+			decodedBytes += size
+			if decodedBytes > MaxStringUTF8Bytes {
+				return "", ErrCanonicalResourceLimitExceeded
+			}
+			out.Write(p.input[p.pos : p.pos+size])
+			p.pos += size
+			continue
+		}
+
+		p.pos++
+		if p.pos >= len(p.input) {
+			return "", ErrMalformedJSON
+		}
+		switch esc := p.input[p.pos]; esc {
+		case '"', '\\', '/':
+			decodedBytes++
+			if decodedBytes > MaxStringUTF8Bytes {
+				return "", ErrCanonicalResourceLimitExceeded
+			}
+			out.WriteByte(esc)
+			p.pos++
+		case 'b', 'f', 'n', 'r', 't':
+			decodedBytes++
+			if decodedBytes > MaxStringUTF8Bytes {
+				return "", ErrCanonicalResourceLimitExceeded
+			}
+			switch esc {
+			case 'b':
+				out.WriteByte('\b')
+			case 'f':
+				out.WriteByte('\f')
+			case 'n':
+				out.WriteByte('\n')
+			case 'r':
+				out.WriteByte('\r')
+			case 't':
+				out.WriteByte('\t')
+			}
+			p.pos++
+		case 'u':
+			cu, next, ok := parseHex4(p.input, p.pos+1)
+			if !ok {
+				return "", ErrMalformedJSON
+			}
+			p.pos = next
+			var r rune
+			if cu >= 0xd800 && cu <= 0xdbff {
+				if p.pos+6 > len(p.input) || p.input[p.pos] != '\\' || p.input[p.pos+1] != 'u' {
+					return "", ErrInvalidUnicodeScalar
+				}
+				low, afterLow, ok := parseHex4(p.input, p.pos+2)
+				if !ok {
+					return "", ErrMalformedJSON
+				}
+				if low < 0xdc00 || low > 0xdfff {
+					return "", ErrInvalidUnicodeScalar
+				}
+				r = rune(0x10000 + (uint32(cu)-0xd800)<<10 + (uint32(low) - 0xdc00))
+				p.pos = afterLow
+			} else if cu >= 0xdc00 && cu <= 0xdfff {
+				return "", ErrInvalidUnicodeScalar
+			} else {
+				r = rune(cu)
+			}
+			n := utf8.RuneLen(r)
+			if n < 0 {
+				return "", ErrInvalidUnicodeScalar
+			}
+			decodedBytes += n
+			if decodedBytes > MaxStringUTF8Bytes {
+				return "", ErrCanonicalResourceLimitExceeded
+			}
+			out.WriteRune(r)
+		default:
+			return "", ErrMalformedJSON
+		}
+	}
+	return "", ErrMalformedJSON
+}
+
+func (p *parser) skipWhitespace() {
+	for p.pos < len(p.input) {
+		switch p.input[p.pos] {
+		case ' ', '\t', '\n', '\r':
+			p.pos++
+		default:
+			return
+		}
+	}
+}
+
+func (p *parser) take(c byte) bool {
+	if p.pos < len(p.input) && p.input[p.pos] == c {
+		p.pos++
+		return true
+	}
+	return false
+}
+
+func (p *parser) consumeLiteral(s string) bool {
+	if len(p.input)-p.pos < len(s) || string(p.input[p.pos:p.pos+len(s)]) != s {
+		return false
+	}
+	end := p.pos + len(s)
+	if end < len(p.input) && !isValueTerminator(p.input[end]) {
+		return false
+	}
+	p.pos = end
+	return true
+}
+
+func isValueStart(c byte) bool {
+	return c == '{' || c == '[' || c == '"' || c == 't' || c == 'f' || c == 'n' || c == '-' || (c >= '0' && c <= '9')
+}
+
+func isValueTerminator(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' || c == ']' || c == '}'
 }
 
 func emit(out *bytes.Buffer, v value) error {
@@ -272,95 +505,6 @@ func emitString(out *bytes.Buffer, s string) {
 		}
 	}
 	out.WriteByte('"')
-}
-
-func scalarString(s string) bool {
-	if !utf8.ValidString(s) {
-		return false
-	}
-	for _, r := range s {
-		if r >= 0xd800 && r <= 0xdfff {
-			return false
-		}
-	}
-	return true
-}
-
-func validateRawJSONStrings(input []byte) error {
-	for i := 0; i < len(input); i++ {
-		if input[i] != '"' {
-			continue
-		}
-		decodedBytes := 0
-		i++
-		for ; i < len(input); i++ {
-			c := input[i]
-			if c == '"' {
-				break
-			}
-			if c < 0x20 {
-				return ErrMalformedJSON
-			}
-			if c != '\\' {
-				if c < utf8.RuneSelf {
-					decodedBytes++
-				} else {
-					_, size := utf8.DecodeRune(input[i:])
-					if size <= 0 {
-						return ErrInvalidUTF8
-					}
-					decodedBytes += size
-					i += size - 1
-				}
-				if decodedBytes > MaxStringUTF8Bytes {
-					return ErrCanonicalResourceLimitExceeded
-				}
-				continue
-			}
-			i++
-			if i >= len(input) {
-				return ErrMalformedJSON
-			}
-			switch input[i] {
-			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
-				decodedBytes++
-			case 'u':
-				cu, next, ok := parseHex4(input, i+1)
-				if !ok {
-					return ErrMalformedJSON
-				}
-				i = next - 1
-				if cu >= 0xd800 && cu <= 0xdbff {
-					if i+6 >= len(input) || input[i+1] != '\\' || input[i+2] != 'u' {
-						return ErrInvalidUnicodeScalar
-					}
-					low, afterLow, ok := parseHex4(input, i+3)
-					if !ok {
-						return ErrMalformedJSON
-					}
-					if low < 0xdc00 || low > 0xdfff {
-						return ErrInvalidUnicodeScalar
-					}
-					r := rune(0x10000 + (uint32(cu)-0xd800)<<10 + (uint32(low) - 0xdc00))
-					decodedBytes += utf8.RuneLen(r)
-					i = afterLow - 1
-				} else if cu >= 0xdc00 && cu <= 0xdfff {
-					return ErrInvalidUnicodeScalar
-				} else {
-					decodedBytes += utf8.RuneLen(rune(cu))
-				}
-			default:
-				return ErrMalformedJSON
-			}
-			if decodedBytes > MaxStringUTF8Bytes {
-				return ErrCanonicalResourceLimitExceeded
-			}
-		}
-		if i >= len(input) || input[i] != '"' {
-			return ErrMalformedJSON
-		}
-	}
-	return nil
 }
 
 func parseHex4(input []byte, start int) (uint16, int, bool) {
