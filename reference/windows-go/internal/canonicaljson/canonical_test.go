@@ -244,3 +244,49 @@ func TestResourcePrecedenceOversizedStringBeforeLaterInvalidSurrogate(t *testing
 		t.Fatalf("err=%v want ErrCanonicalResourceLimitExceeded", err)
 	}
 }
+
+func TestUTF8PrecedenceResourceBeforeLaterInvalidUTF8(t *testing.T) {
+	input := append([]byte(`{"x":"`+strings.Repeat("a", MaxStringUTF8Bytes+1)+`","y":"`), 0xff)
+	got, err := CanonicalizeSyntax(input)
+	if len(got) != 0 {
+		t.Fatalf("failure emitted partial output: %x", got)
+	}
+	if !errors.Is(err, ErrCanonicalResourceLimitExceeded) {
+		t.Fatalf("err=%v want ErrCanonicalResourceLimitExceeded", err)
+	}
+}
+
+func TestUTF8PrecedenceInvalidUTF8BeforeLaterResource(t *testing.T) {
+	input := append([]byte(`{"x":"`), 0xff)
+	input = append(input, []byte(`","y":"`+strings.Repeat("a", MaxStringUTF8Bytes+1)+`"}`)...)
+	got, err := CanonicalizeSyntax(input)
+	if len(got) != 0 {
+		t.Fatalf("failure emitted partial output: %x", got)
+	}
+	if !errors.Is(err, ErrInvalidUTF8) {
+		t.Fatalf("err=%v want ErrInvalidUTF8", err)
+	}
+}
+
+func TestUTF8PrecedenceMalformedBeforeLaterInvalidUTF8(t *testing.T) {
+	input := append([]byte(`{? "x":"ok","y":"`), 0xff)
+	got, err := CanonicalizeSyntax(input)
+	if len(got) != 0 {
+		t.Fatalf("failure emitted partial output: %x", got)
+	}
+	if !errors.Is(err, ErrMalformedJSON) {
+		t.Fatalf("err=%v want ErrMalformedJSON", err)
+	}
+}
+
+func TestUTF8PrecedenceInvalidUTF8BeforeLaterMalformed(t *testing.T) {
+	input := append([]byte(`{"x":"`), 0xff)
+	input = append(input, []byte(`",?}`)...)
+	got, err := CanonicalizeSyntax(input)
+	if len(got) != 0 {
+		t.Fatalf("failure emitted partial output: %x", got)
+	}
+	if !errors.Is(err, ErrInvalidUTF8) {
+		t.Fatalf("err=%v want ErrInvalidUTF8", err)
+	}
+}
