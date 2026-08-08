@@ -13,7 +13,7 @@ Current implemented foundation:
 Deliberate non-claims and open gates:
 
 - This is not yet a complete Windows peer executable. TLS/pairing/HELLO/capabilities/network plumbing still has active security/profile dependencies.
-- Product canonical resource limits are not invented here. The accepted resource-limit profile is still a separate gate; `CanonicalizeSyntax` proves syntax/byte behavior only.
+- The accepted first-slice canonical resource profile is now bound here: raw JSON <= 65,536 bytes, nesting depth <= 8, arrays <= 32 elements, objects <= 32 lexical members, and each decoded key/string <= 32,768 UTF-8 bytes. `CanonicalizeSyntax` enforces those bounds in addition to the V2 byte rules. Exact Windows/DS216 performance and whole-process resource acceptance remain target gates, not inferred from these constants.
 - Local tests are structural evidence only. They are not Windows x64, DS216, LAN, power-loss, package, or product acceptance evidence.
 - The current security successor is not accepted while revoked-certificate re-enrollment remains under correction/review. Pairing must ultimately reject a tombstoned exact certificate identity before `PENDING`.
 
