@@ -14,6 +14,16 @@ import (
 
 const DurableInboxAccepted = "DURABLE_INBOX_ACCEPTED"
 
+const (
+	journalMagic                     = "VMJ1"
+	journalFrameVersion         byte = 1
+	journalPayloadLengthOffset       = 8
+	journalPayloadDigestOffset       = 12
+	journalHeaderDigestOffset        = 44
+	journalHeaderSize                = 76
+	journalMaxRecordPayloadSize      = 16 << 20 // local journal allocation guard, not a Mesh NOTE/product limit
+)
+
 var (
 	ErrTrustInactive           = errors.New("trust inactive")
 	ErrPairMismatch            = errors.New("pair mismatch")
@@ -24,6 +34,7 @@ var (
 	ErrMalformedEnvelope       = errors.New("malformed envelope")
 	ErrStoreNeedsRecovery      = errors.New("store needs recovery")
 	ErrStoreClosed             = errors.New("store closed")
+	ErrJournalFrameTooLarge    = errors.New("journal frame too large")
 )
 
 type Envelope struct {
@@ -119,7 +130,9 @@ func (s *Store) Accept(trust TrustContext, env Envelope) (Receipt, error) {
 	}
 	rec := journalRecord{Version: 1, Envelope: cloneEnvelope(env), Disposition: DurableInboxAccepted}
 	if err := s.append(rec); err != nil {
-		s.poisoned = true
+		if !errors.Is(err, ErrJournalFrameTooLarge) {
+			s.poisoned = true
+		}
 		return Receipt{}, err
 	}
 	s.byID[env.MessageID] = StoredMessage{Envelope: cloneEnvelope(env), Disposition: DurableInboxAccepted}
@@ -215,13 +228,10 @@ func (s *Store) append(rec journalRecord) error {
 	if err != nil {
 		return err
 	}
-	if len(payload) > int(^uint32(0)) {
-		return ErrJournalCorrupt
+	if len(payload) > journalMaxRecordPayloadSize {
+		return ErrJournalFrameTooLarge
 	}
-	sum := sha256.Sum256(payload)
-	var header [36]byte
-	binary.BigEndian.PutUint32(header[:4], uint32(len(payload)))
-	copy(header[4:], sum[:])
+	header := makeJournalHeader(payload)
 	if _, err := s.file.Write(header[:]); err != nil {
 		return err
 	}
@@ -229,6 +239,29 @@ func (s *Store) append(rec journalRecord) error {
 		return err
 	}
 	return s.file.Sync()
+}
+
+func makeJournalHeader(payload []byte) [journalHeaderSize]byte {
+	var header [journalHeaderSize]byte
+	copy(header[:4], journalMagic)
+	header[4] = journalFrameVersion
+	binary.BigEndian.PutUint32(header[journalPayloadLengthOffset:journalPayloadLengthOffset+4], uint32(len(payload)))
+	payloadSum := sha256.Sum256(payload)
+	copy(header[journalPayloadDigestOffset:journalHeaderDigestOffset], payloadSum[:])
+	headerSum := sha256.Sum256(header[:journalHeaderDigestOffset])
+	copy(header[journalHeaderDigestOffset:], headerSum[:])
+	return header
+}
+
+func validJournalHeader(header []byte) bool {
+	if len(header) != journalHeaderSize || string(header[:4]) != journalMagic || header[4] != journalFrameVersion {
+		return false
+	}
+	if header[5] != 0 || header[6] != 0 || header[7] != 0 {
+		return false
+	}
+	want := sha256.Sum256(header[:journalHeaderDigestOffset])
+	return equalBytes(header[journalHeaderDigestOffset:], want[:])
 }
 
 func (s *Store) replay() error {
@@ -240,7 +273,7 @@ func (s *Store) replay() error {
 		if err != nil {
 			return err
 		}
-		var header [36]byte
+		var header [journalHeaderSize]byte
 		n, err := io.ReadFull(s.file, header[:])
 		if err == io.EOF && n == 0 {
 			return nil
@@ -251,8 +284,11 @@ func (s *Store) replay() error {
 		if err != nil {
 			return err
 		}
-		size := binary.BigEndian.Uint32(header[:4])
-		if size > 16<<20 { // local journal corruption guard, not a Mesh protocol resource limit
+		if !validJournalHeader(header[:]) {
+			return ErrJournalCorrupt
+		}
+		size := binary.BigEndian.Uint32(header[journalPayloadLengthOffset : journalPayloadLengthOffset+4])
+		if size > journalMaxRecordPayloadSize {
 			return ErrJournalCorrupt
 		}
 		payload := make([]byte, size)
@@ -262,7 +298,7 @@ func (s *Store) replay() error {
 			}
 			return err
 		}
-		want := header[4:]
+		want := header[journalPayloadDigestOffset:journalHeaderDigestOffset]
 		got := sha256.Sum256(payload)
 		if !equalBytes(want, got[:]) {
 			return ErrJournalCorrupt
