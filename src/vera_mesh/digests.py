@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import hashlib
 import json
-import math
 import re
 from typing import Any
 
@@ -20,6 +19,11 @@ class DigestValidationError(ValueError):
     """Raised when canonical bytes or digest evidence is invalid."""
 
 
+def _validate_unicode_scalar_string(value: str, *, path: str) -> None:
+    if any(0xD800 <= ord(char) <= 0xDFFF for char in value):
+        raise DigestValidationError(f"{path}: invalid Unicode scalar")
+
+
 def _validate_json_value(value: Any, *, path: str = "$") -> None:
     if isinstance(value, Mapping):
         for key, item in value.items():
@@ -27,18 +31,20 @@ def _validate_json_value(value: Any, *, path: str = "$") -> None:
                 raise DigestValidationError(
                     f"{path}: canonical JSON object keys must be strings"
                 )
+            _validate_unicode_scalar_string(key, path=f"{path}.<key>")
             _validate_json_value(item, path=f"{path}.{key}")
         return
     if isinstance(value, list):
         for index, item in enumerate(value):
             _validate_json_value(item, path=f"{path}[{index}]")
         return
-    if value is None or isinstance(value, (str, bool, int)):
+    if isinstance(value, str):
+        _validate_unicode_scalar_string(value, path=path)
+        return
+    if value is None or isinstance(value, (bool, int)):
         return
     if isinstance(value, float):
-        if not math.isfinite(value):
-            raise DigestValidationError(f"{path}: non-finite numbers are forbidden")
-        return
+        raise DigestValidationError(f"{path}: floating-point numbers are forbidden")
     raise DigestValidationError(
         f"{path}: unsupported canonical JSON value type {type(value).__name__}"
     )
