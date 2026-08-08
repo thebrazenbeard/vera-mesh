@@ -25,16 +25,19 @@ const (
 )
 
 var (
-	ErrTrustInactive           = errors.New("trust inactive")
-	ErrPairMismatch            = errors.New("pair mismatch")
-	ErrTrustGenerationMismatch = errors.New("trust generation mismatch")
-	ErrPayloadDigestMismatch   = errors.New("payload digest mismatch")
-	ErrMessageIDConflict       = errors.New("message id conflict")
-	ErrJournalCorrupt          = errors.New("journal corrupt")
-	ErrMalformedEnvelope       = errors.New("malformed envelope")
-	ErrStoreNeedsRecovery      = errors.New("store needs recovery")
-	ErrStoreClosed             = errors.New("store closed")
-	ErrJournalFrameTooLarge    = errors.New("journal frame too large")
+	ErrTrustInactive                 = errors.New("trust inactive")
+	ErrPairMismatch                  = errors.New("pair mismatch")
+	ErrTrustGenerationMismatch       = errors.New("trust generation mismatch")
+	ErrPayloadDigestMismatch         = errors.New("payload digest mismatch")
+	ErrMessageIDConflict             = errors.New("message id conflict")
+	ErrJournalCorrupt                = errors.New("journal corrupt")
+	ErrMalformedEnvelope             = errors.New("malformed envelope")
+	ErrStoreNeedsRecovery            = errors.New("store needs recovery")
+	ErrStoreClosed                   = errors.New("store closed")
+	ErrJournalFrameTooLarge          = errors.New("journal frame too large")
+	ErrTrustedNodeContextMissing     = errors.New("trusted node context missing")
+	ErrAuthenticatedPeerNodeMismatch = errors.New("authenticated peer node mismatch")
+	ErrLocalRecipientNodeMismatch    = errors.New("local recipient node mismatch")
 )
 
 type Envelope struct {
@@ -49,10 +52,18 @@ type Envelope struct {
 	PayloadSHA256    string `json:"payload_sha256"`
 }
 
+// TrustContext is admission evidence supplied by the authenticated transport/local
+// trust layer. AuthenticatedPeerNodeID and LocalNodeID must be derived independently
+// of the Envelope being validated. A detached TrustContext is not, by itself, final
+// revocation serialization: the future authoritative trust layer must hold an admission
+// guard across Accept through the durable Sync decision so revoke and accept have a
+// mechanically total order.
 type TrustContext struct {
-	Active          bool
-	PairID          string
-	TrustGeneration uint64
+	Active                  bool
+	PairID                  string
+	TrustGeneration         uint64
+	AuthenticatedPeerNodeID string
+	LocalNodeID             string
 }
 
 type Receipt struct {
@@ -183,7 +194,19 @@ func validateEnvelope(trust TrustContext, env Envelope) error {
 	if trust.TrustGeneration != env.TrustGeneration {
 		return ErrTrustGenerationMismatch
 	}
-	return validateDurableBinding(env)
+	if err := validateDurableBinding(env); err != nil {
+		return err
+	}
+	if trust.AuthenticatedPeerNodeID == "" || trust.LocalNodeID == "" {
+		return ErrTrustedNodeContextMissing
+	}
+	if env.SenderNodeID != trust.AuthenticatedPeerNodeID {
+		return ErrAuthenticatedPeerNodeMismatch
+	}
+	if env.RecipientNodeID != trust.LocalNodeID {
+		return ErrLocalRecipientNodeMismatch
+	}
+	return nil
 }
 
 func validateDurableBinding(env Envelope) error {
