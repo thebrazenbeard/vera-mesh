@@ -317,15 +317,18 @@ func (p *parser) parseNumberMode(retain bool) (value, error) {
 			p.pos++
 		}
 	} else {
-		return value{}, ErrMalformedJSON
+		return value{}, p.unexpectedError()
 	}
 
 	isFloat := false
 	if p.pos < len(p.input) && p.input[p.pos] == '.' {
 		isFloat = true
 		p.pos++
-		if p.pos >= len(p.input) || p.input[p.pos] < '0' || p.input[p.pos] > '9' {
+		if p.pos >= len(p.input) {
 			return value{}, ErrMalformedJSON
+		}
+		if p.input[p.pos] < '0' || p.input[p.pos] > '9' {
+			return value{}, p.unexpectedError()
 		}
 		for p.pos < len(p.input) && p.input[p.pos] >= '0' && p.input[p.pos] <= '9' {
 			p.pos++
@@ -337,8 +340,11 @@ func (p *parser) parseNumberMode(retain bool) (value, error) {
 		if p.pos < len(p.input) && (p.input[p.pos] == '+' || p.input[p.pos] == '-') {
 			p.pos++
 		}
-		if p.pos >= len(p.input) || p.input[p.pos] < '0' || p.input[p.pos] > '9' {
+		if p.pos >= len(p.input) {
 			return value{}, ErrMalformedJSON
+		}
+		if p.input[p.pos] < '0' || p.input[p.pos] > '9' {
+			return value{}, p.unexpectedError()
 		}
 		for p.pos < len(p.input) && p.input[p.pos] >= '0' && p.input[p.pos] <= '9' {
 			p.pos++
@@ -438,9 +444,9 @@ func (p *parser) parseStringMode(retain bool) (string, error) {
 			}
 			p.pos++
 		case 'u':
-			cu, next, ok := parseHex4(p.input, p.pos+1)
-			if !ok {
-				return "", ErrMalformedJSON
+			cu, next, err := p.parseHex4(p.pos + 1)
+			if err != nil {
+				return "", err
 			}
 			p.pos = next
 			var r rune
@@ -448,9 +454,9 @@ func (p *parser) parseStringMode(retain bool) (string, error) {
 				if p.pos+6 > len(p.input) || p.input[p.pos] != '\\' || p.input[p.pos+1] != 'u' {
 					return "", ErrInvalidUnicodeScalar
 				}
-				low, afterLow, ok := parseHex4(p.input, p.pos+2)
-				if !ok {
-					return "", ErrMalformedJSON
+				low, afterLow, err := p.parseHex4(p.pos + 2)
+				if err != nil {
+					return "", err
 				}
 				if low < 0xdc00 || low > 0xdfff {
 					return "", ErrInvalidUnicodeScalar
@@ -474,7 +480,7 @@ func (p *parser) parseStringMode(retain bool) (string, error) {
 				out.WriteRune(r)
 			}
 		default:
-			return "", ErrMalformedJSON
+			return "", p.lexicalErrorAt(p.pos)
 		}
 	}
 	return "", ErrMalformedJSON
@@ -524,18 +530,22 @@ func (p *parser) consumeLiteral(s string) error {
 	return nil
 }
 
-func (p *parser) unexpectedError() error {
-	if p.pos >= len(p.input) {
+func (p *parser) lexicalErrorAt(pos int) error {
+	if pos >= len(p.input) {
 		return ErrMalformedJSON
 	}
-	if p.input[p.pos] < utf8.RuneSelf {
+	if p.input[pos] < utf8.RuneSelf {
 		return ErrMalformedJSON
 	}
-	r, size := utf8.DecodeRune(p.input[p.pos:])
+	r, size := utf8.DecodeRune(p.input[pos:])
 	if r == utf8.RuneError && size == 1 {
 		return ErrInvalidUTF8
 	}
 	return ErrMalformedJSON
+}
+
+func (p *parser) unexpectedError() error {
+	return p.lexicalErrorAt(p.pos)
 }
 
 func isValueStart(c byte) bool {
@@ -624,19 +634,19 @@ func emitString(out *bytes.Buffer, s string) {
 	out.WriteByte('"')
 }
 
-func parseHex4(input []byte, start int) (uint16, int, bool) {
-	if start+4 > len(input) {
-		return 0, start, false
-	}
+func (p *parser) parseHex4(start int) (uint16, int, error) {
 	var v uint16
 	for i := start; i < start+4; i++ {
-		d, ok := fromHex(input[i])
+		if i >= len(p.input) {
+			return 0, start, ErrMalformedJSON
+		}
+		d, ok := fromHex(p.input[i])
 		if !ok {
-			return 0, start, false
+			return 0, start, p.lexicalErrorAt(i)
 		}
 		v = v<<4 | uint16(d)
 	}
-	return v, start + 4, true
+	return v, start + 4, nil
 }
 
 func fromHex(c byte) (byte, bool) {
