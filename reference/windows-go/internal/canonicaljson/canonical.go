@@ -72,7 +72,6 @@ func CanonicalizeSyntax(input []byte) ([]byte, error) {
 	if len(input) >= 3 && input[0] == 0xef && input[1] == 0xbb && input[2] == 0xbf {
 		return nil, ErrMalformedJSON
 	}
-
 	p := parser{input: input}
 	p.skipWhitespace()
 	v, err := p.parseValue(0)
@@ -83,7 +82,6 @@ func CanonicalizeSyntax(input []byte) ([]byte, error) {
 	if p.pos != len(input) {
 		return nil, p.unexpectedError()
 	}
-
 	var out bytes.Buffer
 	if err := emit(&out, v); err != nil {
 		return nil, err
@@ -92,6 +90,10 @@ func CanonicalizeSyntax(input []byte) ([]byte, error) {
 }
 
 func (p *parser) parseValue(depth int) (value, error) {
+	return p.parseValueMode(depth, true)
+}
+
+func (p *parser) parseValueMode(depth int, retain bool) (value, error) {
 	p.skipWhitespace()
 	if p.pos >= len(p.input) {
 		return value{}, ErrMalformedJSON
@@ -102,35 +104,51 @@ func (p *parser) parseValue(depth int) (value, error) {
 		if err := p.consumeLiteral("null"); err != nil {
 			return value{}, err
 		}
-		return value{kind: kindNull}, nil
+		if retain {
+			return value{kind: kindNull}, nil
+		}
+		return value{}, nil
 	case c == 't':
 		if err := p.consumeLiteral("true"); err != nil {
 			return value{}, err
 		}
-		return value{kind: kindBool, b: true}, nil
+		if retain {
+			return value{kind: kindBool, b: true}, nil
+		}
+		return value{}, nil
 	case c == 'f':
 		if err := p.consumeLiteral("false"); err != nil {
 			return value{}, err
 		}
-		return value{kind: kindBool, b: false}, nil
+		if retain {
+			return value{kind: kindBool, b: false}, nil
+		}
+		return value{}, nil
 	case c == '"':
-		s, err := p.parseString()
+		s, err := p.parseStringMode(retain)
 		if err != nil {
 			return value{}, err
 		}
-		return value{kind: kindString, s: s}, nil
+		if retain {
+			return value{kind: kindString, s: s}, nil
+		}
+		return value{}, nil
 	case c == '[':
-		return p.parseArray(depth)
+		return p.parseArrayMode(depth, retain)
 	case c == '{':
-		return p.parseObject(depth)
+		return p.parseObjectMode(depth, retain)
 	case c == '-' || (c >= '0' && c <= '9'):
-		return p.parseNumber()
+		return p.parseNumberMode(retain)
 	default:
 		return value{}, p.unexpectedError()
 	}
 }
 
 func (p *parser) parseArray(depth int) (value, error) {
+	return p.parseArrayMode(depth, true)
+}
+
+func (p *parser) parseArrayMode(depth int, retain bool) (value, error) {
 	containerDepth := depth + 1
 	if containerDepth > MaxNestingDepth {
 		return value{}, ErrCanonicalResourceLimitExceeded
@@ -138,29 +156,38 @@ func (p *parser) parseArray(depth int) (value, error) {
 	p.pos++
 	p.skipWhitespace()
 	if p.take(']') {
-		return value{kind: kindArray}, nil
+		if retain {
+			return value{kind: kindArray}, nil
+		}
+		return value{}, nil
 	}
 
-	vals := make([]value, 0, min(MaxArrayElements, 4))
+	var vals []value
+	if retain {
+		vals = make([]value, 0, min(MaxArrayElements, 4))
+	}
+	count := 0
 	for {
-		if len(vals) >= MaxArrayElements {
-			p.skipWhitespace()
-			if p.pos >= len(p.input) {
-				return value{}, ErrMalformedJSON
-			}
-			if !isValueStart(p.input[p.pos]) {
-				return value{}, p.unexpectedError()
+		if count >= MaxArrayElements {
+			if err := p.validateExcessValue(containerDepth, ']'); err != nil {
+				return value{}, err
 			}
 			return value{}, ErrCanonicalResourceLimitExceeded
 		}
-		v, err := p.parseValue(containerDepth)
+		v, err := p.parseValueMode(containerDepth, retain)
 		if err != nil {
 			return value{}, err
 		}
-		vals = append(vals, v)
+		count++
+		if retain {
+			vals = append(vals, v)
+		}
 		p.skipWhitespace()
 		if p.take(']') {
-			return value{kind: kindArray, a: vals}, nil
+			if retain {
+				return value{kind: kindArray, a: vals}, nil
+			}
+			return value{}, nil
 		}
 		if !p.take(',') {
 			return value{}, p.unexpectedError()
@@ -173,6 +200,10 @@ func (p *parser) parseArray(depth int) (value, error) {
 }
 
 func (p *parser) parseObject(depth int) (value, error) {
+	return p.parseObjectMode(depth, true)
+}
+
+func (p *parser) parseObjectMode(depth int, retain bool) (value, error) {
 	containerDepth := depth + 1
 	if containerDepth > MaxNestingDepth {
 		return value{}, ErrCanonicalResourceLimitExceeded
@@ -180,11 +211,18 @@ func (p *parser) parseObject(depth int) (value, error) {
 	p.pos++
 	p.skipWhitespace()
 	if p.take('}') {
-		return value{kind: kindObject}, nil
+		if retain {
+			return value{kind: kindObject}, nil
+		}
+		return value{}, nil
 	}
 
 	seen := make(map[string]struct{}, min(MaxObjectMembers, 4))
-	members := make([]member, 0, min(MaxObjectMembers, 4))
+	var members []member
+	if retain {
+		members = make([]member, 0, min(MaxObjectMembers, 4))
+	}
+	count := 0
 	for {
 		p.skipWhitespace()
 		if p.pos >= len(p.input) {
@@ -197,7 +235,14 @@ func (p *parser) parseObject(depth int) (value, error) {
 		if err != nil {
 			return value{}, err
 		}
-		if len(members) >= MaxObjectMembers {
+		if count >= MaxObjectMembers {
+			p.skipWhitespace()
+			if !p.take(':') {
+				return value{}, p.unexpectedError()
+			}
+			if err := p.validateExcessValue(containerDepth, '}'); err != nil {
+				return value{}, err
+			}
 			return value{}, ErrCanonicalResourceLimitExceeded
 		}
 		if _, exists := seen[key]; exists {
@@ -208,14 +253,20 @@ func (p *parser) parseObject(depth int) (value, error) {
 		if !p.take(':') {
 			return value{}, p.unexpectedError()
 		}
-		val, err := p.parseValue(containerDepth)
+		val, err := p.parseValueMode(containerDepth, retain)
 		if err != nil {
 			return value{}, err
 		}
-		members = append(members, member{key: key, val: val})
+		count++
+		if retain {
+			members = append(members, member{key: key, val: val})
+		}
 		p.skipWhitespace()
 		if p.take('}') {
-			return value{kind: kindObject, o: members}, nil
+			if retain {
+				return value{kind: kindObject, o: members}, nil
+			}
+			return value{}, nil
 		}
 		if !p.take(',') {
 			return value{}, p.unexpectedError()
@@ -227,7 +278,25 @@ func (p *parser) parseObject(depth int) (value, error) {
 	}
 }
 
+func (p *parser) validateExcessValue(depth int, close byte) error {
+	if _, err := p.parseValueMode(depth, false); err != nil {
+		return err
+	}
+	p.skipWhitespace()
+	if p.pos >= len(p.input) {
+		return ErrMalformedJSON
+	}
+	if p.input[p.pos] != close && p.input[p.pos] != ',' {
+		return p.unexpectedError()
+	}
+	return nil
+}
+
 func (p *parser) parseNumber() (value, error) {
+	return p.parseNumberMode(true)
+}
+
+func (p *parser) parseNumberMode(retain bool) (value, error) {
 	start := p.pos
 	if p.take('-') {
 		if p.pos >= len(p.input) {
@@ -281,6 +350,9 @@ func (p *parser) parseNumber() (value, error) {
 	if isFloat {
 		return value{}, ErrFloatForbidden
 	}
+	if !retain {
+		return value{}, nil
+	}
 
 	raw := string(p.input[start:p.pos])
 	z := new(big.Int)
@@ -291,6 +363,10 @@ func (p *parser) parseNumber() (value, error) {
 }
 
 func (p *parser) parseString() (string, error) {
+	return p.parseStringMode(true)
+}
+
+func (p *parser) parseStringMode(retain bool) (string, error) {
 	if !p.take('"') {
 		return "", ErrMalformedJSON
 	}
@@ -300,7 +376,10 @@ func (p *parser) parseString() (string, error) {
 		c := p.input[p.pos]
 		if c == '"' {
 			p.pos++
-			return out.String(), nil
+			if retain {
+				return out.String(), nil
+			}
+			return "", nil
 		}
 		if c < 0x20 {
 			return "", ErrMalformedJSON
@@ -317,7 +396,9 @@ func (p *parser) parseString() (string, error) {
 			if decodedBytes > MaxStringUTF8Bytes {
 				return "", ErrCanonicalResourceLimitExceeded
 			}
-			out.Write(p.input[p.pos : p.pos+size])
+			if retain {
+				out.Write(p.input[p.pos : p.pos+size])
+			}
 			p.pos += size
 			continue
 		}
@@ -332,24 +413,28 @@ func (p *parser) parseString() (string, error) {
 			if decodedBytes > MaxStringUTF8Bytes {
 				return "", ErrCanonicalResourceLimitExceeded
 			}
-			out.WriteByte(esc)
+			if retain {
+				out.WriteByte(esc)
+			}
 			p.pos++
 		case 'b', 'f', 'n', 'r', 't':
 			decodedBytes++
 			if decodedBytes > MaxStringUTF8Bytes {
 				return "", ErrCanonicalResourceLimitExceeded
 			}
-			switch esc {
-			case 'b':
-				out.WriteByte('\b')
-			case 'f':
-				out.WriteByte('\f')
-			case 'n':
-				out.WriteByte('\n')
-			case 'r':
-				out.WriteByte('\r')
-			case 't':
-				out.WriteByte('\t')
+			if retain {
+				switch esc {
+				case 'b':
+					out.WriteByte('\b')
+				case 'f':
+					out.WriteByte('\f')
+				case 'n':
+					out.WriteByte('\n')
+				case 'r':
+					out.WriteByte('\r')
+				case 't':
+					out.WriteByte('\t')
+				}
 			}
 			p.pos++
 		case 'u':
@@ -385,7 +470,9 @@ func (p *parser) parseString() (string, error) {
 			if decodedBytes > MaxStringUTF8Bytes {
 				return "", ErrCanonicalResourceLimitExceeded
 			}
-			out.WriteRune(r)
+			if retain {
+				out.WriteRune(r)
+			}
 		default:
 			return "", ErrMalformedJSON
 		}
