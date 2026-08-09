@@ -388,15 +388,17 @@ class _Parser:
 
     def parse_hex_code_unit(self) -> int:
         start = self.pos
-        end = start + 4
-        if end > len(self.raw):
-            self.fail("MALFORMED_JSON", offset=start)
-        digits = self.raw[start:end]
-        for index, byte in enumerate(digits):
+        available = min(4, len(self.raw) - start)
+        for index in range(available):
+            byte = self.raw[start + index]
             if byte not in _HEX:
                 if byte >= 0x80:
                     self.decode_utf8_scalar(start + index)
                 self.fail("MALFORMED_JSON", offset=start + index)
+        if available < 4:
+            self.fail("MALFORMED_JSON", offset=start)
+        end = start + 4
+        digits = self.raw[start:end]
         self.pos = end
         return int(digits.decode("ascii"), 16)
 

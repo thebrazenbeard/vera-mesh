@@ -317,3 +317,34 @@ def test_large_integer_path_does_not_mutate_runtime_digit_limit() -> None:
         assert sys.get_int_max_str_digits() == 4300
     finally:
         sys.set_int_max_str_digits(old)
+
+
+def test_short_unicode_escape_scans_present_invalid_utf8_before_eof() -> None:
+    for raw in (
+        b'"\\u\xff',
+        b'"\\u1\xff',
+        b'"\\u12\xff',
+    ):
+        assert_code(raw, "INVALID_UTF8")
+
+
+def test_short_unicode_escape_ascii_or_valid_utf8_nonhex_remains_malformed() -> None:
+    for raw in (
+        b'"\\u1g',
+        b'"\\u1\xc3\xa9',
+    ):
+        assert_code(raw, "MALFORMED_JSON")
+
+
+def test_short_unicode_escape_clean_eof_remains_malformed() -> None:
+    for raw in (
+        b'"\\u',
+        b'"\\u1',
+        b'"\\u12',
+        b'"\\u123',
+    ):
+        assert_code(raw, "MALFORMED_JSON")
+
+
+def test_full_width_unicode_escape_invalid_utf8_control_remains_invalid_utf8() -> None:
+    assert_code(b'"\\u123\xff', "INVALID_UTF8")
