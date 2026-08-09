@@ -10,6 +10,9 @@ import (
 	"io"
 	"os"
 	"sync"
+
+	"github.com/thebrazenbeard/vera-mesh/reference/windows-go/internal/quota"
+	meshtrust "github.com/thebrazenbeard/vera-mesh/reference/windows-go/internal/trust"
 )
 
 const DurableInboxAccepted = "DURABLE_INBOX_ACCEPTED"
@@ -25,7 +28,6 @@ const (
 )
 
 var (
-	ErrTrustInactive                 = errors.New("trust inactive")
 	ErrPairMismatch                  = errors.New("pair mismatch")
 	ErrTrustGenerationMismatch       = errors.New("trust generation mismatch")
 	ErrPayloadDigestMismatch         = errors.New("payload digest mismatch")
@@ -38,6 +40,8 @@ var (
 	ErrTrustedNodeContextMissing     = errors.New("trusted node context missing")
 	ErrAuthenticatedPeerNodeMismatch = errors.New("authenticated peer node mismatch")
 	ErrLocalRecipientNodeMismatch    = errors.New("local recipient node mismatch")
+	ErrAdmissionAuthorityMissing     = errors.New("admission authority missing")
+	ErrQuotaTrackerMissing           = errors.New("quota tracker missing")
 )
 
 type Envelope struct {
@@ -50,20 +54,6 @@ type Envelope struct {
 	Payload          []byte `json:"payload"`
 	PayloadByteCount uint64 `json:"payload_byte_count"`
 	PayloadSHA256    string `json:"payload_sha256"`
-}
-
-// TrustContext is admission evidence supplied by the authenticated transport/local
-// trust layer. AuthenticatedPeerNodeID and LocalNodeID must be derived independently
-// of the Envelope being validated. A detached TrustContext is not, by itself, final
-// revocation serialization: the future authoritative trust layer must hold an admission
-// guard across Accept through the durable Sync decision so revoke and accept have a
-// mechanically total order.
-type TrustContext struct {
-	Active                  bool
-	PairID                  string
-	TrustGeneration         uint64
-	AuthenticatedPeerNodeID string
-	LocalNodeID             string
 }
 
 type Receipt struct {
@@ -96,12 +86,15 @@ type RecoveryState struct {
 }
 
 type Store struct {
-	mu       sync.Mutex
-	path     string
-	file     journalFile
-	byID     map[string]StoredMessage
-	poisoned bool
-	recovery RecoveryState
+	mu             sync.Mutex
+	path           string
+	file           journalFile
+	byID           map[string]StoredMessage
+	poisoned       bool
+	recovery       RecoveryState
+	authority      *meshtrust.Authority
+	quota          *quota.Tracker
+	committedBytes uint64
 }
 
 func Open(path string) (*Store, error) {
@@ -121,33 +114,77 @@ func Open(path string) (*Store, error) {
 	return s, nil
 }
 
-func (s *Store) Accept(trust TrustContext, env Envelope) (Receipt, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.file == nil {
-		return Receipt{}, ErrStoreClosed
+func OpenForAdmission(path string, authority *meshtrust.Authority, tracker *quota.Tracker) (*Store, error) {
+	if authority == nil {
+		return nil, ErrAdmissionAuthorityMissing
 	}
-	if s.poisoned {
-		return Receipt{}, ErrStoreNeedsRecovery
+	if tracker == nil {
+		return nil, ErrQuotaTrackerMissing
 	}
-	if err := validateEnvelope(trust, env); err != nil {
+	s, err := Open(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := tracker.Restore(uint64(len(s.byID)), s.committedBytes); err != nil {
+		s.Close()
+		return nil, err
+	}
+	s.authority = authority
+	s.quota = tracker
+	return s, nil
+}
+
+func (s *Store) Accept(request meshtrust.AdmissionRequest, env Envelope) (Receipt, error) {
+	if s.authority == nil {
+		return Receipt{}, ErrAdmissionAuthorityMissing
+	}
+	if s.quota == nil {
+		return Receipt{}, ErrQuotaTrackerMissing
+	}
+	var receipt Receipt
+	err := s.authority.WithDurableAdmission(request, func(binding meshtrust.Binding) error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.file == nil {
+			return ErrStoreClosed
+		}
+		if s.poisoned {
+			return ErrStoreNeedsRecovery
+		}
+		if err := validateEnvelopeBinding(binding, env); err != nil {
+			return err
+		}
+		if prior, ok := s.byID[env.MessageID]; ok {
+			if !sameEnvelope(prior.Envelope, env) {
+				return ErrMessageIDConflict
+			}
+			receipt = Receipt{MessageID: env.MessageID, Disposition: prior.Disposition}
+			return nil
+		}
+		rec := journalRecord{Version: 1, Envelope: cloneEnvelope(env), Disposition: DurableInboxAccepted}
+		frame, err := prepareJournalFrame(rec)
+		if err != nil {
+			return err
+		}
+		err = s.quota.WithCommit(uint64(len(frame)), func() error {
+			return s.appendPrepared(frame)
+		})
+		if err != nil {
+			if !errors.Is(err, quota.ErrLogicalQuotaFull) && !errors.Is(err, ErrJournalFrameTooLarge) {
+				s.poisoned = true
+				return fmt.Errorf("%w: %v", meshtrust.ErrDurableDecisionUnknown, err)
+			}
+			return err
+		}
+		s.byID[env.MessageID] = StoredMessage{Envelope: cloneEnvelope(env), Disposition: DurableInboxAccepted}
+		s.committedBytes += uint64(len(frame))
+		receipt = Receipt{MessageID: env.MessageID, Disposition: DurableInboxAccepted}
+		return nil
+	})
+	if err != nil {
 		return Receipt{}, err
 	}
-	if prior, ok := s.byID[env.MessageID]; ok {
-		if !sameEnvelope(prior.Envelope, env) {
-			return Receipt{}, ErrMessageIDConflict
-		}
-		return Receipt{MessageID: env.MessageID, Disposition: prior.Disposition}, nil
-	}
-	rec := journalRecord{Version: 1, Envelope: cloneEnvelope(env), Disposition: DurableInboxAccepted}
-	if err := s.append(rec); err != nil {
-		if !errors.Is(err, ErrJournalFrameTooLarge) {
-			s.poisoned = true
-		}
-		return Receipt{}, err
-	}
-	s.byID[env.MessageID] = StoredMessage{Envelope: cloneEnvelope(env), Disposition: DurableInboxAccepted}
-	return Receipt{MessageID: env.MessageID, Disposition: DurableInboxAccepted}, nil
+	return receipt, nil
 }
 
 func (s *Store) Count() int {
@@ -184,26 +221,23 @@ func (s *Store) Close() error {
 	return err
 }
 
-func validateEnvelope(trust TrustContext, env Envelope) error {
-	if !trust.Active {
-		return ErrTrustInactive
-	}
-	if trust.PairID != env.PairID {
+func validateEnvelopeBinding(binding meshtrust.Binding, env Envelope) error {
+	if binding.PairID != env.PairID {
 		return ErrPairMismatch
 	}
-	if trust.TrustGeneration != env.TrustGeneration {
+	if binding.TrustGeneration != env.TrustGeneration {
 		return ErrTrustGenerationMismatch
 	}
 	if err := validateDurableBinding(env); err != nil {
 		return err
 	}
-	if trust.AuthenticatedPeerNodeID == "" || trust.LocalNodeID == "" {
+	if binding.AuthenticatedPeerNodeID == "" || binding.LocalNodeID == "" {
 		return ErrTrustedNodeContextMissing
 	}
-	if env.SenderNodeID != trust.AuthenticatedPeerNodeID {
+	if env.SenderNodeID != binding.AuthenticatedPeerNodeID {
 		return ErrAuthenticatedPeerNodeMismatch
 	}
-	if env.RecipientNodeID != trust.LocalNodeID {
+	if env.RecipientNodeID != binding.LocalNodeID {
 		return ErrLocalRecipientNodeMismatch
 	}
 	return nil
@@ -246,22 +280,34 @@ func cloneEnvelope(in Envelope) Envelope {
 	return out
 }
 
-func (s *Store) append(rec journalRecord) error {
+func prepareJournalFrame(rec journalRecord) ([]byte, error) {
 	payload, err := json.Marshal(rec)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(payload) > journalMaxRecordPayloadSize {
-		return ErrJournalFrameTooLarge
+		return nil, ErrJournalFrameTooLarge
 	}
 	header := makeJournalHeader(payload)
-	if _, err := s.file.Write(header[:]); err != nil {
-		return err
-	}
-	if _, err := s.file.Write(payload); err != nil {
+	frame := make([]byte, 0, len(header)+len(payload))
+	frame = append(frame, header[:]...)
+	frame = append(frame, payload...)
+	return frame, nil
+}
+
+func (s *Store) appendPrepared(frame []byte) error {
+	if _, err := s.file.Write(frame); err != nil {
 		return err
 	}
 	return s.file.Sync()
+}
+
+func (s *Store) append(rec journalRecord) error {
+	frame, err := prepareJournalFrame(rec)
+	if err != nil {
+		return err
+	}
+	return s.appendPrepared(frame)
 }
 
 func makeJournalHeader(payload []byte) [journalHeaderSize]byte {
@@ -340,6 +386,7 @@ func (s *Store) replay() error {
 			return ErrJournalCorrupt
 		}
 		s.byID[rec.Envelope.MessageID] = StoredMessage{Envelope: cloneEnvelope(rec.Envelope), Disposition: rec.Disposition}
+		s.committedBytes += uint64(journalHeaderSize) + uint64(size)
 	}
 }
 
