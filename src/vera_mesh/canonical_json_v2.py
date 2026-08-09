@@ -175,10 +175,8 @@ class _Parser:
 
         if not retain:
             return _DISCARDED
-        try:
-            return int(raw[start:self.pos].decode("ascii"))
-        except (UnicodeDecodeError, ValueError):
-            self.fail("MALFORMED_JSON", offset=start)
+        token = raw[start:self.pos]
+        return b"0" if token == b"-0" else token
 
     def parse_float_tail(self) -> None:
         raw = self.raw
@@ -434,8 +432,8 @@ def _emit(value: Any, out: bytearray) -> None:
         out.extend(b"true")
     elif value is False:
         out.extend(b"false")
-    elif isinstance(value, int):
-        out.extend(str(value).encode("ascii"))
+    elif isinstance(value, bytes):
+        out.extend(value)
     elif isinstance(value, str):
         _emit_string(value, out)
     elif isinstance(value, list):

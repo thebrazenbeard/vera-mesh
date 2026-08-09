@@ -1,4 +1,5 @@
 import hashlib
+import sys
 
 import pytest
 
@@ -267,3 +268,52 @@ def test_object_member_33_must_be_complete_before_resource_rejection() -> None:
     assert_code(prefix + b',"k32":"\xff"}', "INVALID_UTF8")
     assert_code(prefix + b',"k32":"\\ud800"}', "INVALID_UNICODE_SCALAR")
     assert_code(prefix + b',"k32":{"x":1}}', "CANONICAL_RESOURCE_LIMIT_EXCEEDED")
+
+
+def _canonicalize_with_int_digit_limit(limit: int, raw: bytes) -> bytes:
+    old = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(limit)
+        return canonicalize_json_v2(raw)
+    finally:
+        sys.set_int_max_str_digits(old)
+
+
+def test_large_integer_4300_and_4301_digits_ignore_runtime_conversion_limit() -> None:
+    n4300 = b"1" * 4300
+    n4301 = b"1" * 4301
+    assert _canonicalize_with_int_digit_limit(4300, n4300) == n4300
+    assert _canonicalize_with_int_digit_limit(4300, n4301) == n4301
+
+
+def test_large_integer_output_is_identical_under_two_runtime_digit_limits() -> None:
+    raw = b"9" * 5000
+    assert _canonicalize_with_int_digit_limit(4300, raw) == raw
+    assert _canonicalize_with_int_digit_limit(10000, raw) == raw
+
+
+def test_large_negative_integer_is_preserved_lexically() -> None:
+    raw = b"-" + (b"8" * 5000)
+    assert _canonicalize_with_int_digit_limit(4300, raw) == raw
+
+
+def test_positive_integer_at_raw_input_ceiling_is_eligible() -> None:
+    raw = b"7" * 65536
+    assert len(raw) == 65536
+    assert _canonicalize_with_int_digit_limit(4300, raw) == raw
+
+
+def test_negative_integer_at_raw_input_ceiling_is_eligible() -> None:
+    raw = b"-" + (b"6" * 65535)
+    assert len(raw) == 65536
+    assert _canonicalize_with_int_digit_limit(4300, raw) == raw
+
+
+def test_large_integer_path_does_not_mutate_runtime_digit_limit() -> None:
+    old = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(4300)
+        assert canonicalize_json_v2(b"5" * 5000) == b"5" * 5000
+        assert sys.get_int_max_str_digits() == 4300
+    finally:
+        sys.set_int_max_str_digits(old)
