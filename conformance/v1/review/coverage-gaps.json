@@ -1,0 +1,127 @@
+{
+  "suite": "VERAMESH_V1_HOSTILE_COVERAGE_GAPS",
+  "status": "NON_NORMATIVE_REVIEW_FIXTURES",
+  "base": "work/vera-mesh-foundation-20260913@3ee4cfc5951f7a1157851873d8fe1e7bea7626e1",
+  "cases": [
+    {
+      "id": "AUTH-P0-006",
+      "priority": "P0",
+      "domain": "http_signature",
+      "stimulus": "omit one required signature parameter or covered component",
+      "expected": ["authentication fails before nonce consumption or state mutation"],
+      "forbidden": ["best-effort acceptance of incomplete signature profile"]
+    },
+    {
+      "id": "PAIR-P0-003",
+      "priority": "P0",
+      "domain": "pairing",
+      "stimulus": "redeem with a P-256 key whose derived SHA-256(SPKI) does not equal declared keyid",
+      "expected": ["pairing fails atomically", "no principal or key binding survives"],
+      "forbidden": ["trusting caller-supplied keyid"]
+    },
+    {
+      "id": "PAIR-P1-004",
+      "priority": "P1",
+      "domain": "pairing",
+      "stimulus": "redeem an expired pairing session with otherwise valid proof",
+      "expected": ["deterministic rejection", "expired token remains unusable"],
+      "forbidden": ["late enrollment"]
+    },
+    {
+      "id": "MAIL-P0-003",
+      "priority": "P0",
+      "domain": "recipient_isolation",
+      "stimulus": "authenticated endpoint fetches a message addressed to a different principal",
+      "expected": ["authorization denial", "no sealed envelope disclosure"],
+      "forbidden": ["direction-only queue access"]
+    },
+    {
+      "id": "MAIL-P1-004",
+      "priority": "P1",
+      "domain": "stream_ordering",
+      "stimulus": "deliver stream sequence N+2 while N+1 is absent",
+      "expected": ["gap is observable", "later delivery is not permanently deadlocked"],
+      "forbidden": ["silent renumbering", "global queue stall"]
+    },
+    {
+      "id": "RECEIPT-P0-004",
+      "priority": "P0",
+      "domain": "receipt_transition",
+      "stimulus": "submit recipient_processed without valid prior recipient_received evidence",
+      "expected": ["invalid transition rejected or kept non-promoting by the normative state projection"],
+      "forbidden": ["processed silently implies durable storage"]
+    },
+    {
+      "id": "RECEIPT-P1-005",
+      "priority": "P1",
+      "domain": "receipt_replay",
+      "stimulus": "replay an already accepted recipient receipt",
+      "expected": ["idempotent result", "no duplicate semantic transition"],
+      "forbidden": ["receipt count changes proposition truth"]
+    },
+    {
+      "id": "AUDIT-P0-001",
+      "priority": "P0",
+      "domain": "external_checkpoint",
+      "stimulus": "present relay-local audit history whose head conflicts with a previously host-signed checkpoint",
+      "expected": ["integrity failure is explicit", "security-sensitive writes are blocked"],
+      "forbidden": ["rewritten local chain accepted as authoritative"]
+    },
+    {
+      "id": "STORAGE-P1-001",
+      "priority": "P1",
+      "domain": "quarantine",
+      "stimulus": "inject one corrupt message/receipt record into a disposable ledger copy",
+      "expected": ["corrupt record is quarantined or surfaced explicitly", "unrelated valid records remain inspectable when safe"],
+      "forbidden": ["silent discard", "single corrupt record poisons all fetches without diagnosis"]
+    },
+    {
+      "id": "MIGRATION-P0-001",
+      "priority": "P0",
+      "domain": "schema_migration",
+      "stimulus": "force migration failure after migration begins",
+      "expected": ["no normal writable service opens on half-migrated schema"],
+      "forbidden": ["partial migration treated as healthy"]
+    },
+    {
+      "id": "RESOURCE-P1-001",
+      "priority": "P1",
+      "domain": "quota",
+      "stimulus": "exceed tested pending-envelope or body-size limit",
+      "expected": ["deterministic bounded rejection", "existing accepted mail remains intact"],
+      "forbidden": ["unbounded growth", "blanket internal error"]
+    },
+    {
+      "id": "HEALTH-P1-001",
+      "priority": "P1",
+      "domain": "transport_health",
+      "stimulus": "make private ingress unavailable while database/audit/core remain healthy",
+      "expected": ["health distinguishes transport failure from core failure"],
+      "forbidden": ["single boolean erases failure domain"]
+    },
+    {
+      "id": "KEY-P0-002",
+      "priority": "P0",
+      "domain": "compromise_recovery",
+      "stimulus": "recover a wiped endpoint through local administration",
+      "expected": ["new cryptographic identity is recorded as discontinuous", "revoked predecessor cannot authenticate new requests"],
+      "forbidden": ["silent key continuity claim"]
+    },
+    {
+      "id": "RELAY-P0-001",
+      "priority": "P0",
+      "domain": "relay_replacement",
+      "stimulus": "replace a relay after custody private-key loss",
+      "expected": ["new relay installation identity is explicit", "endpoint trust must be re-established"],
+      "forbidden": ["replacement masquerades as cryptographic continuation"]
+    },
+    {
+      "id": "UPGRADE-P1-001",
+      "priority": "P1",
+      "domain": "upgrade_rollback",
+      "stimulus": "upgrade with pending envelopes then exercise declared rollback path",
+      "expected": ["pending mail remains recoverable within declared schema compatibility", "unsupported downgrade fails closed with exact recovery instruction"],
+      "forbidden": ["silent data loss", "opening incompatible database writable"]
+    }
+  ]
+}
