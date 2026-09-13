@@ -1,0 +1,9 @@
+{
+  "scenario": "sequence_gap_does_not_deadlock_later_delivery",
+  "stream_id": "22222222-2222-4222-8222-222222222222",
+  "received_sequences": [1, 3],
+  "missing_sequence": 2,
+  "expected_delivery": "sequence_3_remains_deliverable",
+  "expected_evidence": "sequence_gap",
+  "assertion": "Ordering evidence is observable, but a missing earlier message does not permanently block later delivery."
+}

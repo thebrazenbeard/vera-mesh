@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:veramesh:protocol:v1:message-envelope",
+  "title": "VeraMesh V1 sealed message envelope",
+  "description": "The relay-visible, immutable sealed envelope. The ciphertext contains the sender-signed inner application envelope; the relay never interprets that plaintext.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol_version",
+    "message_id",
+    "stream_id",
+    "message_sequence",
+    "message_type",
+    "sender_principal",
+    "sender_signing_key_id",
+    "sender_signing_key_epoch",
+    "recipient_principal",
+    "recipient_hpke_key_id",
+    "recipient_hpke_key_epoch",
+    "created_at",
+    "expires_at",
+    "ciphertext_base64",
+    "ciphertext_sha256",
+    "hpke_suite",
+    "aad_binding",
+    "aad_sha256",
+    "envelope_sha256"
+  ],
+  "properties": {
+    "protocol_version": {"const": "v1"},
+    "message_id": {"$ref": "#/$defs/uuid"},
+    "stream_id": {"$ref": "#/$defs/uuid"},
+    "message_sequence": {"type": "integer", "minimum": 1},
+    "message_type": {"const": "application"},
+    "sender_principal": {"$ref": "#/$defs/endpointPrincipal"},
+    "sender_signing_key_id": {"$ref": "#/$defs/keyId"},
+    "sender_signing_key_epoch": {"type": "integer", "minimum": 1},
+    "recipient_principal": {"$ref": "#/$defs/endpointPrincipal"},
+    "recipient_hpke_key_id": {"$ref": "#/$defs/keyId"},
+    "recipient_hpke_key_epoch": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/utcTimestamp"},
+    "expires_at": {"$ref": "#/$defs/utcTimestamp"},
+    "ciphertext_base64": {"$ref": "#/$defs/nonEmptyBase64"},
+    "ciphertext_sha256": {"$ref": "#/$defs/sha256"},
+    "hpke_suite": {"const": "DHKEM(X25519,HKDF-SHA256)-HKDF-SHA256-AES-128-GCM"},
+    "aad_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "message_id",
+        "stream_id",
+        "message_sequence",
+        "message_type",
+        "sender_principal",
+        "sender_signing_key_id",
+        "sender_signing_key_epoch",
+        "recipient_principal",
+        "recipient_hpke_key_id",
+        "recipient_hpke_key_epoch"
+      ],
+      "properties": {
+        "protocol_version": {"const": "v1"},
+        "message_id": {"$ref": "#/$defs/uuid"},
+        "stream_id": {"$ref": "#/$defs/uuid"},
+        "message_sequence": {"type": "integer", "minimum": 1},
+        "message_type": {"const": "application"},
+        "sender_principal": {"$ref": "#/$defs/endpointPrincipal"},
+        "sender_signing_key_id": {"$ref": "#/$defs/keyId"},
+        "sender_signing_key_epoch": {"type": "integer", "minimum": 1},
+        "recipient_principal": {"$ref": "#/$defs/endpointPrincipal"},
+        "recipient_hpke_key_id": {"$ref": "#/$defs/keyId"},
+        "recipient_hpke_key_epoch": {"type": "integer", "minimum": 1}
+      }
+    },
+    "aad_sha256": {"$ref": "#/$defs/sha256"},
+    "envelope_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"sender_principal": {"pattern": "^phone:"}}},
+      "then": {"properties": {"recipient_principal": {"pattern": "^host:"}}}
+    },
+    {
+      "if": {"properties": {"sender_principal": {"pattern": "^host:"}}},
+      "then": {"properties": {"recipient_principal": {"pattern": "^phone:"}}}
+    },
+    {
+      "if": {"properties": {"aad_binding": {"type": "object"}}},
+      "then": {"description": "aad_binding is required and is semantically required to equal the corresponding outer fields; equality is checked by conformance tests."}
+    }
+  ],
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "keyId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "endpointPrincipal": {
+      "type": "string",
+      "pattern": "^(phone|host):[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "nonEmptyBase64": {
+      "type": "string",
+      "minLength": 4,
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+    }
+  }
+}
