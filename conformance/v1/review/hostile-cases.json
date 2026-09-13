@@ -1,0 +1,217 @@
+{
+  "suite": "VERAMESH_V1_HOSTILE_REVIEW_VECTORS",
+  "status": "NON_NORMATIVE_REVIEW_FIXTURES",
+  "base": "work/vera-mesh-foundation-20260913@3ee4cfc5951f7a1157851873d8fe1e7bea7626e1",
+  "cases": [
+    {
+      "id": "AUTH-P0-001",
+      "priority": "P0",
+      "domain": "http_signature",
+      "preconditions": ["principal enrolled with policy ecdsa-p256-sha256"],
+      "stimulus": "submit a correctly structured request signed by an RSA key while labeling it ecdsa-p256-sha256",
+      "expected": ["request rejected before authorization/state mutation", "actual key type is independently checked"],
+      "forbidden": ["acceptance based only on alg label", "nonce/state consumption after failed key validation"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "AUTH-P0-002",
+      "priority": "P0",
+      "domain": "http_signature",
+      "preconditions": ["principal enrolled with policy ecdsa-p256-sha256"],
+      "stimulus": "submit request signed by P-384 EC key labeled ecdsa-p256-sha256",
+      "expected": ["request rejected before authorization/state mutation", "curve is verified as P-256"],
+      "forbidden": ["successful authentication"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "AUTH-P0-003",
+      "priority": "P0",
+      "domain": "authorization",
+      "preconditions": ["valid phone-client authentication", "target operation is host-only or targets another recipient"],
+      "stimulus": "submit authenticated cross-role or cross-recipient operation",
+      "expected": ["authorization denial", "no protected state mutation"],
+      "forbidden": ["authentication treated as permission", "caller-controlled direction overrides role-derived direction"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "AUTH-P1-004",
+      "priority": "P1",
+      "domain": "replay",
+      "preconditions": ["one valid signed request has already succeeded"],
+      "stimulus": "replay the identical request with identical nonce and signature",
+      "expected": ["second request rejected as replay", "original committed result remains unchanged"],
+      "forbidden": ["second business mutation"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "AUTH-P1-005",
+      "priority": "P1",
+      "domain": "cross_relay_replay",
+      "preconditions": ["same endpoint signing identity can be known to two relay installations"],
+      "stimulus": "replay a valid protected request from relay A against relay B at the same method/path",
+      "expected": ["request bound to intended relay installation and rejected by B"],
+      "forbidden": ["acceptance solely because nonce is unused on B"],
+      "requires_normative_closure": true
+    },
+    {
+      "id": "DIGEST-P1-001",
+      "priority": "P1",
+      "domain": "content_digest",
+      "preconditions": ["valid signer and protected body endpoint"],
+      "stimulus": "alter one received body byte without updating Content-Digest/signature",
+      "expected": ["digest verification fails before authorization/state mutation"],
+      "forbidden": ["parsing/mutating based on unsigned altered bytes"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "DIGEST-P2-002",
+      "priority": "P2",
+      "domain": "content_digest",
+      "preconditions": ["VeraMesh declares SHA-256-only Content-Digest policy"],
+      "stimulus": "send a Content-Digest dictionary containing sha-256 plus an additional algorithm member",
+      "expected": ["all conforming implementations make the same accept/reject decision"],
+      "forbidden": ["Node accepts while Android/Python rejects or vice versa because policy was unspecified"],
+      "requires_normative_closure": true
+    },
+    {
+      "id": "FRESH-P2-001",
+      "priority": "P2",
+      "domain": "signature_freshness",
+      "preconditions": ["five-minute freshness design requirement"],
+      "stimulus": "test created/expires exactly on each configured time boundary and just outside it",
+      "expected": ["all implementations apply identical inclusive/exclusive boundary rules and maximum lifetime"],
+      "forbidden": ["language-specific clock-window disagreement"],
+      "requires_normative_closure": true
+    },
+    {
+      "id": "PAIR-P0-001",
+      "priority": "P0",
+      "domain": "pairing",
+      "preconditions": ["single unconsumed pairing session/token"],
+      "stimulus": "redeem the same pairing token concurrently from two clients",
+      "expected": ["at most one principal/key binding commits", "loser observes deterministic rejection", "token consumption and enrollment are atomic"],
+      "forbidden": ["two enrolled principals from one token", "partially created principal without consumed token/audit"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "PAIR-P0-002",
+      "priority": "P0",
+      "domain": "pairing",
+      "preconditions": ["pairing session predetermines phone-client role/scopes"],
+      "stimulus": "redeeming client requests relay-admin or host scopes",
+      "expected": ["requested escalation rejected or ignored in favor of predetermined grant"],
+      "forbidden": ["remote client self-selects stronger role"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "E2E-P0-001",
+      "priority": "P0",
+      "domain": "inner_authorship",
+      "preconditions": ["recipient trusts sender signing key", "relay knows recipient HPKE public key"],
+      "stimulus": "relay or attacker creates a fresh HPKE-valid ciphertext for recipient without a valid sender inner signature",
+      "expected": ["recipient decrypts if cryptographically valid but rejects message authorship before application processing"],
+      "forbidden": ["HPKE base-mode ciphertext accepted as proof of sender identity"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "E2E-P1-002",
+      "priority": "P1",
+      "domain": "inner_signature_bytes",
+      "preconditions": ["same logical JSON data can be serialized with different insignificant whitespace/key ordering"],
+      "stimulus": "recipient parses and reserializes signed inner JSON before verification",
+      "expected": ["normative profile defines exact signed bytes so verification never depends on reconstructed JSON"],
+      "forbidden": ["implementation-specific JSON canonicalization assumptions"],
+      "requires_normative_closure": true
+    },
+    {
+      "id": "MAIL-P0-001",
+      "priority": "P0",
+      "domain": "idempotency",
+      "preconditions": ["sender/message-id pair already accepted with envelope hash H1"],
+      "stimulus": "submit same sender/message-id with different immutable envelope hash H2",
+      "expected": ["idempotency conflict", "original stored envelope remains unchanged"],
+      "forbidden": ["duplicate success hiding changed content", "overwrite of original envelope"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "MAIL-P1-002",
+      "priority": "P1",
+      "domain": "ambiguous_commit_retry",
+      "preconditions": ["relay commits message acceptance but response is lost"],
+      "stimulus": "sender retries same message identity/content using a fresh HTTP nonce/signature",
+      "expected": ["relay returns semantically equivalent original custody result", "no duplicate immutable message row"],
+      "forbidden": ["second business acceptance", "requirement that nondeterministic ECDSA signature bytes be identical unless exact signed receipt was durably persisted"],
+      "requires_normative_closure": true
+    },
+    {
+      "id": "RECEIPT-P0-001",
+      "priority": "P0",
+      "domain": "recipient_durability",
+      "preconditions": ["recipient has received a valid sealed envelope"],
+      "stimulus": "recipient attempts to emit durable-storage receipt before durable inbox write",
+      "expected": ["conforming recipient implementation orders durable write before receipt creation"],
+      "forbidden": ["receipt proves storage that can be lost immediately on process death"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "RECEIPT-P0-002",
+      "priority": "P0",
+      "domain": "receipt_authenticity",
+      "preconditions": ["relay has message but no valid recipient-signed durable-storage receipt"],
+      "stimulus": "relay fabricates or substitutes recipient_received evidence",
+      "expected": ["sender/GC logic rejects receipt lacking valid recipient signature and binding"],
+      "forbidden": ["relay alone can cause recipient-received proposition to become true"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "RECEIPT-P0-003",
+      "priority": "P0",
+      "domain": "receipt_visibility",
+      "preconditions": ["relay GC is gated by valid recipient durable-storage evidence"],
+      "stimulus": "recipient sends storage acknowledgement only inside an HPKE-opaque application envelope",
+      "expected": ["protocol has separate relay-verifiable non-secret custody evidence if relay GC depends on it"],
+      "forbidden": ["relay claims verification of plaintext/signature fields it cannot inspect"],
+      "requires_normative_closure": true
+    },
+    {
+      "id": "CUSTODY-P0-001",
+      "priority": "P0",
+      "domain": "relay_custody_trust",
+      "preconditions": ["endpoint receives relay-signed acceptance receipt"],
+      "stimulus": "receipt is signed by an otherwise valid but previously untrusted relay custody key",
+      "expected": ["endpoint rejects custody claim unless relay installation/key binding is trusted from pairing/bootstrap"],
+      "forbidden": ["any valid P-256 key can impersonate trusted relay custody"],
+      "requires_normative_closure": true
+    },
+    {
+      "id": "RECOVERY-P1-001",
+      "priority": "P1",
+      "domain": "process_failure",
+      "preconditions": ["relay has transactional SQLite ledger"],
+      "stimulus": "kill process after durable DB commit but before HTTP response delivery",
+      "expected": ["restart preserves committed acceptance", "retry reconciles by stable message identity"],
+      "forbidden": ["timeout interpreted as proof of rollback"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "RECOVERY-P0-002",
+      "priority": "P0",
+      "domain": "integrity_failure",
+      "preconditions": ["audit/security-integrity verification is failed"],
+      "stimulus": "attempt security-sensitive state mutation",
+      "expected": ["write is blocked until integrity is reconciled"],
+      "forbidden": ["0005 behavior: health red while sensitive writes continue"],
+      "requires_normative_closure": false
+    },
+    {
+      "id": "KEY-P0-001",
+      "priority": "P0",
+      "domain": "key_rotation",
+      "preconditions": ["old HPKE key epoch still has unresolved queued envelopes"],
+      "stimulus": "rotate to new HPKE epoch and immediately destroy old private key",
+      "expected": ["implementation prevents or delays destruction until old-epoch envelopes are durably resolved/expired per policy"],
+      "forbidden": ["rotation silently renders accepted pending envelopes undecryptable"],
+      "requires_normative_closure": false
+    }
+  ]
+}
