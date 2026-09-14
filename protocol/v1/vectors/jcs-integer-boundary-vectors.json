@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "profile": "protocol/v1/message-envelope-serialization-profile.md",
+  "vectors": [
+    {
+      "id": "message-sequence-over-jcs-safe-integer-001",
+      "expected": "REJECT",
+      "field": "message_sequence",
+      "value": 9007199254740992,
+      "limit": 9007199254740991,
+      "reason": "i-json-safe-integer-exceeded"
+    },
+    {
+      "id": "key-epoch-over-jcs-safe-integer-001",
+      "expected": "REJECT",
+      "field": "sender_signing_key_epoch",
+      "value": 9007199254740992,
+      "limit": 9007199254740991,
+      "reason": "i-json-safe-integer-exceeded"
+    }
+  ]
+}

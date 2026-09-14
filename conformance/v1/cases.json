@@ -378,6 +378,20 @@
       ],
       "requires_external_target": false,
       "status": "UNRUN"
+    },
+    {
+      "id": "message-jcs-integer-boundary",
+      "category": "message-security",
+      "priority": "required",
+      "setup": "Use a message envelope whose message sequence or key epoch is the first integer above the I-JSON/JCS safe range.",
+      "action": "Validate the envelope against the normative schema before computing or accepting its hashes.",
+      "expected": "Reject the out-of-range integer rather than relying on language-specific number precision.",
+      "fixture_refs": [
+        "protocol/v1/vectors/jcs-integer-boundary-vectors.json#message-sequence-over-jcs-safe-integer-001",
+        "protocol/v1/fixtures/messages/invalid-jcs-integer-boundary.json"
+      ],
+      "requires_external_target": false,
+      "status": "UNRUN"
     }
   ],
   "required_case_ids": [
@@ -410,6 +424,7 @@
     "message-inner-signature-reserialization",
     "receipt-custody-trust-bootstrap",
     "mailbox-custody-retry-equivalence",
-    "mailbox-gc-requires-verified-storage-receipt"
+    "mailbox-gc-requires-verified-storage-receipt",
+    "message-jcs-integer-boundary"
   ]
 }

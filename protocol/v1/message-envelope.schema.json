@@ -37,8 +37,7 @@
       "$ref": "#/$defs/uuid"
     },
     "message_sequence": {
-      "type": "integer",
-      "minimum": 1
+      "$ref": "#/$defs/jcsPositiveInteger"
     },
     "message_type": {
       "const": "application"
@@ -50,8 +49,7 @@
       "$ref": "#/$defs/keyId"
     },
     "sender_signing_key_epoch": {
-      "type": "integer",
-      "minimum": 1
+      "$ref": "#/$defs/jcsPositiveInteger"
     },
     "recipient_principal": {
       "$ref": "#/$defs/endpointPrincipal"
@@ -60,8 +58,7 @@
       "$ref": "#/$defs/keyId"
     },
     "recipient_hpke_key_epoch": {
-      "type": "integer",
-      "minimum": 1
+      "$ref": "#/$defs/jcsPositiveInteger"
     },
     "created_at": {
       "$ref": "#/$defs/utcTimestamp"
@@ -105,8 +102,7 @@
           "$ref": "#/$defs/uuid"
         },
         "message_sequence": {
-          "type": "integer",
-          "minimum": 1
+          "$ref": "#/$defs/jcsPositiveInteger"
         },
         "message_type": {
           "const": "application"
@@ -118,8 +114,7 @@
           "$ref": "#/$defs/keyId"
         },
         "sender_signing_key_epoch": {
-          "type": "integer",
-          "minimum": 1
+          "$ref": "#/$defs/jcsPositiveInteger"
         },
         "recipient_principal": {
           "$ref": "#/$defs/endpointPrincipal"
@@ -128,8 +123,7 @@
           "$ref": "#/$defs/keyId"
         },
         "recipient_hpke_key_epoch": {
-          "type": "integer",
-          "minimum": 1
+          "$ref": "#/$defs/jcsPositiveInteger"
         }
       }
     },
@@ -214,7 +208,13 @@
       "type": "string",
       "minLength": 4,
       "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+    },
+    "jcsPositiveInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "description": "I-JSON/JCS safe positive integer; values above 2^53-1 are rejected for interoperability."
     }
   },
-  "$comment": "Canonical bytes and hash construction are normative in protocol/v1/message-envelope-serialization-profile.md. Implementations MUST use those rules rather than a local JSON serializer."
+  "$comment": "Canonical bytes and hash construction are normative in protocol/v1/message-envelope-serialization-profile.md. Implementations MUST use those rules rather than a local JSON serializer. Hashed integer fields are limited to the I-JSON/JCS safe range."
 }

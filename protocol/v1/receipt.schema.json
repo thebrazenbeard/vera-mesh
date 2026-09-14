@@ -21,99 +21,263 @@
     "signature"
   ],
   "properties": {
-    "protocol_version": {"const": "v1"},
-    "receipt_id": {"$ref": "#/$defs/uuid"},
-    "receipt_type": {"enum": ["relay_custody", "recipient_storage", "recipient_processed"]},
-    "message_id": {"$ref": "#/$defs/uuid"},
-    "envelope_sha256": {"$ref": "#/$defs/sha256"},
-    "stream_id": {"$ref": "#/$defs/uuid"},
-    "message_sequence": {"type": "integer", "minimum": 1},
-    "sender_principal": {"$ref": "#/$defs/endpointPrincipal"},
-    "recipient_principal": {"$ref": "#/$defs/endpointPrincipal"},
-    "issued_at": {"$ref": "#/$defs/utcTimestamp"},
-    "relay_installation_id": {"$ref": "#/$defs/installationId"},
-    "signer_binding": {"enum": ["relay_custody", "recipient"]},
+    "protocol_version": {
+      "const": "v1"
+    },
+    "receipt_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "receipt_type": {
+      "enum": [
+        "relay_custody",
+        "recipient_storage",
+        "recipient_processed"
+      ]
+    },
+    "message_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "envelope_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "stream_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "message_sequence": {
+      "$ref": "#/$defs/jcsPositiveInteger"
+    },
+    "sender_principal": {
+      "$ref": "#/$defs/endpointPrincipal"
+    },
+    "recipient_principal": {
+      "$ref": "#/$defs/endpointPrincipal"
+    },
+    "issued_at": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "relay_installation_id": {
+      "$ref": "#/$defs/installationId"
+    },
+    "signer_binding": {
+      "enum": [
+        "relay_custody",
+        "recipient"
+      ]
+    },
     "signer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["role", "principal", "key_id", "key_epoch"],
+      "required": [
+        "role",
+        "principal",
+        "key_id",
+        "key_epoch"
+      ],
       "properties": {
-        "role": {"enum": ["relay-custody", "phone-client", "vera-host"]},
-        "principal": {"$ref": "#/$defs/anySignerPrincipal"},
-        "key_id": {"$ref": "#/$defs/keyId"},
-        "key_epoch": {"type": "integer", "minimum": 1}
+        "role": {
+          "enum": [
+            "relay-custody",
+            "phone-client",
+            "vera-host"
+          ]
+        },
+        "principal": {
+          "$ref": "#/$defs/anySignerPrincipal"
+        },
+        "key_id": {
+          "$ref": "#/$defs/keyId"
+        },
+        "key_epoch": {
+          "$ref": "#/$defs/jcsPositiveInteger"
+        }
       }
     },
     "transition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["from", "to"],
+      "required": [
+        "from",
+        "to"
+      ],
       "properties": {
-        "from": {"enum": ["none", "relay_accepted", "recipient_stored", "recipient_processed"]},
-        "to": {"enum": ["relay_accepted", "recipient_stored", "recipient_processed"]}
+        "from": {
+          "enum": [
+            "none",
+            "relay_accepted",
+            "recipient_stored",
+            "recipient_processed"
+          ]
+        },
+        "to": {
+          "enum": [
+            "relay_accepted",
+            "recipient_stored",
+            "recipient_processed"
+          ]
+        }
       }
     },
     "signature": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["algorithm", "encoding", "key_id", "signature_base64"],
+      "required": [
+        "algorithm",
+        "encoding",
+        "key_id",
+        "signature_base64"
+      ],
       "properties": {
-        "algorithm": {"const": "ecdsa-p256-sha256"},
-        "encoding": {"const": "p1363"},
-        "key_id": {"$ref": "#/$defs/keyId"},
-        "signature_base64": {"$ref": "#/$defs/p1363Signature"}
+        "algorithm": {
+          "const": "ecdsa-p256-sha256"
+        },
+        "encoding": {
+          "const": "p1363"
+        },
+        "key_id": {
+          "$ref": "#/$defs/keyId"
+        },
+        "signature_base64": {
+          "$ref": "#/$defs/p1363Signature"
+        }
       }
     }
   },
   "allOf": [
     {
-      "if": {"properties": {"receipt_type": {"const": "relay_custody"}}},
-      "then": {
-        "required": ["relay_installation_id", "signer_binding"],
+      "if": {
         "properties": {
-          "signer_binding": {"const": "relay_custody"},
+          "receipt_type": {
+            "const": "relay_custody"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "relay_installation_id",
+          "signer_binding"
+        ],
+        "properties": {
+          "signer_binding": {
+            "const": "relay_custody"
+          },
           "signer": {
             "properties": {
-              "role": {"const": "relay-custody"},
-              "principal": {"pattern": "^relay:"}
+              "role": {
+                "const": "relay-custody"
+              },
+              "principal": {
+                "pattern": "^relay:"
+              }
             }
           },
           "transition": {
-            "properties": {"from": {"const": "none"}, "to": {"const": "relay_accepted"}}
+            "properties": {
+              "from": {
+                "const": "none"
+              },
+              "to": {
+                "const": "relay_accepted"
+              }
+            }
           }
         }
       }
     },
     {
-      "if": {"properties": {"receipt_type": {"const": "recipient_storage"}}},
-      "then": {
-        "required": ["signer_binding"],
+      "if": {
         "properties": {
-          "signer_binding": {"const": "recipient"},
-          "signer": {"properties": {"role": {"enum": ["phone-client", "vera-host"]}}},
-          "transition": {
-            "properties": {"from": {"const": "relay_accepted"}, "to": {"const": "recipient_stored"}}
+          "receipt_type": {
+            "const": "recipient_storage"
           }
         }
-      }
-    },
-    {
-      "if": {"properties": {"receipt_type": {"const": "recipient_processed"}}},
+      },
       "then": {
-        "required": ["signer_binding"],
+        "required": [
+          "signer_binding"
+        ],
         "properties": {
-          "signer_binding": {"const": "recipient"},
-          "signer": {"properties": {"role": {"enum": ["phone-client", "vera-host"]}}},
+          "signer_binding": {
+            "const": "recipient"
+          },
+          "signer": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "phone-client",
+                  "vera-host"
+                ]
+              }
+            }
+          },
           "transition": {
-            "properties": {"from": {"const": "recipient_stored"}, "to": {"const": "recipient_processed"}}
+            "properties": {
+              "from": {
+                "const": "relay_accepted"
+              },
+              "to": {
+                "const": "recipient_stored"
+              }
+            }
           }
         }
       }
     },
     {
-      "if": {"properties": {"receipt_type": {"enum": ["recipient_storage", "recipient_processed"]}}},
+      "if": {
+        "properties": {
+          "receipt_type": {
+            "const": "recipient_processed"
+          }
+        }
+      },
       "then": {
-        "not": {"required": ["relay_installation_id"]}
+        "required": [
+          "signer_binding"
+        ],
+        "properties": {
+          "signer_binding": {
+            "const": "recipient"
+          },
+          "signer": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "phone-client",
+                  "vera-host"
+                ]
+              }
+            }
+          },
+          "transition": {
+            "properties": {
+              "from": {
+                "const": "recipient_stored"
+              },
+              "to": {
+                "const": "recipient_processed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "receipt_type": {
+            "enum": [
+              "recipient_storage",
+              "recipient_processed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "relay_installation_id"
+          ]
+        }
       }
     }
   ],
@@ -152,6 +316,13 @@
       "minLength": 88,
       "maxLength": 88,
       "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+    },
+    "jcsPositiveInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "description": "I-JSON/JCS safe positive integer; values above 2^53-1 are rejected for interoperability."
     }
-  }
+  },
+  "$comment": "Signed-object canonical bytes are normative in protocol/v1/signed-object-profile.md; integer fields use the I-JSON/JCS safe range and reject values above 2^53-1."
 }

@@ -34,6 +34,12 @@ def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def jcs(value) -> bytes:
+    return json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+
+
 def decode_b64url(value: str) -> bytes:
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
@@ -157,16 +163,63 @@ def run_non_device_case(case: dict) -> tuple[str, list[str]]:
             return "PASS", ["original JWS verifies; parse/reserialize bytes reject"]
         raise AssertionError("reserialized payload unexpectedly verifies")
 
+    if case_id == "message-jcs-integer-boundary":
+        vector = vector_from_reference(case["fixture_refs"][0])
+        if vector["value"] != vector["limit"] + 1:
+            raise AssertionError("boundary vector is not the first out-of-range integer")
+        if not schema_rejects(case["fixture_refs"][1], "message-envelope.schema.json"):
+            raise AssertionError("out-of-range integer fixture unexpectedly validates")
+        return "PASS", ["out-of-range JCS integer is rejected by schema"]
+
     if case_id == "receipt-custody-trust-bootstrap":
         scenario = load_json(ROOT / case["fixture_refs"][0])
         trusted = scenario["trusted_tuple"]
         matching = scenario["matching_receipt"]
-        if (trusted["relay_installation_id"] != matching["relay_installation_id"] or trusted["custody_key_id"] != matching["signer_key_id"] or trusted["custody_key_epoch"] != matching["signer_key_epoch"]):
-            raise AssertionError("matching custody trust tuple does not match")
+        receipt = load_json(PROTOCOL / "fixtures" / "receipts" / "valid-relay-custody.json")
+        keys = load_json(PROTOCOL / "vectors" / "object-signing-keys.json")
+        relay_key = keys["relay_test_custody_key"]
+        if schema_rejects(
+            "protocol/v1/fixtures/receipts/valid-relay-custody.json",
+            "receipt.schema.json",
+        ):
+            raise AssertionError("valid custody receipt fails its normative schema")
+        actual = (
+            receipt["relay_installation_id"],
+            receipt["signer"]["key_id"],
+            receipt["signer"]["key_epoch"],
+        )
+        expected = (
+            trusted["relay_installation_id"],
+            trusted["custody_key_id"],
+            trusted["custody_key_epoch"],
+        )
+        if actual != expected:
+            raise AssertionError("custody receipt does not match pinned trust tuple")
+        if (matching["relay_installation_id"], matching["signer_key_id"], matching["signer_key_epoch"]) != actual:
+            raise AssertionError("matching scenario does not identify the actual receipt")
+        if receipt["signer"]["principal"] != "relay:" + trusted["relay_installation_id"]:
+            raise AssertionError("custody signer principal is not bound to installation")
+        if receipt["signature"]["key_id"] != receipt["signer"]["key_id"]:
+            raise AssertionError("custody signature key is not bound to signer")
+        spki = base64.b64decode(relay_key["spki_base64"], validate=True)
+        if hashlib.sha256(spki).hexdigest() != relay_key["key_id"]:
+            raise AssertionError("custody SPKI hash does not match catalog key ID")
+        if relay_key["key_id"] != trusted["custody_key_id"]:
+            raise AssertionError("custody catalog key is not the pinned trust key")
+        unsigned = {key: value for key, value in receipt.items() if key != "signature"}
+        verify_p1363(
+            relay_key["spki_base64"],
+            receipt["signature"]["signature_base64"],
+            b"veramesh-v1/receipt\n" + jcs(unsigned),
+        )
         for mismatch in scenario["mismatches"]:
-            if (mismatch["relay_installation_id"] == trusted["relay_installation_id"] and mismatch["signer_key_id"] == trusted["custody_key_id"] and mismatch["signer_key_epoch"] == trusted["custody_key_epoch"]):
+            if (
+                mismatch["relay_installation_id"] == trusted["relay_installation_id"]
+                and mismatch["signer_key_id"] == trusted["custody_key_id"]
+                and mismatch["signer_key_epoch"] == trusted["custody_key_epoch"]
+            ):
                 raise AssertionError("trust mismatch fixture contains a matching tuple")
-        return "PASS", ["installation, custody key, and epoch are all trust-bound"]
+        return "PASS", ["signed custody receipt and trust tuple are mutually bound"]
 
     if case_id == "mailbox-custody-retry-equivalence":
         scenario = load_json(ROOT / case["fixture_refs"][0])

@@ -21,7 +21,7 @@ class ConformanceCatalogTests(unittest.TestCase):
         ids = [case["id"] for case in cases]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(set(self.catalog["required_case_ids"]), set(ids))
-        self.assertEqual(len(self.catalog["required_case_ids"]), 30)
+        self.assertEqual(len(self.catalog["required_case_ids"]), 31)
 
     def test_cases_are_unqualified_until_a_target_is_observed(self):
         permitted = set(self.catalog["statuses"])

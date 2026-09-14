@@ -277,6 +277,18 @@ class ProtocolObjectTests(unittest.TestCase):
                     json.dumps(vector["envelope_without_envelope_sha256"],ensure_ascii=False,sort_keys=True,separators=(",",":")),
                 )
 
+    def test_jcs_integer_boundary_is_rejected(self):
+        vectors = read_json(ROOT / "vectors/jcs-integer-boundary-vectors.json")
+        for vector in vectors["vectors"]:
+            with self.subTest(vector=vector["id"]):
+                self.assertEqual(vector["expected"], "REJECT")
+                self.assertEqual(vector["value"], vector["limit"] + 1)
+                self.assertEqual(vector["limit"], 9007199254740991)
+        hostile = read_json(FIXTURES / "messages/invalid-jcs-integer-boundary.json")
+        errors = list(self.validator("message-envelope.schema.json").iter_errors(hostile))
+        self.assertTrue(errors, "out-of-range JCS integer unexpectedly validated")
+
+
     def test_health_public_surface_is_narrow_and_non_authorizing(self):
         matrix = read_json(ROOT / "authorization-matrix.json")
         health = next(item for item in matrix["operations"] if item["id"] == "health")

@@ -2,7 +2,7 @@
 
 Status: normative.
 
-Pairing proofs and delivery receipts use ECDSA P-256/SHA-256 with IEEE P1363 64-byte signatures. Their signed bytes are domain-separated UTF-8 bytes followed by RFC 8785 JSON Canonicalization Scheme (JCS) bytes. Implementations MUST verify those exact bytes and MUST NOT verify a parse-and-reserialize variant using a different serialization.
+Pairing proofs and delivery receipts use ECDSA P-256/SHA-256 with IEEE P1363 64-byte signatures. Their signed bytes are domain-separated UTF-8 bytes followed by RFC 8785 JSON Canonicalization Scheme (JCS) bytes. Integer-valued schema fields use the I-JSON/JCS safe range through 9007199254740991 (2^53-1); out-of-range numbers are rejected. Implementations MUST verify those exact bytes and MUST NOT verify a parse-and-reserialize variant using a different serialization.
 
 ## Pairing proof
 

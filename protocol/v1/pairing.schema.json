@@ -73,8 +73,7 @@
           "$ref": "#/$defs/sha256"
         },
         "relay_custody_key_epoch": {
-          "type": "integer",
-          "minimum": 1
+          "$ref": "#/$defs/jcsPositiveInteger"
         }
       }
     },
@@ -173,6 +172,13 @@
       "minLength": 88,
       "maxLength": 88,
       "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+    },
+    "jcsPositiveInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "description": "I-JSON/JCS safe positive integer; values above 2^53-1 are rejected for interoperability."
     }
-  }
+  },
+  "$comment": "Signed-object canonical bytes are normative in protocol/v1/signed-object-profile.md; integer fields use the I-JSON/JCS safe range and reject values above 2^53-1."
 }
