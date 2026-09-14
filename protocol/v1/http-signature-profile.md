@@ -14,7 +14,7 @@ This profile fixes the RFC 9421 choices needed for independent implementations. 
 - `tag`: `veramesh-v1`.
 - Body digest: RFC 9530 `Content-Digest` with SHA-256 over the exact received body bytes. The digest is covered by the signature for body-bearing requests. V1 requires exactly one `sha-256` dictionary member; duplicate, additional, or other digest members are rejected rather than ignored.
 - Freshness: `created` and `expires` are Unix seconds. A verifier accepts only when `expires > created`, `expires - created <= 300`, `created <= now + 30`, and `expires >= now`; the 30-second future allowance is clock-skew tolerance, not an extension of the five-minute signed lifetime.
-- `nonce`: base64url without padding, at least 128 bits of entropy. A nonce is single-use for the signing principal and is consumed transactionally with the authorized operation.
+- `nonce`: base64url without padding. The signer MUST generate at least 16 random bytes from a CSPRNG and encode them without padding; the verifier checks the decoded length is at least 16 bytes, the alphabet/padding rules, and single-use uniqueness for the signing principal. A nonce is consumed transactionally with the authorized operation.
 - Protected V1 endpoints do not use semantically meaningful query strings. An implementation rejects a protected request with a query rather than silently dropping it from the authorization decision.
 
 Every protected request requires `created`, `expires`, `nonce`, `keyid`, `alg`, and `tag`. A request signature authenticates the deposit to VeraRelay; it does not prove endpoint-to-endpoint authorship of the sealed ciphertext. That proof is the inner envelope signature.
@@ -76,3 +76,7 @@ The redemption body is forbidden from carrying `enrollment_role`, `enrollment_sc
 ## Interoperability and hostile vectors
 
 `vectors/http-signature-vectors.json` contains a fixed valid P-256/P1363 vector and rejection vectors for RSA, P-384, digest mismatch, stale freshness, and nonce replay. The vector private key is test-only material; it is not a deployment secret. The key-id assertion is over the public SPKI bytes, not over a PEM wrapper or textual key representation.
+
+## Relay trust binding
+
+The locally pinned relay installation identity is part of the protected request contract. x-veramesh-relay-id MUST equal the exact relay_installation_id in the local-admin-created pairing trust tuple. A request signed for one installation is rejected at the binding check when presented to another installation, even when the signing principal is enrolled at both.

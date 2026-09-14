@@ -5,13 +5,21 @@
   "principal_classes": {
     "phone-client": {
       "remote_application": true,
-      "allowed_scopes": ["mailbox:submit", "mailbox:fetch:self", "receipt:create:self"],
+      "allowed_scopes": [
+        "mailbox:submit",
+        "mailbox:fetch:self",
+        "receipt:create:self"
+      ],
       "legal_recipient_class": "vera-host",
       "derived_direction": "phone-to-host"
     },
     "vera-host": {
       "remote_application": true,
-      "allowed_scopes": ["mailbox:submit", "mailbox:fetch:self", "receipt:create:self"],
+      "allowed_scopes": [
+        "mailbox:submit",
+        "mailbox:fetch:self",
+        "receipt:create:self"
+      ],
       "legal_recipient_class": "phone-client",
       "derived_direction": "host-to-phone"
     },
@@ -52,7 +60,12 @@
           "direction": "host-to-phone"
         }
       ],
-      "derive": ["sender_principal", "sender_role", "direction", "legal_recipient_class"],
+      "derive": [
+        "sender_principal",
+        "sender_role",
+        "direction",
+        "legal_recipient_class"
+      ],
       "reject_if": [
         "body contains direction",
         "body contains sender_role",
@@ -79,7 +92,9 @@
           "recipient_principal": "authenticated_principal"
         }
       ],
-      "derive": ["recipient_principal from authenticated principal"],
+      "derive": [
+        "recipient_principal from authenticated principal"
+      ],
       "reject_if": [
         "message recipient differs from authenticated principal",
         "authenticated principal lacks mailbox:fetch:self",
@@ -98,17 +113,25 @@
           "required_scope": "receipt:create:self",
           "receipt_signer": "authenticated_principal",
           "recipient_principal": "authenticated_principal",
-          "receipt_types": ["recipient_storage", "recipient_processed"]
+          "receipt_types": [
+            "recipient_storage",
+            "recipient_processed"
+          ]
         },
         {
           "principal_class": "vera-host",
           "required_scope": "receipt:create:self",
           "receipt_signer": "authenticated_principal",
           "recipient_principal": "authenticated_principal",
-          "receipt_types": ["recipient_storage", "recipient_processed"]
+          "receipt_types": [
+            "recipient_storage",
+            "recipient_processed"
+          ]
         }
       ],
-      "derive": ["receipt signer from authenticated principal"],
+      "derive": [
+        "receipt signer from authenticated principal"
+      ],
       "reject_if": [
         "relay-custody receipt submitted by endpoint",
         "receipt signer differs from authenticated principal",
@@ -130,7 +153,11 @@
           "scopes": "derived from unexpired pairing session"
         }
       ],
-      "derive": ["enrollment_role", "enrollment_scopes", "principal_id from verified signing key"],
+      "derive": [
+        "enrollment_role",
+        "enrollment_scopes",
+        "principal_id from verified signing key"
+      ],
       "reject_if": [
         "redeem body requests a role",
         "redeem body requests scopes",
@@ -154,8 +181,14 @@
           "transport": "local administration"
         }
       ],
-      "derive": ["token_sha256", "one-time session state"],
-      "reject_if": ["remote VeraMesh application principal", "arbitrary remote role or scope grant"]
+      "derive": [
+        "token_sha256",
+        "one-time session state"
+      ],
+      "reject_if": [
+        "remote VeraMesh application principal",
+        "arbitrary remote role or scope grant"
+      ]
     },
     {
       "id": "health",
@@ -163,9 +196,37 @@
       "path": "/v1/health",
       "authentication": "none",
       "body_schema": null,
-      "allow": [{"principal_class": "private-transport-observer", "scope": "health:read-only"}],
+      "allow": [
+        {
+          "principal_class": "private-transport-observer",
+          "scope": "health:read-only"
+        }
+      ],
       "derive": [],
-      "reject_if": ["health response is treated as authorization", "health response exposes endpoint plaintext or private keys"]
+      "reject_if": [
+        "health response is treated as authorization",
+        "health response exposes endpoint plaintext or private keys",
+        "health response includes endpoint plaintext, private keys, principal inventory, or message metadata"
+      ],
+      "public_response_fields": [
+        "overall_state",
+        "process",
+        "database",
+        "audit",
+        "storage",
+        "auth",
+        "transport",
+        "pairing",
+        "write_availability",
+        "degraded_reasons"
+      ],
+      "response_policy": {
+        "public": true,
+        "allow_endpoint_plaintext": false,
+        "allow_private_keys": false,
+        "allow_principal_inventory": false,
+        "allow_message_metadata": false
+      }
     },
     {
       "id": "admin_operations",
@@ -181,7 +242,11 @@
         }
       ],
       "derive": [],
-      "reject_if": ["remote phone-client", "remote vera-host", "tailnet membership used as Vera authorization"]
+      "reject_if": [
+        "remote phone-client",
+        "remote vera-host",
+        "tailnet membership used as Vera authorization"
+      ]
     }
   ],
   "global_invariants": [

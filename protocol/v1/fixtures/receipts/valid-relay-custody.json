@@ -9,12 +9,12 @@
   "sender_principal": "phone:pixel",
   "recipient_principal": "host:vera",
   "issued_at": "2026-09-13T18:00:01Z",
-  "relay_installation_id": "ds216",
+  "relay_installation_id": "relay-ds216",
   "signer_binding": "relay_custody",
   "signer": {
     "role": "relay-custody",
     "principal": "relay:ds216",
-    "key_id": "3b31caba729282059f371e6ee601f7fb3f1466f1bf13f6df51d2fc60a88a1b93",
+    "key_id": "761986ab6a7af2c56f385496e4e2b8ca46bb15a84323c3681a21b5357f898c15",
     "key_epoch": 1
   },
   "transition": {
@@ -24,7 +24,7 @@
   "signature": {
     "algorithm": "ecdsa-p256-sha256",
     "encoding": "p1363",
-    "key_id": "3b31caba729282059f371e6ee601f7fb3f1466f1bf13f6df51d2fc60a88a1b93",
-    "signature_base64": "IhGgndMTkUYNMLOYZgbLAe6Yxgm1/zRrlWbyAmCwMHaCJl6SAY/drhn/xdanHL7DHg8DFUwV9YE/EkoVfuOGpg=="
+    "key_id": "761986ab6a7af2c56f385496e4e2b8ca46bb15a84323c3681a21b5357f898c15",
+    "signature_base64": "7XV92lgvJR3cq+QtwPtVU+186mFJxpa536Y7/736XXlwsHtmIPXawP6qraTwavs1ILE4yrxTt6ELV0n5fLggsQ=="
   }
 }

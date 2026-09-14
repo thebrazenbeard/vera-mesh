@@ -67,5 +67,36 @@ class SignedObjectTests(unittest.TestCase):
         self.assertIn('MUST NOT parse the payload and reserialize it', text)
 
 
+
+    def test_relay_custody_receipt_matches_pinned_trust_tuple(self):
+        pairing = load(FIX / "pairing" / "valid-create-session.json")
+        receipt = load(FIX / "receipts" / "valid-relay-custody.json")
+        trusted = (pairing["relay_installation_id"],pairing["relay_custody_key_id"],pairing["relay_custody_key_epoch"])
+        asserted = (receipt["relay_installation_id"],receipt["signer"]["key_id"],receipt["signer"]["key_epoch"])
+        self.assertEqual(asserted, trusted)
+        self.assertEqual(receipt["signer"]["principal"], "relay:" + trusted[0])
+        self.assertEqual(receipt["signature"]["key_id"], receipt["signer"]["key_id"])
+        scenario = load(FIX / "scenarios" / "relay-custody-trust-mismatch.json")
+        for mismatch in scenario["mismatches"]:
+            self.assertNotEqual((mismatch["relay_installation_id"],mismatch["signer_key_id"],mismatch["signer_key_epoch"]),trusted)
+
+    def test_inner_jws_vector_verifies_original_payload_bytes_only(self):
+        vector = load(ROOT / "vectors" / "inner-envelope-vectors.json")["vectors"][0]
+        self.assertEqual(vector["signing_input"],vector["protected_header_base64url"]+"."+vector["payload_base64url"])
+        self.assertEqual(vector["compact_jws"],vector["signing_input"]+"."+vector["signature_base64url"])
+        signature_b64 = base64.urlsafe_b64encode(base64.urlsafe_b64decode(vector["signature_base64url"]+"="*(-len(vector["signature_base64url"])%4))).decode("ascii")
+        verify_p1363(vector["key"]["spki_base64"],signature_b64,vector["signing_input"].encode("ascii"))
+        reserialized = base64.urlsafe_b64encode(vector["reserialized_payload_utf8"].encode("utf-8")).rstrip(b"=")
+        with self.assertRaises(Exception):
+            verify_p1363(vector["key"]["spki_base64"],signature_b64,(vector["protected_header_base64url"]+"."+reserialized.decode("ascii")).encode("ascii"))
+
+    def test_pairing_session_hashes_and_custody_key_are_bound(self):
+        pairing = load(FIX / "pairing" / "valid-create-session.json")
+        token = load(FIX / "pairing" / "valid-redeem.json")["pairing_token"]
+        token_bytes = base64.urlsafe_b64decode(token+"="*(-len(token)%4))
+        self.assertEqual(pairing["token_sha256"],hashlib.sha256(token_bytes).hexdigest())
+        custody_spki = base64.b64decode(pairing["relay_custody_public_key_spki_base64"],validate=True)
+        self.assertEqual(pairing["relay_custody_key_id"],hashlib.sha256(custody_spki).hexdigest())
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

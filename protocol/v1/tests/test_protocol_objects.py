@@ -250,8 +250,43 @@ class ProtocolObjectTests(unittest.TestCase):
                             replay_of["request"]["signature_input"], "nonce"
                         )
                         self.assertIn(replay_nonce, seen_nonces)
+                    elif reason == "relay_binding_mismatch":
+                        self.assertNotEqual(vector["trusted_relay_id"], request["relay_id"])
+                        self.assertIn("x-veramesh-relay-id", signature_input)
+                    elif reason == "content_digest_extra_member":
+                        self.assertEqual(request["content_digest_member_count"], 2)
+                        self.assertIn(",", request["content_digest"])
                     else:
                         self.fail(f"unhandled vector rejection: {reason}")
+
+
+    def test_message_serialization_vectors_freeze_exact_hash_bytes(self):
+        document = read_json(ROOT / "vectors/message-envelope-vectors.json")
+        for vector in document["vectors"]:
+            with self.subTest(vector=vector["id"]):
+                aad_bytes = vector["aad_canonical_utf8"].encode("utf-8")
+                envelope_bytes = vector["envelope_canonical_utf8"].encode("utf-8")
+                self.assertEqual(vector["aad_sha256"], sha256_hex(aad_bytes))
+                self.assertEqual(vector["envelope_sha256"], sha256_hex(envelope_bytes))
+                self.assertEqual(
+                    vector["aad_canonical_utf8"],
+                    json.dumps(vector["aad_binding"],ensure_ascii=False,sort_keys=True,separators=(",",":")),
+                )
+                self.assertEqual(
+                    vector["envelope_canonical_utf8"],
+                    json.dumps(vector["envelope_without_envelope_sha256"],ensure_ascii=False,sort_keys=True,separators=(",",":")),
+                )
+
+    def test_health_public_surface_is_narrow_and_non_authorizing(self):
+        matrix = read_json(ROOT / "authorization-matrix.json")
+        health = next(item for item in matrix["operations"] if item["id"] == "health")
+        self.assertEqual(health["authentication"], "none")
+        self.assertFalse(health["response_policy"]["allow_endpoint_plaintext"])
+        self.assertFalse(health["response_policy"]["allow_private_keys"])
+        self.assertFalse(health["response_policy"]["allow_principal_inventory"])
+        self.assertFalse(health["response_policy"]["allow_message_metadata"])
+        self.assertIn("overall_state", health["public_response_fields"])
+
 
     @staticmethod
     def signature_base(vector) -> str:

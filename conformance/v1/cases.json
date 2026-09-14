@@ -3,7 +3,13 @@
   "protocol_version": "v1",
   "execution_model": "black_box",
   "runner_contract": "runner-contract.md",
-  "statuses": ["PASS", "FAIL", "BLOCKED", "NOT_RUN", "UNRUN"],
+  "statuses": [
+    "PASS",
+    "FAIL",
+    "BLOCKED",
+    "NOT_RUN",
+    "UNRUN"
+  ],
   "cases": [
     {
       "id": "auth-wrong-curve-p384",
@@ -12,7 +18,9 @@
       "setup": "Use the P-384 public key from the fixed HTTP vector.",
       "action": "Submit a request labeled ecdsa-p256-sha256.",
       "expected": "Reject before nonce consumption or operation mutation with a deterministic wrong-key-type-or-curve error.",
-      "fixture_refs": ["protocol/v1/vectors/http-signature-vectors.json#wrong-curve-p384-001"],
+      "fixture_refs": [
+        "protocol/v1/vectors/http-signature-vectors.json#wrong-curve-p384-001"
+      ],
       "requires_external_target": false,
       "status": "UNRUN"
     },
@@ -23,7 +31,9 @@
       "setup": "Use the RSA public key from the fixed HTTP vector.",
       "action": "Submit a request labeled ecdsa-p256-sha256.",
       "expected": "Reject before nonce consumption or operation mutation with a deterministic wrong-key-type-or-curve error.",
-      "fixture_refs": ["protocol/v1/vectors/http-signature-vectors.json#wrong-key-type-rsa-001"],
+      "fixture_refs": [
+        "protocol/v1/vectors/http-signature-vectors.json#wrong-key-type-rsa-001"
+      ],
       "requires_external_target": false,
       "status": "UNRUN"
     },
@@ -34,7 +44,9 @@
       "setup": "Submit one valid signed request and retain its nonce.",
       "action": "Replay the identical request and then replay its nonce with a fresh signature.",
       "expected": "Both replays reject; the original operation remains singular and nonce consumption is durable.",
-      "fixture_refs": ["protocol/v1/vectors/http-signature-vectors.json#replayed-nonce-001"],
+      "fixture_refs": [
+        "protocol/v1/vectors/http-signature-vectors.json#replayed-nonce-001"
+      ],
       "requires_external_target": true,
       "status": "UNRUN"
     },
@@ -45,7 +57,9 @@
       "setup": "Use a body whose bytes differ from the signed Content-Digest.",
       "action": "Submit the request with an otherwise valid P-256 signature.",
       "expected": "Reject before operation mutation because the recomputed RFC 9530 digest differs.",
-      "fixture_refs": ["protocol/v1/vectors/http-signature-vectors.json#digest-mismatch-001"],
+      "fixture_refs": [
+        "protocol/v1/vectors/http-signature-vectors.json#digest-mismatch-001"
+      ],
       "requires_external_target": false,
       "status": "UNRUN"
     },
@@ -56,7 +70,9 @@
       "setup": "Use a correctly signed request outside the five-minute freshness window.",
       "action": "Submit the request.",
       "expected": "Reject without consuming the nonce or mutating the target.",
-      "fixture_refs": ["protocol/v1/vectors/http-signature-vectors.json#stale-request-001"],
+      "fixture_refs": [
+        "protocol/v1/vectors/http-signature-vectors.json#stale-request-001"
+      ],
       "requires_external_target": false,
       "status": "UNRUN"
     },
@@ -67,7 +83,9 @@
       "setup": "Create one local-admin pairing session and two redemption attempts for the same token.",
       "action": "Redeem concurrently and then retry the losing request.",
       "expected": "Exactly one principal is created; the token is consumed once; the loser and later retry reject without partial records.",
-      "fixture_refs": ["protocol/v1/fixtures/pairing/valid-redeem.json"],
+      "fixture_refs": [
+        "protocol/v1/fixtures/pairing/valid-redeem.json"
+      ],
       "requires_external_target": true,
       "status": "UNRUN"
     },
@@ -78,7 +96,9 @@
       "setup": "Use a redemption body that attempts to request relay-admin authority.",
       "action": "Submit the pairing redemption.",
       "expected": "Reject the extra authority claim; the resulting enrollment, if any, uses only the predetermined session role and scopes.",
-      "fixture_refs": ["protocol/v1/fixtures/pairing/invalid-role-escalation.json"],
+      "fixture_refs": [
+        "protocol/v1/fixtures/pairing/invalid-role-escalation.json"
+      ],
       "requires_external_target": false,
       "status": "UNRUN"
     },
@@ -89,7 +109,9 @@
       "setup": "Authenticate as one endpoint and target a message addressed to another endpoint.",
       "action": "Fetch or receipt the cross-recipient message.",
       "expected": "Reject exact-principal mismatch without revealing sealed content or mutating receipt state.",
-      "fixture_refs": ["protocol/v1/fixtures/messages/invalid-cross-role.json"],
+      "fixture_refs": [
+        "protocol/v1/fixtures/messages/invalid-cross-role.json"
+      ],
       "requires_external_target": true,
       "status": "UNRUN"
     },
@@ -100,7 +122,9 @@
       "setup": "Submit an immutable envelope and retain its sender principal plus message ID.",
       "action": "Retry with the same sender principal and message ID but different immutable content.",
       "expected": "Return 409 idempotency_conflict and preserve the first envelope unchanged.",
-      "fixture_refs": ["protocol/v1/fixtures/scenarios/idempotency-conflict.json"],
+      "fixture_refs": [
+        "protocol/v1/fixtures/scenarios/idempotency-conflict.json"
+      ],
       "requires_external_target": true,
       "status": "UNRUN"
     },
@@ -133,7 +157,9 @@
       "setup": "Obtain a valid recipient storage receipt.",
       "action": "Replay it after the same receipt has been accepted.",
       "expected": "The replay is idempotent or rejected deterministically; it cannot create a second state transition.",
-      "fixture_refs": ["protocol/v1/fixtures/receipts/valid-recipient-storage.json"],
+      "fixture_refs": [
+        "protocol/v1/fixtures/receipts/valid-recipient-storage.json"
+      ],
       "requires_external_target": true,
       "status": "UNRUN"
     },
@@ -144,7 +170,9 @@
       "setup": "Accept recipient_processed evidence for an immutable message.",
       "action": "Submit a recipient_storage or delivered transition after processing.",
       "expected": "Reject the backward transition and retain append-only evidence of the stronger prior proposition.",
-      "fixture_refs": ["protocol/v1/fixtures/receipts/invalid-regressed-transition.json"],
+      "fixture_refs": [
+        "protocol/v1/fixtures/receipts/invalid-regressed-transition.json"
+      ],
       "requires_external_target": false,
       "status": "UNRUN"
     },
@@ -232,7 +260,9 @@
       "setup": "Use captured predecessor software/data compatibility evidence with pending mail.",
       "action": "Perform only an explicitly supported rollback/recovery rehearsal.",
       "expected": "The documented compatibility outcome is observed; unsupported downgrade is refused rather than silently opening writable service.",
-      "fixture_refs": ["evidence/prototypes/verarelay-0.3.0-0005.json"],
+      "fixture_refs": [
+        "evidence/prototypes/verarelay-0.3.0-0005.json"
+      ],
       "requires_external_target": true,
       "status": "UNRUN"
     },
@@ -243,7 +273,9 @@
       "setup": "Deliver stream sequence 1 and 3 while sequence 2 is unavailable.",
       "action": "Inspect delivery and ordering evidence.",
       "expected": "Sequence 3 remains deliverable and the missing sequence is visible as a gap; later delivery is not permanently deadlocked.",
-      "fixture_refs": ["protocol/v1/fixtures/scenarios/sequence-gap-observable.json"],
+      "fixture_refs": [
+        "protocol/v1/fixtures/scenarios/sequence-gap-observable.json"
+      ],
       "requires_external_target": true,
       "status": "UNRUN"
     },
@@ -267,6 +299,84 @@
       "expected": "The mutation is blocked and the degraded reason is explicit; health-red alone is not treated as sufficient handling.",
       "fixture_refs": [],
       "requires_external_target": true,
+      "status": "UNRUN"
+    },
+    {
+      "id": "auth-cross-relay-binding",
+      "category": "authentication",
+      "priority": "required",
+      "setup": "Use a correctly signed request whose relay-installation binding names a different trusted relay.",
+      "action": "Submit the request to the locally pinned relay.",
+      "expected": "Reject before nonce consumption because the signed relay-installation binding does not match the local trust tuple.",
+      "fixture_refs": [
+        "protocol/v1/vectors/http-signature-vectors.json#cross-relay-binding-001"
+      ],
+      "requires_external_target": false,
+      "status": "UNRUN"
+    },
+    {
+      "id": "auth-content-digest-extra-member",
+      "category": "authentication",
+      "priority": "required",
+      "setup": "Use a body with one valid SHA-256 digest plus an extra RFC 9530 dictionary member.",
+      "action": "Submit the otherwise protected request.",
+      "expected": "Reject the request under the exact-one-sha-256 policy before operation mutation.",
+      "fixture_refs": [
+        "protocol/v1/vectors/http-signature-vectors.json#content-digest-extra-member-001"
+      ],
+      "requires_external_target": false,
+      "status": "UNRUN"
+    },
+    {
+      "id": "message-inner-signature-reserialization",
+      "category": "message-security",
+      "priority": "required",
+      "setup": "Decrypt a fixed inner JWS whose payload contains insignificant whitespace and a deliberate member order.",
+      "action": "Verify the original compact JWS, then try verification after parsing and reserializing the payload.",
+      "expected": "The original bytes verify; the reserialized payload is rejected.",
+      "fixture_refs": [
+        "protocol/v1/vectors/inner-envelope-vectors.json#inner-jws-reserialization-001"
+      ],
+      "requires_external_target": false,
+      "status": "UNRUN"
+    },
+    {
+      "id": "receipt-custody-trust-bootstrap",
+      "category": "receipts",
+      "priority": "required",
+      "setup": "Pin relay installation, custody key ID, and custody epoch from local-admin pairing material.",
+      "action": "Verify a matching custody receipt and three receipts with one trust-tuple member changed.",
+      "expected": "The matching tuple is accepted; every mismatch is rejected before custody evidence is projected.",
+      "fixture_refs": [
+        "protocol/v1/fixtures/scenarios/relay-custody-trust-mismatch.json"
+      ],
+      "requires_external_target": false,
+      "status": "UNRUN"
+    },
+    {
+      "id": "mailbox-custody-retry-equivalence",
+      "category": "mailbox",
+      "priority": "required",
+      "setup": "Accept one immutable envelope and lose the response after commit.",
+      "action": "Retry the same sender/message/envelope identity.",
+      "expected": "Return the exact original custody receipt bytes; a different envelope under the same identity returns 409 idempotency_conflict.",
+      "fixture_refs": [
+        "protocol/v1/fixtures/scenarios/custody-retry-equivalence.json"
+      ],
+      "requires_external_target": false,
+      "status": "UNRUN"
+    },
+    {
+      "id": "mailbox-gc-requires-verified-storage-receipt",
+      "category": "mailbox",
+      "priority": "required",
+      "setup": "Consider rescue-retention garbage collection for an accepted envelope.",
+      "action": "Evaluate GC with no verified recipient-storage receipt, with recipient_processed only, and with a verified recipient_storage receipt.",
+      "expected": "GC stays blocked for the first two and is eligible only after the exact recipient-storage receipt is verified.",
+      "fixture_refs": [
+        "protocol/v1/fixtures/scenarios/gc-requires-recipient-receipt.json"
+      ],
+      "requires_external_target": false,
       "status": "UNRUN"
     }
   ],
@@ -294,6 +404,12 @@
     "predecessor-rollback",
     "sequence-gap-later-delivery",
     "transport-loss-core-health",
-    "audit-failure-blocks-write"
+    "audit-failure-blocks-write",
+    "auth-cross-relay-binding",
+    "auth-content-digest-extra-member",
+    "message-inner-signature-reserialization",
+    "receipt-custody-trust-bootstrap",
+    "mailbox-custody-retry-equivalence",
+    "mailbox-gc-requires-verified-storage-receipt"
   ]
 }

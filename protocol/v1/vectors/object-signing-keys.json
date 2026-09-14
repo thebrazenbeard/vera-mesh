@@ -7,7 +7,12 @@
   },
   "relay_test_custody_key": {
     "curve": "P-256",
-    "spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdYoUJ3m+iegp5xmEy0DvdYzErXdfxbmj4cjtUvb6NtmnnSR2kvTto6a9q3fWqmR0pGSuSTRmPFJlunAYugkfeQ==",
-    "key_id": "3b31caba729282059f371e6ee601f7fb3f1466f1bf13f6df51d2fc60a88a1b93"
+    "spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMHa/LQ8NYJf5lPWvHAQgMn6/P6f5WtijoBQX48jZm8v65BFKE+MqjnNqPd3bPjP6bwMsf3fa4Id8641YWRMRoQ==",
+    "key_id": "761986ab6a7af2c56f385496e4e2b8ca46bb15a84323c3681a21b5357f898c15"
+  },
+  "inner_test_signing_key": {
+    "curve": "P-256",
+    "spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQ7yx9o+SSBk9OKwv9a0Up4v8U1m/j2UIL5CVM0V5M23RhTBKFlRkW2al3BjIUe2b+ZPmmPFGkafY4NocWUEPVw==",
+    "key_id": "82e5789bd9a4437db9a59fd7f64237f0b721298f8fb105e7183ca028f9749b41"
   }
 }

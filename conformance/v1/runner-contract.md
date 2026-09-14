@@ -45,3 +45,7 @@ The conformance runner never installs a package, deploys, changes Tailscale or o
 ## Required evidence discipline
 
 The runner records observed HTTP status, response body classification, message/receipt IDs, exact target identity, and relevant timestamps. It must not record endpoint private keys, pairing tokens, plaintext application payloads, or unrelated personal data. Ambiguous outcomes are reconciled from the target's public API and retried idempotently; absence of a response is never recorded as proof of non-commit.
+
+## Protocol-fixture runner
+
+`protocol_runner.py` is an independent, target-free contract harness. It executes only cases whose requires_external_target value is false against the published schemas, fixed vectors, and semantic scenarios. Its PASS records are explicitly scoped to protocol-fixture-only; they are not VeraRelay runtime or device conformance evidence. Cases requiring a relay, phone, host, disk pressure, upgrade, restart, or transport change remain UNRUN until a separately supplied black-box adapter is authorized and available.

@@ -27,22 +27,57 @@
     "envelope_sha256"
   ],
   "properties": {
-    "protocol_version": {"const": "v1"},
-    "message_id": {"$ref": "#/$defs/uuid"},
-    "stream_id": {"$ref": "#/$defs/uuid"},
-    "message_sequence": {"type": "integer", "minimum": 1},
-    "message_type": {"const": "application"},
-    "sender_principal": {"$ref": "#/$defs/endpointPrincipal"},
-    "sender_signing_key_id": {"$ref": "#/$defs/keyId"},
-    "sender_signing_key_epoch": {"type": "integer", "minimum": 1},
-    "recipient_principal": {"$ref": "#/$defs/endpointPrincipal"},
-    "recipient_hpke_key_id": {"$ref": "#/$defs/keyId"},
-    "recipient_hpke_key_epoch": {"type": "integer", "minimum": 1},
-    "created_at": {"$ref": "#/$defs/utcTimestamp"},
-    "expires_at": {"$ref": "#/$defs/utcTimestamp"},
-    "ciphertext_base64": {"$ref": "#/$defs/nonEmptyBase64"},
-    "ciphertext_sha256": {"$ref": "#/$defs/sha256"},
-    "hpke_suite": {"const": "DHKEM(X25519,HKDF-SHA256)-HKDF-SHA256-AES-128-GCM"},
+    "protocol_version": {
+      "const": "v1"
+    },
+    "message_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "stream_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "message_sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "message_type": {
+      "const": "application"
+    },
+    "sender_principal": {
+      "$ref": "#/$defs/endpointPrincipal"
+    },
+    "sender_signing_key_id": {
+      "$ref": "#/$defs/keyId"
+    },
+    "sender_signing_key_epoch": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "recipient_principal": {
+      "$ref": "#/$defs/endpointPrincipal"
+    },
+    "recipient_hpke_key_id": {
+      "$ref": "#/$defs/keyId"
+    },
+    "recipient_hpke_key_epoch": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "expires_at": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "ciphertext_base64": {
+      "$ref": "#/$defs/nonEmptyBase64"
+    },
+    "ciphertext_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "hpke_suite": {
+      "const": "DHKEM(X25519,HKDF-SHA256)-HKDF-SHA256-AES-128-GCM"
+    },
     "aad_binding": {
       "type": "object",
       "additionalProperties": false,
@@ -60,34 +95,97 @@
         "recipient_hpke_key_epoch"
       ],
       "properties": {
-        "protocol_version": {"const": "v1"},
-        "message_id": {"$ref": "#/$defs/uuid"},
-        "stream_id": {"$ref": "#/$defs/uuid"},
-        "message_sequence": {"type": "integer", "minimum": 1},
-        "message_type": {"const": "application"},
-        "sender_principal": {"$ref": "#/$defs/endpointPrincipal"},
-        "sender_signing_key_id": {"$ref": "#/$defs/keyId"},
-        "sender_signing_key_epoch": {"type": "integer", "minimum": 1},
-        "recipient_principal": {"$ref": "#/$defs/endpointPrincipal"},
-        "recipient_hpke_key_id": {"$ref": "#/$defs/keyId"},
-        "recipient_hpke_key_epoch": {"type": "integer", "minimum": 1}
+        "protocol_version": {
+          "const": "v1"
+        },
+        "message_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "stream_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "message_sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "message_type": {
+          "const": "application"
+        },
+        "sender_principal": {
+          "$ref": "#/$defs/endpointPrincipal"
+        },
+        "sender_signing_key_id": {
+          "$ref": "#/$defs/keyId"
+        },
+        "sender_signing_key_epoch": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "recipient_principal": {
+          "$ref": "#/$defs/endpointPrincipal"
+        },
+        "recipient_hpke_key_id": {
+          "$ref": "#/$defs/keyId"
+        },
+        "recipient_hpke_key_epoch": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
-    "aad_sha256": {"$ref": "#/$defs/sha256"},
-    "envelope_sha256": {"$ref": "#/$defs/sha256"}
+    "aad_sha256": {
+      "$ref": "#/$defs/sha256",
+      "description": "SHA-256 of the UTF-8 RFC 8785 JCS bytes of aad_binding."
+    },
+    "envelope_sha256": {
+      "$ref": "#/$defs/sha256",
+      "description": "SHA-256 of the UTF-8 RFC 8785 JCS bytes of this object with envelope_sha256 omitted."
+    }
   },
   "allOf": [
     {
-      "if": {"properties": {"sender_principal": {"pattern": "^phone:"}}},
-      "then": {"properties": {"recipient_principal": {"pattern": "^host:"}}}
+      "if": {
+        "properties": {
+          "sender_principal": {
+            "pattern": "^phone:"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "recipient_principal": {
+            "pattern": "^host:"
+          }
+        }
+      }
     },
     {
-      "if": {"properties": {"sender_principal": {"pattern": "^host:"}}},
-      "then": {"properties": {"recipient_principal": {"pattern": "^phone:"}}}
+      "if": {
+        "properties": {
+          "sender_principal": {
+            "pattern": "^host:"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "recipient_principal": {
+            "pattern": "^phone:"
+          }
+        }
+      }
     },
     {
-      "if": {"properties": {"aad_binding": {"type": "object"}}},
-      "then": {"description": "aad_binding is required and is semantically required to equal the corresponding outer fields; equality is checked by conformance tests."}
+      "if": {
+        "properties": {
+          "aad_binding": {
+            "type": "object"
+          }
+        }
+      },
+      "then": {
+        "description": "aad_binding is required and is semantically required to equal the corresponding outer fields; equality is checked by conformance tests."
+      }
     }
   ],
   "$defs": {
@@ -117,5 +215,6 @@
       "minLength": 4,
       "pattern": "^[A-Za-z0-9+/]+={0,2}$"
     }
-  }
+  },
+  "$comment": "Canonical bytes and hash construction are normative in protocol/v1/message-envelope-serialization-profile.md. Implementations MUST use those rules rather than a local JSON serializer."
 }

@@ -21,7 +21,7 @@ class ConformanceCatalogTests(unittest.TestCase):
         ids = [case["id"] for case in cases]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(set(self.catalog["required_case_ids"]), set(ids))
-        self.assertEqual(len(self.catalog["required_case_ids"]), 24)
+        self.assertEqual(len(self.catalog["required_case_ids"]), 30)
 
     def test_cases_are_unqualified_until_a_target_is_observed(self):
         permitted = set(self.catalog["statuses"])
@@ -47,5 +47,20 @@ class ConformanceCatalogTests(unittest.TestCase):
         self.assertIn("must not record endpoint private keys", text)
 
 
+    def test_protocol_fixture_runner_executes_non_device_cases(self):
+        from protocol_runner import run_catalog
+
+        results = run_catalog()
+        by_id = {record["case_id"]: record for record in results}
+        for case in self.catalog["cases"]:
+            with self.subTest(case=case["id"]):
+                if case["requires_external_target"]:
+                    self.assertEqual(by_id[case["id"]]["status"], "UNRUN")
+                else:
+                    self.assertEqual(by_id[case["id"]]["status"], "PASS")
+                self.assertEqual(
+                    by_id[case["id"]]["qualification_scope"],
+                    "protocol-fixture-only",
+                )
 if __name__ == "__main__":
     unittest.main()
