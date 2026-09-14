@@ -84,7 +84,7 @@ class SignedObjectTests(unittest.TestCase):
         vector = load(ROOT / "vectors" / "inner-envelope-vectors.json")["vectors"][0]
         self.assertEqual(vector["signing_input"],vector["protected_header_base64url"]+"."+vector["payload_base64url"])
         self.assertEqual(vector["compact_jws"],vector["signing_input"]+"."+vector["signature_base64url"])
-        signature_b64 = base64.urlsafe_b64encode(base64.urlsafe_b64decode(vector["signature_base64url"]+"="*(-len(vector["signature_base64url"])%4))).decode("ascii")
+        signature_b64 = vector["signature_base64url"].replace("-", "+").replace("_", "/") + "=" * (-len(vector["signature_base64url"]) % 4)
         verify_p1363(vector["key"]["spki_base64"],signature_b64,vector["signing_input"].encode("ascii"))
         reserialized = base64.urlsafe_b64encode(vector["reserialized_payload_utf8"].encode("utf-8")).rstrip(b"=")
         with self.assertRaises(Exception):

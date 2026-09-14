@@ -7,8 +7,8 @@
   },
   "relay_test_custody_key": {
     "curve": "P-256",
-    "spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMHa/LQ8NYJf5lPWvHAQgMn6/P6f5WtijoBQX48jZm8v65BFKE+MqjnNqPd3bPjP6bwMsf3fa4Id8641YWRMRoQ==",
-    "key_id": "761986ab6a7af2c56f385496e4e2b8ca46bb15a84323c3681a21b5357f898c15"
+    "spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEPmpgjnU3etP0S/8wdBj2++BkceAkCt9oUvSZ8sooNY3wF/nz1b8zcSYAXhvOI+cFqmQ8hhNyEtBjrYGaXr1lhg==",
+    "key_id": "e103912fa93bb1931efa251f742ce705a92c7fe9a8c753946163d78be4a1fa9d"
   },
   "inner_test_signing_key": {
     "curve": "P-256",
