@@ -3,23 +3,23 @@
   "scenario": "relay-custody-trust-bootstrap",
   "trusted_tuple": {
     "relay_installation_id": "relay-ds216",
-    "custody_key_id": "e103912fa93bb1931efa251f742ce705a92c7fe9a8c753946163d78be4a1fa9d",
+    "custody_key_id": "50b1b0ca61ee2b9b2a48fc24f2ecf779a7f3f345e02df9807ed6d4820c59caee",
     "custody_key_epoch": 1
   },
   "matching_receipt": {
     "relay_installation_id": "relay-ds216",
-    "signer_key_id": "e103912fa93bb1931efa251f742ce705a92c7fe9a8c753946163d78be4a1fa9d",
+    "signer_key_id": "50b1b0ca61ee2b9b2a48fc24f2ecf779a7f3f345e02df9807ed6d4820c59caee",
     "signer_key_epoch": 1
   },
   "mismatches": [
     {
       "relay_installation_id": "ds216",
-      "signer_key_id": "e103912fa93bb1931efa251f742ce705a92c7fe9a8c753946163d78be4a1fa9d",
+      "signer_key_id": "50b1b0ca61ee2b9b2a48fc24f2ecf779a7f3f345e02df9807ed6d4820c59caee",
       "signer_key_epoch": 1
     },
     {
       "relay_installation_id": "relay-ds216",
-      "signer_key_id": "e103912fa93bb1931efa251f742ce705a92c7fe9a8c753946163d78be4a1fa9d",
+      "signer_key_id": "50b1b0ca61ee2b9b2a48fc24f2ecf779a7f3f345e02df9807ed6d4820c59caee",
       "signer_key_epoch": 2
     },
     {

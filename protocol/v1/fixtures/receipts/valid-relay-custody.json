@@ -14,7 +14,7 @@
   "signer": {
     "role": "relay-custody",
     "principal": "relay:relay-ds216",
-    "key_id": "e103912fa93bb1931efa251f742ce705a92c7fe9a8c753946163d78be4a1fa9d",
+    "key_id": "50b1b0ca61ee2b9b2a48fc24f2ecf779a7f3f345e02df9807ed6d4820c59caee",
     "key_epoch": 1
   },
   "transition": {
@@ -24,7 +24,7 @@
   "signature": {
     "algorithm": "ecdsa-p256-sha256",
     "encoding": "p1363",
-    "key_id": "e103912fa93bb1931efa251f742ce705a92c7fe9a8c753946163d78be4a1fa9d",
-    "signature_base64": "w5dFpqmRoySHfODidiJ/S2jYhz5/tLH/oVV6PMcd9RgIY6qCGGekCPT2j0+DoMgcJ/q/chwLS7fI2c57Q/XV0w=="
+    "key_id": "50b1b0ca61ee2b9b2a48fc24f2ecf779a7f3f345e02df9807ed6d4820c59caee",
+    "signature_base64": "vAnY0JaxPcwON5O01EXbMcEm/tzI+jJrWRIb5PPUUOv0dCsKUwKls1C9Zu70DJPO4d/7UBXs/xV+uptJUuUDAQ=="
   }
 }
