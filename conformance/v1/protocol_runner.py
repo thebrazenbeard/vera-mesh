@@ -156,7 +156,8 @@ def run_non_device_case(case: dict) -> tuple[str, list[str]]:
         if original_input != expected_input:
             raise AssertionError("inner signing input is not exact compact bytes")
         verify_p1363(vector["key"]["spki_base64"],vector["signature_base64url"],original_input)
-        changed_input = (vector["protected_header_base64url"]+"."+base64.urlsafe_b64encode(vector["reserialized_payload_utf8"].encode("utf-8")).rstrip(b"=")).encode("ascii")
+        changed_payload = base64.urlsafe_b64encode(vector["reserialized_payload_utf8"].encode("utf-8")).rstrip(b"=").decode("ascii")
+        changed_input = (vector["protected_header_base64url"]+"."+changed_payload).encode("ascii")
         try:
             verify_p1363(vector["key"]["spki_base64"],vector["signature_base64url"],changed_input)
         except Exception:
