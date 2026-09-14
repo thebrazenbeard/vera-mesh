@@ -3,14 +3,14 @@
   "operation": "redeem_session",
   "session_id": "77777777-7777-4777-8777-777777777777",
   "pairing_token": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
-  "signing_public_key_spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaxfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpZP40Li/hp/m47n60p8D54WK84zV2sxXs7LtkBoN79R9Q==",
-  "signing_key_id": "5cd252fb0ce8932436faf8ccd1040981b89ee4ad6b9fe9e2a2b7e71aacb27cd3",
+  "signing_public_key_spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEUNRnC951JE8o0oOKDSVVinpyaG1FItTIJz+2RCrr+pPb3TdVGv0mO139YX85YMZajCmIUP+Z8gNm3OfUNnIX9A==",
+  "signing_key_id": "1f3398e6e278f68a15b7fe32236933b8b2f86a6cb02415c57ecc7e1b9b0f16c3",
   "hpke_public_key_base64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
   "hpke_key_id": "8888888888888888888888888888888888888888888888888888888888888888",
   "proof": {
     "context": "veramesh-v1/pairing-redeem",
     "algorithm": "ecdsa-p256-sha256",
     "encoding": "p1363",
-    "signature_base64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+    "signature_base64": "KcYW5yfifq/mjwc2y4uhUuAhn9/TScwIiEptKxL2CfKqMvoiqqnAXW/+fUH9q187Yg733JmU7zHQY/Np3VHj0Q=="
   }
 }

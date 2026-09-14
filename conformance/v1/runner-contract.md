@@ -15,6 +15,8 @@ health() -> structured health response
 restart() -> controlled process restart
 ```
 
+`pair(role)` is a local-admin/test-harness setup operation. The role is predetermined by isolated test setup; it is never a role or scope requested by a remote caller.
+
 The adapter may implement setup and teardown for its own isolated target. It must report the exact implementation repository, source commit, build identity, and artifact hash when those exist. A runner result is not release or deployment evidence.
 
 ## Result contract

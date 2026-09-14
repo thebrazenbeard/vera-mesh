@@ -3,8 +3,16 @@
   "operation": "create_session",
   "session_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   "enrollment_role": "phone-client",
-  "enrollment_scopes": ["mailbox:submit", "mailbox:fetch:self", "receipt:create:self"],
+  "enrollment_scopes": [
+    "mailbox:submit",
+    "mailbox:fetch:self",
+    "receipt:create:self"
+  ],
   "token_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "created_at": "2026-09-13T18:00:00Z",
-  "expires_at": "2026-09-13T18:05:00Z"
+  "expires_at": "2026-09-13T18:05:00Z",
+  "relay_installation_id": "relay-ds216",
+  "relay_custody_public_key_spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdYoUJ3m+iegp5xmEy0DvdYzErXdfxbmj4cjtUvb6NtmnnSR2kvTto6a9q3fWqmR0pGSuSTRmPFJlunAYugkfeQ==",
+  "relay_custody_key_id": "3b31caba729282059f371e6ee601f7fb3f1466f1bf13f6df51d2fc60a88a1b93",
+  "relay_custody_key_epoch": 1
 }

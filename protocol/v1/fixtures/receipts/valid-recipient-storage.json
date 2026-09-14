@@ -13,14 +13,17 @@
   "signer": {
     "role": "vera-host",
     "principal": "host:vera",
-    "key_id": "4444444444444444444444444444444444444444444444444444444444444444",
+    "key_id": "1f3398e6e278f68a15b7fe32236933b8b2f86a6cb02415c57ecc7e1b9b0f16c3",
     "key_epoch": 1
   },
-  "transition": {"from": "relay_accepted", "to": "recipient_stored"},
+  "transition": {
+    "from": "relay_accepted",
+    "to": "recipient_stored"
+  },
   "signature": {
     "algorithm": "ecdsa-p256-sha256",
     "encoding": "p1363",
-    "key_id": "4444444444444444444444444444444444444444444444444444444444444444",
-    "signature_base64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+    "key_id": "1f3398e6e278f68a15b7fe32236933b8b2f86a6cb02415c57ecc7e1b9b0f16c3",
+    "signature_base64": "j3QWfoMmClTDWl+iLpAw6ZrIOxUbBHSIZIg3ZsjKJ7bliPyaq5x572V9MS3PgRgjvmLZ+TK+GloUwn/5EyDtUw=="
   }
 }

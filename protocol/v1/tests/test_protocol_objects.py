@@ -261,6 +261,7 @@ class ProtocolObjectTests(unittest.TestCase):
             (
                 f'"@method": {request["method"]}',
                 f'"@path": {request["path"]}',
+                f'"x-veramesh-relay-id": {request["relay_id"]}',
                 f'"content-digest": {request["content_digest"]}',
                 f'"content-type": {request["content_type"]}',
                 f'"@signature-params": {params}',

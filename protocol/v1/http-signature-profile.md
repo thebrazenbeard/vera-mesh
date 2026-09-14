@@ -12,7 +12,7 @@ This profile fixes the RFC 9421 choices needed for independent implementations. 
 - Public key: an EC P-256 public key in DER SubjectPublicKeyInfo (SPKI) form. The verifier parses the key and checks both the EC key type and the P-256 curve OID; the `alg` label is not trusted as evidence of either.
 - `keyid`: lowercase hexadecimal SHA-256 of the exact SPKI bytes, 64 characters. It identifies an enrolled active signing key.
 - `tag`: `veramesh-v1`.
-- Body digest: RFC 9530 `Content-Digest` with SHA-256 over the exact received body bytes. The digest is covered by the signature for body-bearing requests.
+- Body digest: RFC 9530 `Content-Digest` with SHA-256 over the exact received body bytes. The digest is covered by the signature for body-bearing requests. V1 requires exactly one `sha-256` dictionary member; duplicate, additional, or other digest members are rejected rather than ignored.
 - Freshness: `created` and `expires` are Unix seconds. A verifier accepts only when `expires > created`, `expires - created <= 300`, `created <= now + 30`, and `expires >= now`; the 30-second future allowance is clock-skew tolerance, not an extension of the five-minute signed lifetime.
 - `nonce`: base64url without padding, at least 128 bits of entropy. A nonce is single-use for the signing principal and is consumed transactionally with the authorized operation.
 - Protected V1 endpoints do not use semantically meaningful query strings. An implementation rejects a protected request with a query rather than silently dropping it from the authorization decision.
@@ -24,18 +24,19 @@ Every protected request requires `created`, `expires`, `nonce`, `keyid`, `alg`, 
 For `POST /v1/mailbox/envelopes` the covered component list is exactly:
 
 ```text
-("@method" "@path" "content-digest" "content-type")
+("@method" "@path" "x-veramesh-relay-id" "content-digest" "content-type")
 ```
 
 For a body-bearing protected endpoint, `content-digest` and `content-type` are required. For a bodyless protected endpoint, the implementation-specific profile for that endpoint may omit the body fields, but V1 mailbox operations do not.
 
-`@path` is the path component only. The method is the uppercase method value. Header field names are case-insensitive, but the covered values are reconstructed from the received message under RFC 9421 rules.
+`@path` is the path component only. `x-veramesh-relay-id` is the exact locally pinned `relay_installation_id` learned from local-admin pairing material; signing it prevents a valid request from being replayed to another trusted relay. The method is the uppercase method value. Header field names are case-insensitive, but the covered values are reconstructed from the received message under RFC 9421 rules.
 
 The corresponding header shape is:
 
 ```http
+X-VeraMesh-Relay-Id: <relay_installation_id>
 Content-Digest: sha-256=:<base64-sha256-of-exact-body>:
-Signature-Input: vera=("@method" "@path" "content-digest" "content-type");created=<unix-seconds>;expires=<unix-seconds>;nonce="<base64url-nonce>";keyid="<sha256-spki-hex>";alg="ecdsa-p256-sha256";tag="veramesh-v1"
+Signature-Input: vera=("@method" "@path" "x-veramesh-relay-id" "content-digest" "content-type");created=<unix-seconds>;expires=<unix-seconds>;nonce="<base64url-nonce>";keyid="<sha256-spki-hex>";alg="ecdsa-p256-sha256";tag="veramesh-v1"
 Signature: vera=:<base64-64-byte-p1363-signature>:
 ```
 
@@ -44,9 +45,10 @@ The signature base is the RFC 9421 derived component sequence, with one line per
 ```text
 "@method": POST
 "@path": /v1/mailbox/envelopes
+"x-veramesh-relay-id": <relay_installation_id>
 "content-digest": sha-256=:<base64-sha256-of-exact-body>:
 "content-type": application/json
-"@signature-params": ("@method" "@path" "content-digest" "content-type");created=<unix-seconds>;expires=<unix-seconds>;nonce="<base64url-nonce>";keyid="<sha256-spki-hex>";alg="ecdsa-p256-sha256";tag="veramesh-v1"
+"@signature-params": ("@method" "@path" "x-veramesh-relay-id" "content-digest" "content-type");created=<unix-seconds>;expires=<unix-seconds>;nonce="<base64url-nonce>";keyid="<sha256-spki-hex>";alg="ecdsa-p256-sha256";tag="veramesh-v1"
 ```
 
 The exact fixed serialization, including structured-field quoting, is tested by `vectors/http-signature-vectors.json`. Implementations must not sort, lowercase, or otherwise normalize the signature-base lines beyond RFC 9421 processing.
@@ -56,7 +58,7 @@ The exact fixed serialization, including structured-field quoting, is tested by 
 An implementation MUST fail closed in this order, without consuming a nonce for a request that has not authenticated:
 
 1. Parse `Signature` and `Signature-Input` as RFC 9421 structured fields and require exactly one `vera` signature.
-2. Require the profile parameters and exact covered-component set.
+2. Require the profile parameters, exact covered-component set, and `x-veramesh-relay-id` equal to the locally pinned relay installation identity.
 3. Recompute `Content-Digest` over received bytes and compare it before signature acceptance.
 4. Resolve `keyid` to an enrolled active key, parse the exact stored SPKI, and enforce EC P-256.
 5. Check `created`/`expires` freshness and nonce syntax.
