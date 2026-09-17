@@ -1,0 +1,56 @@
+{
+  "suite": "VERAMESH_V1_TASK2_SCHEMA_ESCAPE_CASES",
+  "status": "NON_NORMATIVE_HOSTILE_REVIEW",
+  "reviewed_head": "25d5040c4898f6fe4bde8bf540fe9ed7b985ba2d",
+  "purpose": "Cases that the current JSON-schema/static-fixture layer can admit even though protocol semantics require rejection or additional cryptographic verification.",
+  "cases": [
+    {
+      "id": "ESCAPE-RECEIPT-SIGNER-001",
+      "mutation": "recipient_storage receipt keeps recipient_principal=host:vera but changes signer.principal to host:other",
+      "current_gap": "receipt.schema.json constrains signer shape/role but cannot assert signer.principal equals recipient_principal",
+      "required_conformance": "reject before accepting recipient-storage proposition"
+    },
+    {
+      "id": "ESCAPE-RECEIPT-KEY-002",
+      "mutation": "receipt signer.key_id and signature.key_id are two different syntactically valid 64-hex values",
+      "current_gap": "schema does not bind signature.key_id to signer.key_id",
+      "required_conformance": "reject signature/key binding mismatch"
+    },
+    {
+      "id": "ESCAPE-CUSTODY-INSTALLATION-003",
+      "mutation": "relay_custody receipt uses relay_installation_id=A while signer.principal names relay:B",
+      "current_gap": "schema checks relay: prefix but does not bind signer identity to installation identity/trusted custody key",
+      "required_conformance": "reject unless signer key is pinned to the exact trusted relay installation and epoch"
+    },
+    {
+      "id": "ESCAPE-AAD-EQUALITY-004",
+      "mutation": "outer recipient_principal is host:vera while aad_binding.recipient_principal is host:other; all individual fields remain schema-valid",
+      "current_gap": "schema describes equality semantically but JSON Schema does not enforce cross-object equality; current happy-path test does not include hostile mismatch fixture",
+      "required_conformance": "reject before HPKE/application processing"
+    },
+    {
+      "id": "ESCAPE-PAIRING-PROOF-005",
+      "mutation": "pairing proof is 64 zero bytes encoded as base64",
+      "current_gap": "schema validates encoding/length only; current fixture labeled valid uses exactly this non-ECDSA value and tests do not verify the nested proof",
+      "required_conformance": "nested proof must either be removed as redundant or verified against a normatively defined signature base"
+    },
+    {
+      "id": "ESCAPE-PAIRING-PROOFBASE-006",
+      "mutation": "two clients sign different byte serializations while both set proof.context=veramesh-v1/pairing-redeem",
+      "current_gap": "no normative bytes-to-sign are defined for the nested proof",
+      "required_conformance": "all conforming clients sign the same exact bytes or the nested proof is not part of V1"
+    },
+    {
+      "id": "ESCAPE-AAD-SERIALIZATION-007",
+      "mutation": "encode the same aad_binding JSON with different key order/insignificant whitespace",
+      "current_gap": "Python tests hash a locally defined sorted/minified JSON representation but normative protocol text does not bind that representation",
+      "required_conformance": "freeze exact AAD serialization bytes and hash those exact bytes across Node/Java/Python"
+    },
+    {
+      "id": "ESCAPE-RECEIPT-SIGNATUREBASE-008",
+      "mutation": "sign different serializations/subsets of the same receipt claims",
+      "current_gap": "receipt schema specifies algorithm/encoding but not the exact signed claim bytes",
+      "required_conformance": "freeze one exact receipt signature base and reject every other representation"
+    }
+  ]
+}
