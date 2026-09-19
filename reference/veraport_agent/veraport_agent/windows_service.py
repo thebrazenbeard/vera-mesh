@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 from pathlib import Path
 
@@ -44,6 +45,28 @@ async def run_until_stop(config_path: str | Path, stop_event: threading.Event) -
             prepared.state_store.close()
 
 
+def _run_service_loop(config_path: str | Path, stop_event: threading.Event) -> None:
+    """Run service async work without requiring the interpreter main thread.
+
+    pythonservice.exe invokes SvcDoRun on a service worker thread. Windows'
+    default Proactor loop initializes signal wakeup state and fails there.
+    A Selector loop supports the socket/file workload used by VeraPort; Windows
+    process execution is separately delegated to a worker thread.
+    """
+    if os.name != "nt":
+        asyncio.run(run_until_stop(config_path, stop_event))
+        return
+
+    loop = asyncio.SelectorEventLoop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(run_until_stop(config_path, stop_event))
+        loop.run_until_complete(loop.shutdown_asyncgens())
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()
+
+
 def run_console(config_path: str | Path) -> None:
     stop = threading.Event()
     try:
@@ -73,7 +96,7 @@ if win32serviceutil is not None:
                 f"VeraPortAgent starting with fixed config {DEFAULT_CONFIG_PATH}"
             )
             try:
-                asyncio.run(run_until_stop(DEFAULT_CONFIG_PATH, self._stop_event))
+                _run_service_loop(DEFAULT_CONFIG_PATH, self._stop_event)
             except Exception as exc:
                 servicemanager.LogErrorMsg(f"VeraPortAgent failed: {exc}")
                 raise

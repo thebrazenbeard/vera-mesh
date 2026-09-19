@@ -1,0 +1,11 @@
+{
+  "schema": "VERAPORT_WINDOWS_SCM_ASYNC_REPAIR_V1",
+  "date": "2026-09-19",
+  "status": "SOURCE_REPAIR_TEST_PENDING",
+  "defect": "pythonservice.exe invokes SvcDoRun outside the interpreter main thread; asyncio.run attempted Windows Proactor loop initialization and failed at signal.set_wakeup_fd",
+  "repair": [
+    "Windows SCM service mode uses an explicit SelectorEventLoop",
+    "Windows process.exec delegates subprocess.run(shell=False) to a worker thread so subprocess execution remains supported under SelectorEventLoop"
+  ],
+  "claim_ceiling": "source repair only until exact Windows SCM qualification passes"
+}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -132,6 +133,14 @@ class LocalExecutor:
             resource_key=self._cwd_resource(resolved_cwd),
             resource_mode=ClaimMode.WRITE,
         )
+        if os.name == "nt":
+            return await asyncio.to_thread(
+                self._run_process_windows,
+                argv,
+                resolved_cwd,
+                timeout_s,
+            )
+
         process = await asyncio.create_subprocess_exec(
             *argv,
             cwd=resolved_cwd,
@@ -144,10 +153,33 @@ class LocalExecutor:
             process.kill()
             await process.wait()
             raise
+        return self._result(process.returncode, stdout_b, stderr_b)
+
+    def _run_process_windows(
+        self,
+        argv: list[str],
+        cwd: Path,
+        timeout_s: float,
+    ) -> ProcessResult:
+        try:
+            completed = subprocess.run(
+                argv,
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout_s,
+                shell=False,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise TimeoutError(f"process exceeded timeout {timeout_s}s") from exc
+        return self._result(completed.returncode, completed.stdout, completed.stderr)
+
+    def _result(self, returncode: int, stdout_b: bytes, stderr_b: bytes) -> ProcessResult:
         stdout, stdout_truncated = self._decode_limited(stdout_b)
         stderr, stderr_truncated = self._decode_limited(stderr_b)
         return ProcessResult(
-            returncode=process.returncode,
+            returncode=returncode,
             stdout=stdout,
             stderr=stderr,
             stdout_truncated=stdout_truncated,
