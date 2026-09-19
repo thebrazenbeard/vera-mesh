@@ -1,14 +1,52 @@
 {
   "schema": "VERAPORT_WHOLE_CHAIN_LOOPBACK_TEST_V1",
   "date": "2026-09-19",
-  "status": "TEST_AUTHORED_NOT_EXECUTED",
-  "path": "reference/veraport_agent/tests/test_end_to_end_loopback.py",
-  "intended_claim": "TLS/auth/session/pool/gateway/shared-agent/lane/filesystem round trip using actual VeraPort modules",
-  "reason_not_executed": "No current authorized execution surface contains the exact full GitHub candidate tree; hosted workflow execution has not been authorized.",
-  "non_claims": [
-    "no pass/fail result",
-    "no deployment",
-    "no Windows qualification",
-    "no ChatGPT/MCP qualification"
+  "status": "PASS_WITH_ENVIRONMENT_QUALIFICATION_CAVEAT",
+  "subject": {
+    "repository": "thebrazenbeard/vera-mesh",
+    "head": "fe6245fc9bf6392355bb9f13a88e010476ebdb89",
+    "tree": "91d123408201b80a8d6edd7c4fbc20824fc3b330",
+    "path": "reference/veraport_agent/tests/test_end_to_end_loopback.py"
+  },
+  "execution_surface": "Lappy Windows isolated detached checkout",
+  "environment": {
+    "python": "3.11.9",
+    "pytest": "8.3.5",
+    "cryptography_observed": "48.0.1",
+    "cryptography_declared": ">=42,<47",
+    "pytest_asyncio": "not installed"
+  },
+  "execution": {
+    "pytest_attempt": {
+      "result": "SKIPPED",
+      "reason": "async test plugin unavailable; no package installation was authorized or performed"
+    },
+    "direct_exact_test_function": {
+      "method": "runpy.run_path + asyncio.run on the checked-out test function",
+      "result": "PASS",
+      "output": "WHOLE_CHAIN_DIRECT_EXECUTION=PASS"
+    }
+  },
+  "verified_claims": [
+    "TLS listener to VeraPort mutual P-256 application authentication",
+    "persistent MultiplexClient session",
+    "HotSessionPool DIRECT_STREAM routing",
+    "thin VeraPortGateway projection",
+    "SessionBoundHandler and shared VeraPortAgent",
+    "LaneRegistry durable fence allocation",
+    "LocalExecutor real allowed-root filesystem write/read round trip",
+    "result returned through the same hot connection"
+  ],
+  "post_run": {
+    "service_registered": false,
+    "veraport_firewall_rules_found": false,
+    "source_worktree_after_test_artifact_cleanup": "CLEAN",
+    "head_readback": "fe6245fc9bf6392355bb9f13a88e010476ebdb89",
+    "tree_readback": "91d123408201b80a8d6edd7c4fbc20824fc3b330"
+  },
+  "caveats": [
+    "Observed cryptography 48.0.1 is outside the candidate-declared <47 supported range, so this is not clean dependency-range qualification.",
+    "The exact async test body passed, but pytest itself skipped it because pytest-asyncio is not installed.",
+    "No Windows service installation/SCM lifecycle, non-loopback exposure, firewall mutation, persistent certificate provisioning, Synology edge runtime, or ChatGPT/MCP end-to-end path was exercised."
   ]
 }
