@@ -1,0 +1,18 @@
+{
+  "schema": "VERAPORT_IDENTITY_STORE_LOCAL_TEST_V1",
+  "date": "2026-09-19",
+  "status": "FOCUSED_LOCAL_TEST_PASS_ONLY",
+  "subject": "reference/veraport_agent/veraport_agent/identity_store.py",
+  "result": {"passed": 4, "failed": 0, "duration_seconds_observed": 0.11},
+  "coverage_claims": [
+    "controller public key is bound to recomputed principal and key ID",
+    "principal/key mismatch rejects",
+    "non-P256 controller key rejects",
+    "empty controller trust set rejects"
+  ],
+  "non_claims": [
+    "no key generation",
+    "no credential installation",
+    "no Windows ACL qualification"
+  ]
+}
