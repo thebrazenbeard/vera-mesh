@@ -6,7 +6,7 @@ The controller-facing adapter should route a tool request into an already-authen
 
 ## Selection
 
-For one workstation, the controller maintains current authenticated session endpoints. Each endpoint combines:
+For one exact `(workstation_principal, controller_principal)` route, the controller maintains current authenticated session endpoints. Endpoints belonging to another controller principal MUST NOT be eligible merely because they target the same workstation. Each endpoint combines:
 - a VeraPort session binding;
 - one path observation;
 - one request channel;
@@ -20,9 +20,9 @@ Expired application sessions are ineligible even if their underlying socket stil
 
 Read-only requests may be reissued over another current path after transport loss.
 
-Mutation retry is stricter. If a stream disappears after the request may have reached Lappy, the controller MUST NOT retry that mutation over another path unless the exact target agent has durable request-idempotency/reconciliation state and the controller resends the exact same request ID and request content.
+Mutation retry is stricter. If a stream disappears after the request may have reached Lappy, the controller MUST NOT retry that mutation over another path unless the exact target agent has durable request-idempotency/reconciliation state, the controller resends the exact same request ID and request content, and the alternate endpoint is another path for the same authenticated VeraPort application `session_id`. A different application session changes session-scoped lane identity and is not an equivalent mutation target.
 
-Without that protection, the result is `AMBIGUOUS_DELIVERY`.
+Without all of that protection, the result is `AMBIGUOUS_DELIVERY`.
 
 This converts direct-to-edge failover from "hope it did not run twice" into an explicit contract with the Lappy agent's durable idempotency ledger.
 

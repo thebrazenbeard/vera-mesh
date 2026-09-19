@@ -133,6 +133,7 @@ async def test_full_direct_hot_path_file_round_trip(tmp_path: Path):
     gateway = VeraPortGateway(
         pool,
         workstation_principal=binding.workstation_principal,
+        controller_principal=binding.controller_principal,
         allowed_operations={
             "lane.open",
             "lane.close",

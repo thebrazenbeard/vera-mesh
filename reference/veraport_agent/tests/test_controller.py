@@ -21,10 +21,15 @@ class Channel:
         return await self.fn(request)
 
 
-def binding(workstation="workstation:w", expires=10000):
+def binding(
+    workstation="workstation:w",
+    expires=10000,
+    controller="controller:c",
+    session="session",
+):
     return SessionBinding(
-        "session",
-        "controller:c",
+        session,
+        controller,
         workstation,
         frozenset({"fs.read", "fs.write"}),
         expires,
@@ -63,6 +68,7 @@ async def test_pool_prefers_direct_hot_session():
 
     result = await pool.request(
         "workstation:w",
+        "controller:c",
         {"request_id": "1", "operation": "fs.read_text"},
         now_ms=1001,
     )
@@ -118,6 +124,7 @@ async def test_mutation_can_failover_with_durable_idempotency_same_request():
 
     result = await pool.request(
         "workstation:w",
+        "controller:c",
         {"request_id": "mutation-1", "operation": "fs.write_text"},
         now_ms=1001,
     )
@@ -156,6 +163,7 @@ async def test_mutation_failover_blocked_without_durable_idempotency():
     with pytest.raises(AmbiguousDelivery):
         await pool.request(
             "workstation:w",
+            "controller:c",
             {"request_id": "mutation-2", "operation": "process.exec"},
             now_ms=1001,
         )
@@ -188,6 +196,7 @@ async def test_read_can_failover_without_durable_idempotency():
 
     result = await pool.request(
         "workstation:w",
+        "controller:c",
         {"request_id": "read-1", "operation": "fs.read_text"},
         now_ms=1001,
     )
@@ -211,6 +220,83 @@ async def test_expired_session_not_selected():
     with pytest.raises(NoCurrentPath):
         await pool.request(
             "workstation:w",
+            "controller:c",
             {"request_id": "expired", "operation": "lane.list"},
             now_ms=1000,
         )
+
+
+@pytest.mark.asyncio
+async def test_pool_never_routes_across_controller_principals_for_same_workstation():
+    async def controller_a(request):
+        return {"request_id": request["request_id"], "via": "controller-a"}
+
+    async def controller_b(request):
+        return {"request_id": request["request_id"], "via": "controller-b"}
+
+    pool = HotSessionPool()
+    a_channel = Channel(controller_a)
+    b_channel = Channel(controller_b)
+    pool.register(SessionEndpoint(
+        "a-edge",
+        binding(controller="controller:a"),
+        path("a-edge", PathMode.EDGE_STREAM, rtt=50),
+        a_channel,
+        True,
+    ))
+    pool.register(SessionEndpoint(
+        "b-direct",
+        binding(controller="controller:b"),
+        path("b-direct", PathMode.DIRECT_STREAM, rtt=1),
+        b_channel,
+        True,
+    ))
+
+    result = await pool.request(
+        "workstation:w",
+        "controller:a",
+        {"request_id": "cross-controller", "operation": "lane.open", "capabilities": ["fs.write"]},
+        now_ms=1001,
+    )
+
+    assert result["via"] == "controller-a"
+    assert a_channel.calls == 1
+    assert b_channel.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_mutation_failover_does_not_cross_application_session_id():
+    async def fail(request):
+        raise StreamClosed("unknown delivery")
+
+    async def would_mutate(request):
+        return {"request_id": request["request_id"], "ok": True}
+
+    first = Channel(fail)
+    second = Channel(would_mutate)
+    pool = HotSessionPool()
+    pool.register(SessionEndpoint(
+        "session-a-direct",
+        binding(session="session-a"),
+        path("session-a-direct", PathMode.DIRECT_STREAM),
+        first,
+        True,
+    ))
+    pool.register(SessionEndpoint(
+        "session-b-edge",
+        binding(session="session-b"),
+        path("session-b-edge", PathMode.EDGE_STREAM),
+        second,
+        True,
+    ))
+
+    with pytest.raises(AmbiguousDelivery, match="same-session"):
+        await pool.request(
+            "workstation:w",
+            "controller:c",
+            {"request_id": "mutation-cross-session", "operation": "fs.write_text"},
+            now_ms=1001,
+        )
+
+    assert first.calls == 1
+    assert second.calls == 0

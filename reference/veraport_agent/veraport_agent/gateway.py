@@ -56,18 +56,22 @@ class VeraPortGateway:
         pool: Any,
         *,
         workstation_principal: str,
+        controller_principal: str,
         allowed_operations: Iterable[str],
         now_ms: Callable[[], int] | None = None,
         request_id_factory: Callable[[], str] | None = None,
     ) -> None:
         if not workstation_principal:
             raise ValueError("workstation_principal is required")
+        if not controller_principal:
+            raise ValueError("controller_principal is required")
         allowed = frozenset(allowed_operations)
         unknown = allowed - ALL_OPERATIONS
         if unknown:
             raise ValueError(f"unknown gateway operations: {sorted(unknown)}")
         self.pool = pool
         self.workstation_principal = workstation_principal
+        self.controller_principal = controller_principal
         self.allowed_operations = allowed
         self.now_ms = now_ms or (lambda: int(time.time() * 1000))
         self.request_id_factory = request_id_factory or (lambda: uuid.uuid4().hex)
@@ -161,6 +165,7 @@ class VeraPortGateway:
         }
         return await self.pool.request(
             self.workstation_principal,
+            self.controller_principal,
             request,
             now_ms=self.now_ms(),
         )

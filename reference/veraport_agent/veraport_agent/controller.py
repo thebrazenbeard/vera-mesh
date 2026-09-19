@@ -52,23 +52,34 @@ class HotSessionPool:
     """Select current hot paths and preserve mutation safety across failover."""
 
     def __init__(self) -> None:
-        self._by_workstation: dict[str, dict[str, SessionEndpoint]] = {}
+        self._by_route: dict[tuple[str, str], dict[str, SessionEndpoint]] = {}
+
+    @staticmethod
+    def _route_key(binding: SessionBinding) -> tuple[str, str]:
+        return (binding.workstation_principal, binding.controller_principal)
 
     def register(self, endpoint: SessionEndpoint) -> None:
-        workstation = endpoint.binding.workstation_principal
-        self._by_workstation.setdefault(workstation, {})[endpoint.endpoint_id] = endpoint
+        route = self._route_key(endpoint.binding)
+        self._by_route.setdefault(route, {})[endpoint.endpoint_id] = endpoint
 
-    def remove(self, workstation_principal: str, endpoint_id: str) -> None:
-        group = self._by_workstation.get(workstation_principal)
+    def remove(
+        self,
+        workstation_principal: str,
+        controller_principal: str,
+        endpoint_id: str,
+    ) -> None:
+        route = (workstation_principal, controller_principal)
+        group = self._by_route.get(route)
         if group is None:
             return
         group.pop(endpoint_id, None)
         if not group:
-            self._by_workstation.pop(workstation_principal, None)
+            self._by_route.pop(route, None)
 
     async def request(
         self,
         workstation_principal: str,
+        controller_principal: str,
         request: dict[str, Any],
         *,
         now_ms: int,
@@ -81,12 +92,28 @@ class HotSessionPool:
         if not isinstance(operation, str) or not operation:
             raise ValueError("operation is required")
 
-        candidates = self._current_endpoints(workstation_principal, now_ms=now_ms)
+        candidates = self._current_endpoints(
+            workstation_principal,
+            controller_principal,
+            now_ms=now_ms,
+        )
         attempted: set[str] = set()
         last_error: Exception | None = None
+        mutation_retry_session_id: str | None = None
 
         while True:
-            remaining = tuple(item for item in candidates if item.endpoint_id not in attempted)
+            remaining = tuple(
+                item
+                for item in candidates
+                if item.endpoint_id not in attempted
+                and (
+                    mutation_retry_session_id is None
+                    or (
+                        item.binding.session_id == mutation_retry_session_id
+                        and item.durable_idempotency
+                    )
+                )
+            )
             decision = select_path(
                 tuple(item.path for item in remaining),
                 now_ms=now_ms,
@@ -103,19 +130,41 @@ class HotSessionPool:
             except StreamClosed as exc:
                 last_error = exc
                 mutating = operation in _MUTATING_OPERATIONS
-                if mutating and not endpoint.durable_idempotency:
-                    raise AmbiguousDelivery(
-                        f"{request_id} lost transport after possible mutation; retry blocked without durable idempotency"
-                    ) from exc
+                if mutating:
+                    if not endpoint.durable_idempotency:
+                        raise AmbiguousDelivery(
+                            f"{request_id} lost transport after possible mutation; retry blocked without durable idempotency"
+                        ) from exc
+                    mutation_retry_session_id = endpoint.binding.session_id
+                    compatible = any(
+                        item.endpoint_id not in attempted
+                        and item.binding.session_id == mutation_retry_session_id
+                        and item.durable_idempotency
+                        for item in candidates
+                    )
+                    if not compatible:
+                        raise AmbiguousDelivery(
+                            f"{request_id} lost transport after possible mutation; no same-session durable failover path"
+                        ) from exc
                 continue
 
-    def _current_endpoints(self, workstation_principal: str, *, now_ms: int) -> tuple[SessionEndpoint, ...]:
+    def _current_endpoints(
+        self,
+        workstation_principal: str,
+        controller_principal: str,
+        *,
+        now_ms: int,
+    ) -> tuple[SessionEndpoint, ...]:
         result = []
-        for endpoint in self._by_workstation.get(workstation_principal, {}).values():
+        route = (workstation_principal, controller_principal)
+        for endpoint in self._by_route.get(route, {}).values():
             binding = endpoint.binding
             if now_ms >= binding.expires_at_ms:
                 continue
-            if binding.workstation_principal != workstation_principal:
+            if (
+                binding.workstation_principal != workstation_principal
+                or binding.controller_principal != controller_principal
+            ):
                 continue
             result.append(endpoint)
         return tuple(result)
