@@ -16,6 +16,16 @@ See `synchrony-profile.md` and `path.schema.json`.
 
 VeraRelay is not required to remain a separately named mandatory hop. Its durable mechanisms may become a VeraMesh edge/relay capability set. Hot interactive traffic should not be queued merely because durable relay storage exists.
 
+## Hot-session authentication
+
+See `hot-session-profile.md` and `hot-session-auth.schema.json`.
+
+The current reference handshake uses enrolled P-256 identities, a fresh workstation challenge, a fresh controller nonce, mutual signatures, exact workstation targeting, and workstation-local capability policy. The resulting session binding is identity evidence plus a capability ceiling; it is not permission to bypass the VeraPort lane/resource policy.
+
+The reference byte-stream layer is multiplexed: one already-authenticated connection can have many in-flight request IDs and return results out of order while preserving correlation.
+
+The byte-stream reference is transport-neutral and loopback-tested only. Production direct/edge paths still require a reviewed confidentiality/integrity transport such as QUIC/TLS.
+
 ## Operations
 
 Initial operations:
@@ -37,4 +47,4 @@ The reference agent may use `--state-db PATH` for SQLite-backed durable fencing 
 
 Active lane membership remains process-local in the current reference cut. Restart invalidates the live lane set while durable fencing continues monotonically.
 
-`reference/veraport_agent` is currently a local reference implementation. Its JSONL stdio adapter demonstrates multiplexed concurrent requests without exposing a network listener. The authenticated hot network/MCP bridge is the next implementation stage.
+The next implementation frontier is binding this authenticated session layer to the production hot transport and then placing the thin controller/MCP adapter over the already-hot session.
