@@ -16,22 +16,28 @@ def _modules():
 
 def test_harden_private_file_round_trip(tmp_path: Path):
     from veraport_agent.windows_acl import (
+        harden_private_directory,
         harden_private_file,
+        validate_private_directory,
         validate_private_file,
     )
+    harden_private_directory(tmp_path)
     target = tmp_path / "secret.pem"
     target.write_text("secret", encoding="utf-8")
     harden_private_file(target)
+    validate_private_directory(tmp_path)
     validate_private_file(target)
 
 
 def test_broad_users_ace_is_rejected(tmp_path: Path):
     from veraport_agent.windows_acl import (
         WindowsAclError,
+        harden_private_directory,
         harden_private_file,
         validate_private_file,
     )
     ntsecuritycon, win32security = _modules()
+    harden_private_directory(tmp_path)
     target = tmp_path / "secret.pem"
     target.write_text("secret", encoding="utf-8")
     harden_private_file(target)

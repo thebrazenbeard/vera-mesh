@@ -60,9 +60,10 @@ def _set_protected_dacl(path: Path, *, service_mask: int, directory: bool) -> No
     win32security.SetNamedSecurityInfo(
         str(path),
         win32security.SE_FILE_OBJECT,
-        win32security.DACL_SECURITY_INFORMATION
+        win32security.OWNER_SECURITY_INFORMATION
+        | win32security.DACL_SECURITY_INFORMATION
         | win32security.PROTECTED_DACL_SECURITY_INFORMATION,
-        None,
+        admins_sid,
         None,
         dacl,
         None,
@@ -81,7 +82,7 @@ def harden_private_file(path: str | Path) -> None:
     )
 
 
-def harden_state_directory(path: str | Path) -> None:
+def harden_private_directory(path: str | Path) -> None:
     ntsecuritycon, _, _ = _modules()
     target = Path(path)
     target.mkdir(parents=True, exist_ok=True)
@@ -92,71 +93,94 @@ def harden_state_directory(path: str | Path) -> None:
     )
 
 
-def validate_private_file(path: str | Path) -> None:
+def _validate_path_acl(path: Path, *, require_directory: bool) -> None:
     _, _, win32security = _modules()
-    target = Path(path)
-    if not target.is_file():
-        raise WindowsAclError(f"private material file missing: {target}")
+    if require_directory:
+        if not path.is_dir():
+            raise WindowsAclError(f"protected directory missing: {path}")
+    elif not path.is_file():
+        raise WindowsAclError(f"private material file missing: {path}")
 
     sd = win32security.GetNamedSecurityInfo(
-        str(target),
+        str(path),
         win32security.SE_FILE_OBJECT,
         win32security.DACL_SECURITY_INFORMATION
         | win32security.OWNER_SECURITY_INFORMATION,
     )
     control, _ = sd.GetSecurityDescriptorControl()
     if not control & win32security.SE_DACL_PROTECTED:
-        raise WindowsAclError(f"DACL inheritance is not protected: {target}")
+        raise WindowsAclError(f"DACL inheritance is not protected: {path}")
+
+    allowed = expected_service_sids()
+    owner = sd.GetSecurityDescriptorOwner()
+    if owner is None or _sid_string(owner) not in allowed:
+        raise WindowsAclError(f"owner must be SYSTEM or Administrators: {path}")
 
     dacl = sd.GetSecurityDescriptorDacl()
     if dacl is None:
-        raise WindowsAclError(f"NULL DACL is forbidden: {target}")
+        raise WindowsAclError(f"NULL DACL is forbidden: {path}")
 
-    allowed = expected_service_sids()
     seen: set[str] = set()
     for index in range(dacl.GetAceCount()):
         ace = dacl.GetAce(index)
         ace_type = ace[0][0]
         if ace_type != win32security.ACCESS_ALLOWED_ACE_TYPE:
-            raise WindowsAclError(f"unexpected non-allow ACE on private material: {target}")
+            raise WindowsAclError(f"unexpected non-allow ACE: {path}")
         sid_string = _sid_string(ace[2])
         if sid_string not in allowed:
-            raise WindowsAclError(
-                f"unexpected principal {sid_string} on private material: {target}"
-            )
+            raise WindowsAclError(f"unexpected principal {sid_string}: {path}")
         seen.add(sid_string)
 
     if seen != set(allowed):
         raise WindowsAclError(
-            f"private material ACL must contain exactly SYSTEM and Administrators: {target}"
+            f"ACL must contain exactly SYSTEM and Administrators: {path}"
         )
 
 
-def harden_service_materials(config_path: str | Path, config) -> None:
-    """Apply production service ACLs before first listener start.
+def validate_private_file(path: str | Path) -> None:
+    _validate_path_acl(Path(path), require_directory=False)
 
-    Current VeraPort Windows service runs as LocalSystem. Sensitive material is
-    therefore readable only by SYSTEM and Built-in Administrators. State gets
-    SYSTEM/Admin full control.
-    """
+
+def validate_private_directory(path: str | Path) -> None:
+    _validate_path_acl(Path(path), require_directory=True)
+
+
+def harden_service_materials(config_path: str | Path, config) -> None:
+    """Apply the current LocalSystem production ACL profile."""
     config_path = Path(config_path)
-    for path in (
+    files = (
         config_path,
         config.tls_cert,
         config.tls_key,
         config.workstation_key,
         config.controller_trust,
-    ):
+    )
+    private_dirs = {
+        config_path.parent,
+        config.state_db.parent,
+        *(Path(path).parent for path in files),
+    }
+    for directory in sorted(private_dirs, key=lambda p: len(str(p))):
+        harden_private_directory(directory)
+    for path in files:
         harden_private_file(path)
-    harden_state_directory(config.state_db.parent)
 
 
 def validate_service_materials(config_path: str | Path, config) -> None:
-    for path in (
-        Path(config_path),
+    config_path = Path(config_path)
+    files = (
+        config_path,
         config.tls_cert,
         config.tls_key,
         config.workstation_key,
         config.controller_trust,
-    ):
+    )
+    private_dirs = {
+        config_path.parent,
+        config.state_db.parent,
+        *(Path(path).parent for path in files),
+    }
+    for directory in private_dirs:
+        validate_private_directory(directory)
+    for path in files:
         validate_private_file(path)
