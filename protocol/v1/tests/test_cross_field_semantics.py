@@ -52,6 +52,26 @@ def test_recipient_receipt_rejects_schema_valid_wrong_signer_principal():
         validate_receipt_cross_fields(receipt)
 
 
+def test_recipient_receipt_rejects_role_principal_class_mismatch():
+    receipt = read_json(FIXTURES / "receipts" / "valid-recipient-storage.json")
+    principal = receipt["recipient_principal"]
+    receipt["signer"]["role"] = (
+        "phone-client" if principal.startswith("host:") else "vera-host"
+    )
+    with pytest.raises(ValueError, match="receipt signer must use"):
+        validate_receipt_cross_fields(receipt)
+
+
+def test_relay_custody_receipt_binds_signer_principal_to_installation():
+    receipt = read_json(FIXTURES / "receipts" / "valid-relay-custody.json")
+    validate_receipt_cross_fields(receipt)
+    receipt["signer"]["principal"] = "relay:alternate"
+    with pytest.raises(
+        ValueError, match="signer principal must bind relay_installation_id"
+    ):
+        validate_receipt_cross_fields(receipt)
+
+
 def test_recipient_receipt_rejects_schema_valid_signature_key_mismatch():
     receipt = read_json(FIXTURES / "receipts" / "valid-recipient-storage.json")
     replacement = "f" * 64
