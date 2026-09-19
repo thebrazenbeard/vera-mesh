@@ -15,7 +15,7 @@ from veraport_agent.core import (
     ResourceClaim,
     StaleFence,
 )
-from veraport_agent.executor import LocalExecutor, PathOutsideRoots
+from veraport_agent.executor import LocalExecutor, PathOutsideRoots, ProcessExecutionDisabled
 from veraport_agent.protocol import VeraPortAgent
 
 
@@ -98,6 +98,25 @@ async def test_filesystem_is_root_bounded_and_atomic(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_process_exec_is_disabled_by_default(tmp_path: Path) -> None:
+    registry = LaneRegistry({"process.exec"})
+    lane = registry.open_lane(
+        lane_id="proc-disabled",
+        task_id="t",
+        capabilities={"process.exec"},
+        claims=(claim("cwd", tmp_path, ClaimMode.WRITE),),
+    )
+    executor = LocalExecutor(registry, allowed_roots=(tmp_path,))
+    with pytest.raises(ProcessExecutionDisabled):
+        await executor.run_process(
+            lane_id=lane.lane_id,
+            fencing_token=lane.fencing_token,
+            argv=[sys.executable, "-c", "print('nope')"],
+            cwd=str(tmp_path),
+        )
+
+
+@pytest.mark.asyncio
 async def test_process_exec_uses_argv_not_shell(tmp_path: Path) -> None:
     registry = LaneRegistry({"process.exec"})
     lane = registry.open_lane(
@@ -106,7 +125,7 @@ async def test_process_exec_uses_argv_not_shell(tmp_path: Path) -> None:
         capabilities={"process.exec"},
         claims=(claim("cwd", tmp_path, ClaimMode.WRITE),),
     )
-    executor = LocalExecutor(registry, allowed_roots=(tmp_path,))
+    executor = LocalExecutor(registry, allowed_roots=(tmp_path,), allow_process_exec=True)
     result = await executor.run_process(
         lane_id=lane.lane_id,
         fencing_token=lane.fencing_token,
@@ -120,7 +139,7 @@ async def test_process_exec_uses_argv_not_shell(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_agent_can_dispatch_independent_lanes_concurrently(tmp_path: Path) -> None:
     registry = LaneRegistry({"process.exec"}, max_lanes=4)
-    agent = VeraPortAgent(registry, LocalExecutor(registry, allowed_roots=(tmp_path,)))
+    agent = VeraPortAgent(registry, LocalExecutor(registry, allowed_roots=(tmp_path,), allow_process_exec=True))
 
     open_a = await agent.handle({
         "protocol_version": "veraport-v1",

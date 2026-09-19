@@ -42,7 +42,7 @@ The session establishes a capability ceiling. A lane may only request a subset o
 Initial implemented reference capabilities:
 - `fs.read`
 - `fs.write`
-- `process.exec`
+- `process.exec` (broad host authority, disabled by default local policy)
 
 Planned but not implemented: process inspection/signaling, screen capture, UI observation, UI control.
 
@@ -67,7 +67,9 @@ Filesystem access is bounded by local allowed roots. Remote capability claims ca
 
 Text writes use temporary-file plus atomic replacement in the reference implementation.
 
-`process.exec` accepts an argv vector and explicit working directory and uses `create_subprocess_exec`; it never silently invokes `shell=True`. PowerShell remains possible as an explicitly named executable.
+`process.exec` accepts an argv vector and explicit working directory and uses `create_subprocess_exec`; it never silently invokes `shell=True`. It is disabled by default. The workstation operator must explicitly start the reference agent with `--allow-process-exec` before the session ceiling can contain that capability.
+
+Critically, an allowed `cwd` is not an OS sandbox. Once arbitrary process execution is explicitly enabled, the child program may possess whatever filesystem/process/network authority the Lappy OS account gives it. Future network acceptance must either preserve that as an explicit broad-host grant or introduce a real OS sandbox/command profile; it must not pretend path claims contain arbitrary child effects.
 
 Execution has time and output bounds.
 
@@ -90,7 +92,8 @@ No network listener is exposed in this source cut. Before a network adapter is a
 7. reconnect and ambiguous-outcome reconciliation;
 8. standard reviewed transport confidentiality/integrity;
 9. no relay possession of endpoint OS credentials;
-10. hostile end-to-end testing before Lappy installation.
+10. `process.exec` remains absent unless local workstation policy explicitly enables broad host execution or a reviewed narrower sandbox/profile;
+11. hostile end-to-end testing before Lappy installation.
 
 A VLAN may reduce lateral-movement blast radius, but it is optional containment, not VeraPort identity or authorization.
 
@@ -110,12 +113,13 @@ VeraPort is intentionally independent of one controller vendor. An MCP/app adapt
 - filesystem root containment;
 - atomic text replacement;
 - argv-only subprocess execution;
+- default-deny local gate for broad `process.exec`;
 - timeout/output bounds;
 - concurrent dispatch over one JSONL stdio stream.
 
 The stdio adapter is deliberately local-only. It is a reference multiplexing surface to be wrapped by the future authenticated bridge, not an Internet-facing shell.
 
-Local construction test result: **7 passed**.
+Fresh local construction test result: **8 passed / 0 failed** on Python 3.13.5 / pytest 9.0.2.
 
 No Lappy process, network listener, relay deployment, credential, MCP registration, port exposure, merge, or OS mutation occurred.
 
@@ -127,4 +131,4 @@ No earlier state implies a later state.
 
 ## Next frontier
 
-Build the authenticated network/session adapter and controller gateway around the existing lane engine without widening execution authority.
+Build the authenticated network/session adapter and controller gateway around the existing lane engine, with a real least-privilege decision for process execution, without widening authority.

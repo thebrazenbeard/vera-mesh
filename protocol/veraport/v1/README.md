@@ -19,4 +19,6 @@ Initial resource namespaces are `fs:<canonical-path>` and `cwd:<canonical-path>`
 
 A lane can only narrow authority from its authenticated session ceiling. VLAN placement, transport membership, relay custody, pairing, or message possession does not create execution authority.
 
+`process.exec` is deliberately treated as broad host execution authority. A `cwd:` claim constrains the selected working directory for collision/accounting purposes; it is **not** an OS sandbox for the child process. The reference agent therefore excludes `process.exec` from its default session ceiling and only enables it when the workstation operator starts the agent with the explicit local `--allow-process-exec` grant.
+
 `reference/veraport_agent` is a local reference implementation. Its JSONL stdio adapter demonstrates multiplexed concurrent requests without exposing a network listener. The authenticated network/MCP bridge is the next implementation stage.

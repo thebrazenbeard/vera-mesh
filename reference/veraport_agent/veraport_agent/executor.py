@@ -13,6 +13,10 @@ class PathOutsideRoots(PermissionError):
     pass
 
 
+class ProcessExecutionDisabled(PermissionError):
+    pass
+
+
 @dataclass(frozen=True)
 class ProcessResult:
     returncode: int
@@ -29,6 +33,7 @@ class LocalExecutor:
         *,
         allowed_roots: tuple[Path, ...],
         max_output_bytes: int = 1_048_576,
+        allow_process_exec: bool = False,
     ) -> None:
         if not allowed_roots:
             raise ValueError("at least one allowed root is required")
@@ -37,6 +42,7 @@ class LocalExecutor:
         self.registry = registry
         self.allowed_roots = tuple(root.expanduser().resolve() for root in allowed_roots)
         self.max_output_bytes = max_output_bytes
+        self.allow_process_exec = allow_process_exec
 
     def _resolve_allowed(self, value: str | Path) -> Path:
         path = Path(value).expanduser().resolve()
@@ -112,6 +118,8 @@ class LocalExecutor:
         cwd: str,
         timeout_s: float = 60.0,
     ) -> ProcessResult:
+        if not self.allow_process_exec:
+            raise ProcessExecutionDisabled("process.exec is disabled by local workstation policy")
         if not argv or not all(isinstance(item, str) and item for item in argv):
             raise ValueError("argv must be a non-empty list of non-empty strings")
         if timeout_s <= 0:

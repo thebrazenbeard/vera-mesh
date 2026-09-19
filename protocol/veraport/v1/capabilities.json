@@ -5,7 +5,12 @@
   "capabilities": {
     "fs.read": {"class": "read", "reference_agent": "implemented", "resource_namespace": "fs"},
     "fs.write": {"class": "mutation", "reference_agent": "implemented", "resource_namespace": "fs"},
-    "process.exec": {"class": "mutation", "reference_agent": "implemented", "resource_namespace": "cwd", "notes": "argv vector only; no implicit shell expansion"},
+    "process.exec": {
+      "class": "broad_host_mutation",
+      "reference_agent": "implemented_local_gate_required",
+      "resource_namespace": "cwd",
+      "notes": "argv vector only; no implicit shell expansion; cwd claim is not an OS sandbox; reference agent requires explicit local --allow-process-exec startup grant"
+    },
     "process.list": {"class": "read", "reference_agent": "planned"},
     "process.signal": {"class": "mutation", "reference_agent": "planned"},
     "screen.capture": {"class": "read", "reference_agent": "planned"},
@@ -15,7 +20,9 @@
   "invariants": [
     "A lane capability set MUST be a subset of the authenticated session capability ceiling.",
     "A child or parallel lane MUST NOT synthesize authority absent from its session ceiling.",
-    "Filesystem and process operations MUST be constrained by local workstation policy in addition to remote capability claims.",
+    "Filesystem operations MUST be constrained by local workstation policy in addition to remote capability claims.",
+    "A cwd resource claim is collision/accounting metadata and MUST NOT be represented as sandboxing arbitrary process side effects.",
+    "process.exec MUST remain disabled in the reference agent unless the workstation operator grants it explicitly at local startup.",
     "Network or transport membership MUST NOT itself grant any VeraPort capability."
   ]
 }

@@ -11,7 +11,7 @@ from .executor import LocalExecutor
 from .protocol import VeraPortAgent
 
 
-DEFAULT_CAPABILITIES = frozenset({"fs.read", "fs.write", "process.exec"})
+BASE_CAPABILITIES = frozenset({"fs.read", "fs.write"})
 
 
 async def serve(agent: VeraPortAgent) -> int:
@@ -59,9 +59,12 @@ async def serve(agent: VeraPortAgent) -> int:
     return 0
 
 
-def build_agent(roots: tuple[Path, ...], max_lanes: int) -> VeraPortAgent:
-    registry = LaneRegistry(DEFAULT_CAPABILITIES, max_lanes=max_lanes)
-    executor = LocalExecutor(registry, allowed_roots=roots)
+def build_agent(roots: tuple[Path, ...], max_lanes: int, *, allow_process_exec: bool = False) -> VeraPortAgent:
+    capabilities = set(BASE_CAPABILITIES)
+    if allow_process_exec:
+        capabilities.add("process.exec")
+    registry = LaneRegistry(capabilities, max_lanes=max_lanes)
+    executor = LocalExecutor(registry, allowed_roots=roots, allow_process_exec=allow_process_exec)
     return VeraPortAgent(registry, executor)
 
 
@@ -69,9 +72,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Local VeraPort reference agent over JSONL stdio")
     parser.add_argument("--root", action="append", required=True, help="Allowed filesystem/process root")
     parser.add_argument("--max-lanes", type=int, default=32)
+    parser.add_argument(
+        "--allow-process-exec",
+        action="store_true",
+        help="Explicitly enable broad host process execution; disabled by default",
+    )
     args = parser.parse_args(argv)
     roots = tuple(Path(value) for value in args.root)
-    return asyncio.run(serve(build_agent(roots, args.max_lanes)))
+    return asyncio.run(serve(build_agent(roots, args.max_lanes, allow_process_exec=args.allow_process_exec)))
 
 
 if __name__ == "__main__":

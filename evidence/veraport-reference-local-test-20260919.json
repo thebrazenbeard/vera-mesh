@@ -7,9 +7,9 @@
   "pytest": "9.0.2",
   "command": "python -m pytest -q",
   "result": {
-    "passed": 7,
+    "passed": 8,
     "failed": 0,
-    "duration_seconds_observed": 3.13
+    "duration_seconds_observed": 3.14
   },
   "coverage_claims": [
     "capability expansion rejects",
@@ -17,10 +17,12 @@
     "stale fencing token rejects after lane reopen",
     "expired lane fails closed",
     "filesystem operations are allowed-root bounded and atomic-write tested",
-    "process execution uses argv without implicit shell",
-    "two independent process lanes dispatch concurrently"
+    "process.exec is disabled by default local workstation policy",
+    "explicitly enabled process execution uses argv without implicit shell",
+    "two independent explicitly enabled process lanes dispatch concurrently"
   ],
   "non_claims": [
+    "allowed filesystem roots do not sandbox child process side effects",
     "no network adapter qualification",
     "no Windows/Lappy qualification",
     "no VeraRelay deployment",
