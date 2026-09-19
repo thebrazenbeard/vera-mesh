@@ -1,0 +1,15 @@
+{
+  "schema": "VERAPORT_CRYPTOGRAPHY_RANGE_REVIEW_V1",
+  "date": "2026-09-19",
+  "status": "SOURCE_REVIEW_PASS_TEST_PENDING",
+  "old_range": "cryptography>=42,<47",
+  "new_range": "cryptography>=42,<49",
+  "basis": [
+    "VeraPort uses P-256 ECDSA, SPKI/PEM serialization/loading, X.509 test certificates, and DSS signature conversion",
+    "reviewed 47.x/48.x breaking changes do not target the used VeraPort surface",
+    "exact prior executable whole-chain passed under cryptography 48.0.1",
+    "49.x remains outside the declared boundary pending a future review"
+  ],
+  "test_dependency_change": "declares pytest and pytest-asyncio under optional test dependencies",
+  "claim_ceiling": "source review only until the new exact head is tested/read back"
+}

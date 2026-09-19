@@ -8,12 +8,16 @@ version = "0.3.0"
 description = "Reference VeraPort persistent workstation bridge for VeraMesh"
 requires-python = ">=3.11"
 dependencies = [
-  "cryptography>=42,<47"
+  "cryptography>=42,<49"
 ]
 
 [project.optional-dependencies]
 windows-service = [
   "pywin32>=311"
+]
+test = [
+  "pytest>=8,<10",
+  "pytest-asyncio>=0.23,<2"
 ]
 
 [project.scripts]
@@ -23,3 +27,4 @@ veraport-service = "veraport_agent.windows_service:service_cli"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+asyncio_mode = "auto"
