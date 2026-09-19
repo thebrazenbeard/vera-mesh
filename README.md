@@ -1,47 +1,44 @@
 # VeraMesh
 
-VeraMesh is the umbrella multi-device architecture for connecting Vera-capable nodes without collapsing transport, identity, routing, relay semantics, or authority into one mechanism.
+VeraMesh is the umbrella multi-device architecture for connecting Vera-capable nodes without collapsing transport, identity, routing, relay semantics, workstation execution, or authority into one mechanism.
 
-VeraRelay is the NAS relay node inside VeraMesh. The current Synology implementation runs on DSM 7 / `armada38x`, keeps its core listener on `127.0.0.1:17443`, and is designed to use a private ingress such as Tailscale Serve rather than exposing the relay directly to the public Internet.
+VeraRelay is a current VeraMesh relay/edge implementation. It is not a mandatory permanent hop: its useful durability, replay, receipt, audit, enrollment, and health mechanisms may remain in VeraRelay, be absorbed into a broader VeraMesh edge daemon, or be replaced if the replacement preserves or strengthens those invariants.
 
 ## Core principles
 
-- Transport is replaceable. Tailscale is a private carrier, not Vera application authentication.
-- Device identity is Vera-owned. Existing Android identity uses P-256 / ES256 with device ID = SHA-256 of the SPKI public key.
-- Pairing is explicit and one-time, with proof of possession.
-- Requests are signed and protected by timestamp freshness, nonce replay defense, monotonic sequence checks, and revocation.
-- Delivery is durable and directional (`phone-to-host`, `host-to-phone`) with explicit acknowledgement state.
-- Relay state and audit history survive restart and upgrade.
-- Audit integrity fails closed, including legacy rotated audit segments.
-- Capability and health advertisement are protocol concerns; provider-specific ingress is not.
+- Transport is replaceable. Tailscale or any other private carrier is connectivity, not Vera application authorization.
+- Device identity is Vera-owned.
+- Pairing is explicit and proof-of-possession based.
+- Requests are replay/freshness protected.
+- Durable delivery and live interactive delivery are separate path classes.
+- Relay/edge receipt is not recipient completion.
 - Protected effects remain governed outside transport mechanics.
+- Interactive workstation access is direct-first, persistent-session-first, and multiplexed.
 
-## Current implementation relationship
+## VeraPort / VeraRDC
+
+VeraPort is the VeraMesh workstation/RDC application profile. A VeraPort is a logical execution lane, not a TCP/UDP port.
+
+One authenticated session may carry many independent lanes concurrently. The current reference core implements capability narrowing, collision claims, expiring leases, durable fencing/idempotency, root-bounded filesystem operations, default-deny argv process execution, and concurrent local dispatch.
+
+The synchrony profile adds three ordered path classes:
 
 ```text
-Phone / client node
-      |
-private transport (e.g. Tailscale)
-      |
-HTTPS / ingress adapter
-      |
-127.0.0.1:17443
-      |
-VeraRelay (NAS relay node)
-      |
-VeraMesh routing / delivery semantics
-      |
-Vera host node
+DIRECT_STREAM  -> authenticated hot path to Lappy
+EDGE_STREAM    -> authenticated hot path through a VeraMesh edge
+DURABLE_RELAY  -> store-and-forward fallback/recovery
 ```
 
-## VeraPort / VeraRDC extension candidate
+The hot path wins when it is current and authenticated. A Synology edge can remain useful for rendezvous, controller ingress, audit, durable fallback, and offline delivery without forcing every interactive command through a queue.
 
-VeraPort adds capability-bounded logical workstation lanes to VeraMesh. A VeraPort is not a literal TCP/UDP port: one authenticated session can multiplex many independent execution lanes without opening one public network socket per task.
+The ChatGPT-facing MCP/plugin adapter is intended to be thin. The persistent Lappy connection lives behind it so each tool call can enter an already-hot VeraMesh session instead of reconnecting from scratch.
 
-The proposed split keeps VeraRelay as a durable control-plane courier while a future authenticated live data plane carries higher-volume terminal, file, screen, and UI traffic. The workstation agent owns execution authority; relay custody, VLAN placement, LAN/tailnet membership, or message possession does not grant OS capability.
+See:
+- `docs/ARCHITECTURE.md`
+- `docs/SECURITY_MODEL.md`
+- `docs/VALIDATION_MATRIX.md`
+- `protocol/veraport/v1/README.md`
+- `protocol/veraport/v1/synchrony-profile.md`
+- `docs/superpowers/specs/2026-09-19-veraport-rdc-v1-design.md`
 
-The current reference slice lives in `protocol/veraport/v1/` and `reference/veraport_agent/`. It implements capability narrowing, lane leases/fencing, collision claims, root-bounded file access, argv-based process execution, concurrent JSONL dispatch, and optional SQLite-backed durable fencing/idempotency. With durable state enabled, fencing tokens survive restart; exact completed requests replay as historical evidence with current-state nonimplication; incomplete pre-crash requests become outcome-unknown rather than being blindly re-executed.
-
-Broad `process.exec` authority is disabled by default and requires an explicit Lappy-side startup grant; allowed filesystem roots do not sandbox a child process once that grant is enabled. The reference slice does **not** expose a network listener or claim Lappy installation/end-to-end acceptance.
-
-See `docs/ARCHITECTURE.md`, `docs/SECURITY_MODEL.md`, `docs/VALIDATION_MATRIX.md`, and `docs/superpowers/specs/2026-09-19-veraport-rdc-v1-design.md`.
+No current source status implies deployment, Lappy installation, network exposure, MCP registration, or end-to-end acceptance.

@@ -1,39 +1,70 @@
 # VeraMesh VeraPort / VeraRDC V1 design
 
 Date: 2026-09-19
-Status: IMPLEMENTATION CANDIDATE / LOCAL REFERENCE SLICE BUILT / NETWORK BRIDGE NOT DEPLOYED
+Status: IMPLEMENTATION CANDIDATE / LOCAL CORE BUILT / DIRECT-FIRST SYNCHRONY PROFILE ADDED / NETWORK BRIDGE NOT DEPLOYED
 
 ## Purpose
 
-VeraPort extends VeraMesh toward a durable, user-owned bridge between a Vera controller surface and Patrick's workstation ("Lappy"). It is not primarily a remote-desktop clone. It is a persistent execution fabric in which one workstation connection can expose many independent logical execution lanes in parallel.
+VeraPort extends VeraMesh toward a durable, user-owned bridge between a Vera controller surface and Patrick's workstation ("Lappy"). It is a persistent execution fabric in which one workstation connection can expose many independent logical execution lanes in parallel.
 
 A VeraPort is a logical lane, not a literal TCP/UDP port. Each lane has a task, narrowed capabilities, resource claims, an expiring lease, a fencing token, execution context, correlated results, and an audit identity.
 
-## Two-plane architecture
+## Corrected synchrony target
+
+VeraRelay is not required to remain the center of the live path.
+
+The preferred topology is:
 
 ```text
-CONTROL PLANE
-controller <-> VeraRelay <-> Lappy
-identity, bootstrap, durable jobs, reconciliation, receipts, revocation
+HOT PATH A — DIRECT_STREAM
+controller/gateway ================= Lappy
 
-LIVE DATA PLANE
-controller ================= Lappy
-one authenticated multiplexed connection carrying many VeraPort lanes
+HOT PATH B — EDGE_STREAM
+controller/gateway ===== VeraMesh edge ===== Lappy
+
+FALLBACK — DURABLE_RELAY
+controller -> edge/relay durable queue -> Lappy/reconciliation
 ```
 
-VeraRelay remains a blind durable courier. It MUST NOT become a shell daemon, hold Lappy OS credentials, or infer execution authority from transport membership.
+The first current authenticated healthy hot path wins. Durable relay is fallback/recovery, not a mandatory serialization point.
 
-A future live data plane is for high-volume terminal/file/screen traffic. If it disappears, the durable control plane retains enough state to reconcile accepted work rather than blindly retrying.
+A Synology node can remain an always-on edge for rendezvous, gateway, discovery, audit, offline queueing, and fallback. If a direct stream is viable, Synology does not need to sit in the interactive data path.
+
+VeraRelay may be retained, absorbed into a broader VeraMesh edge daemon, split into modules, or replaced. Its name and process topology are not invariants; its useful tested guarantees are.
+
+## Controller/MCP boundary
+
+The ChatGPT-facing MCP/plugin adapter is intentionally thin. It should not own workstation execution state or require a new Lappy handshake for every tool call.
+
+The persistent VeraMesh session lives behind the adapter. MCP calls are projected into that existing session and then into one or more VeraPort lanes.
+
+This separates:
+- ChatGPT/MCP request lifecycle;
+- VeraMesh session lifecycle;
+- VeraPort lane lifecycle;
+- Lappy process/resource lifecycle.
+
+A reconnect at one layer must not silently imply restart or currentness at another.
+
+## Live transport candidate
+
+QUIC is the preferred implementation candidate for the live VeraMesh data plane because one secured connection can expose many independent streams and support connection migration.
+
+Candidate mapping:
+- reliable bidirectional streams: command/result, terminal, ordered file/control transfer;
+- unidirectional streams: telemetry/event fanout where useful;
+- datagrams later: screen/telemetry deltas where dropping stale data is preferable to waiting for retransmission.
+
+QUIC transport encryption is not Vera authorization. The VeraMesh session still binds authenticated principals, capability ceilings, freshness/replay state, and revocation.
 
 ## Roles
 
-VeraPort introduces application-level extension roles without silently rewriting current VeraMesh V1 phone/host authorization:
-
 - `vera-controller`: requests workstation work within an authenticated session ceiling.
 - `workstation-agent`: executes only operations allowed by local Lappy policy.
-- `relay`: transports sealed control material and receipts, with no workstation authority.
+- `mesh-edge`: optional live proxy/rendezvous/durable fallback role.
+- `durable-relay`: store-and-forward fallback capability; may be implemented by the mesh edge.
 
-Existing VeraMesh V1 `phone-client`, `vera-host`, and `relay-admin` semantics remain unchanged until an explicit integration cut updates the normative role topology.
+Existing VeraMesh V1 phone/host roles remain compatible until a later explicit integration cut updates normative role topology.
 
 ## Capability and lane model
 
@@ -44,110 +75,84 @@ Initial implemented reference capabilities:
 - `fs.write`
 - `process.exec` (broad host authority, disabled by default local policy)
 
-Planned but not implemented: process inspection/signaling, screen capture, UI observation, UI control.
+Planned: process inspection/signaling, screen capture, UI observation, UI control.
 
-Each lane contains:
-- stable `lane_id` and `task_id`;
-- explicit resource claims;
-- monotonic fencing token;
-- lease expiry;
-- request/result correlation.
+Each lane contains stable `lane_id` and `task_id`, explicit resource claims, a monotonic fencing token, lease expiry, and request/result correlation.
 
 Initial resource namespaces:
 - `fs:<canonical-path>`
 - `cwd:<canonical-path>`
 
-Read/read overlap is allowed. If overlapping claims include a writer, the later lane fails closed. A future Git adapter should add semantic claims such as `git:<repo>#<branch>`.
+Read/read overlap is allowed. Overlapping claims with a writer fail closed.
 
-Every operation carries the current fencing token. Expired/closed/reopened lanes reject stale tokens so a disconnected old worker cannot resume mutations after ownership has changed.
+Every operation carries the current fencing token. Expired/closed/reopened lanes reject stale tokens.
 
-## Durable restart and idempotency semantics
+## Durable restart and idempotency
 
 The local reference may use a SQLite state database configured by `--state-db`. It stores a monotonic fence counter and request-idempotency ledger with `PENDING` / `COMPLETED` state.
 
-Fence allocation uses SQLite `BEGIN IMMEDIATE` transactions so distinct store connections cannot allocate the same fencing token. This preserves stale-worker exclusion across agent restart.
+Fence allocation uses SQLite `BEGIN IMMEDIATE` transactions so distinct store connections cannot allocate the same fencing token.
 
 A stable request ID is bound to a SHA-256 digest of the canonical request object. Reusing the ID with different content is `IDEMPOTENCY_CONFLICT`.
 
-A completed duplicate request is not executed again. Its stored response is returned with replay metadata stating that it is durable evidence and that current state is not implied. This distinction matters especially for `lane.open`: a historical acceptance does not mean that the lane survived a process restart.
+A completed duplicate request is not executed again. Its stored response is historical evidence with current-state nonimplication.
 
-A request left `PENDING` by process death remains `REQUEST_OUTCOME_UNKNOWN`. The agent refuses to infer absence and refuses to rerun it automatically. Reconciliation must happen at the operation/target layer.
+A request left `PENDING` by process death remains `REQUEST_OUTCOME_UNKNOWN`; it is not blindly rerun.
 
-Active lanes remain process-local in this reference cut. Restart invalidates the live lane set while the durable fence counter continues advancing.
+Active lanes remain process-local in this reference cut. Restart invalidates the live lane set while durable fencing continues advancing.
 
 ## Execution primitives
 
-Filesystem access is bounded by local allowed roots. Remote capability claims cannot widen those roots.
+Filesystem access is bounded by local allowed roots. Text writes use temporary-file plus atomic replacement.
 
-Text writes use temporary-file plus atomic replacement in the reference implementation.
+`process.exec` uses an argv vector and `create_subprocess_exec`, never implicit `shell=True`. It is disabled by default and requires explicit local `--allow-process-exec`.
 
-`process.exec` accepts an argv vector and explicit working directory and uses `create_subprocess_exec`; it never silently invokes `shell=True`. It is disabled by default. The workstation operator must explicitly start the reference agent with `--allow-process-exec` before the session ceiling can contain that capability.
+An allowed `cwd` is not an OS sandbox. If broad process execution is enabled, the child program has whatever authority the Lappy OS account grants unless a real sandbox/profile is added.
 
-Critically, an allowed `cwd` is not an OS sandbox. Once arbitrary process execution is explicitly enabled, the child program may possess whatever filesystem/process/network authority the Lappy OS account gives it. Future network acceptance must either preserve that as an explicit broad-host grant or introduce a real OS sandbox/command profile; it must not pretend path claims contain arbitrary child effects.
+## Synchrony rules
 
-Execution has time and output bounds.
+1. Keep a current authenticated hot session open when possible.
+2. Opening a logical lane must not require opening a new network connection.
+3. Prefer `DIRECT_STREAM`, then `EDGE_STREAM`, then `DURABLE_RELAY`.
+4. Never select stale, unhealthy, or unauthenticated paths to save latency.
+5. Re-evaluate immediately on path failure rather than waiting for slow polling.
+6. Do not retry ambiguous mutations merely because a connection dropped.
+7. Preserve fencing/idempotency across transport reconnection.
+8. Measure bridge-added latency separately from model/tool-call latency.
 
-## Multiplexing
-
-One physical connection may carry many lane IDs and responses may finish out of order. The reference JSONL adapter demonstrates this by creating an async task per request while serializing only response writes.
-
-A production network adapter should use a mature multiplexed transport rather than opening one public network port per VeraPort.
+The reference `synchrony.py` selector implements this semantic ordering and is independently focused-tested.
 
 ## Network acceptance requirements
 
-No network listener is exposed in this source cut. Before a network adapter is accepted it must demonstrate:
-
+Before a network adapter is accepted it must demonstrate:
 1. cryptographic controller and workstation identity;
 2. replay-resistant session establishment;
-3. capability grants bound to the exact session and workstation;
+3. session-bound capability grants;
 4. no trust based solely on VLAN/LAN/tailnet/IP/TCP source;
 5. revocation and a local kill switch;
 6. bounded lane/process/output resources;
 7. reconnect and ambiguous-outcome reconciliation;
-8. standard reviewed transport confidentiality/integrity;
-9. no relay possession of endpoint OS credentials;
-10. `process.exec` remains absent unless local workstation policy explicitly enables broad host execution or a reviewed narrower sandbox/profile;
-11. durable request identity integrates with transport/session replay controls rather than being silently replaced by connection-local state;
-12. hostile end-to-end testing before Lappy installation.
+8. reviewed transport confidentiality/integrity;
+9. no edge/relay possession of endpoint OS credentials;
+10. default-deny or real sandboxing for broad `process.exec`;
+11. durable request identity integrated with transport/session replay controls;
+12. direct/edge/relay path failover does not duplicate mutation;
+13. hostile end-to-end testing before Lappy installation.
 
-A VLAN may reduce lateral-movement blast radius, but it is optional containment, not VeraPort identity or authorization.
-
-## ChatGPT/MCP boundary
-
-VeraPort is intentionally independent of one controller vendor. An MCP/app adapter can expose VeraPort to ChatGPT, but changing that adapter must not require redesigning the Lappy agent. This is the layer that removes dependence on the current third-party RDC quota.
+A VLAN can reduce lateral-movement blast radius; it is containment, not identity or authorization.
 
 ## Reference implementation
 
-`reference/veraport_agent` implements:
-- capability narrowing;
-- max-lane limit;
-- hierarchical read/write collision claims;
-- expiring leases;
-- monotonic fencing;
-- optional SQLite-persisted cross-restart fence allocation;
-- stable request digest/idempotency ledger;
-- explicit completed-replay currentness boundary;
-- explicit outcome-unknown handling for interrupted requests;
-- stale-fence rejection;
-- filesystem root containment;
-- atomic text replacement;
-- argv-only subprocess execution;
-- default-deny local gate for broad `process.exec`;
-- timeout/output bounds;
-- concurrent dispatch over one JSONL stdio stream.
+`reference/veraport_agent` currently implements capability narrowing, collision claims, expiring leases, durable fencing/idempotency, root-bounded filesystem operations, atomic writes, default-deny argv process execution, concurrent JSONL dispatch, and deterministic direct/edge/relay path selection.
 
-The stdio adapter is deliberately local-only. It is a reference multiplexing surface to be wrapped by the future authenticated bridge, not an Internet-facing shell.
-
-Fresh local construction test result: **13 passed / 0 failed** on Python 3.13.5 / pytest 9.0.2.
-
-No Lappy process, network listener, relay deployment, credential, MCP registration, port exposure, merge, or OS mutation occurred.
+Existing local core evidence remains 13/13 passing on its exact source blobs. The new synchrony selector is separately 6/6 focused-pass locally. No claim is made that a combined network runtime has been qualified.
 
 ## Acceptance stages
 
-`SOURCE_CREATED` -> `LOCAL_TEST_PASS` -> `NETWORK_ADAPTER_BUILT` -> `NETWORK_HOSTILE_PASS` -> `LAPPY_AGENT_INSTALLED` -> `CONTROLLER_ADAPTER_CONNECTED` -> `END_TO_END_ACCEPTED`.
+`SOURCE_CREATED` -> `LOCAL_CORE_TEST_PASS` -> `DIRECT_NETWORK_ADAPTER_BUILT` -> `DIRECT_NETWORK_HOSTILE_PASS` -> `LAPPY_AGENT_INSTALLED` -> `CONTROLLER_ADAPTER_CONNECTED` -> `END_TO_END_ACCEPTED`.
 
-No earlier state implies a later state.
+Durable-relay compatibility/replacement can proceed in parallel, but no earlier state implies a later state.
 
 ## Next frontier
 
-Build the authenticated network/session adapter and controller gateway around the existing durable lane engine, with a real least-privilege decision for process execution, without widening authority.
+Implement the hot direct session adapter first, then edge-proxy/fallback integration. Do not optimize the store-and-forward relay before the interactive hot path exists.
