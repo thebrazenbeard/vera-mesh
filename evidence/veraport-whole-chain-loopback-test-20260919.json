@@ -1,0 +1,14 @@
+{
+  "schema": "VERAPORT_WHOLE_CHAIN_LOOPBACK_TEST_V1",
+  "date": "2026-09-19",
+  "status": "TEST_AUTHORED_NOT_EXECUTED",
+  "path": "reference/veraport_agent/tests/test_end_to_end_loopback.py",
+  "intended_claim": "TLS/auth/session/pool/gateway/shared-agent/lane/filesystem round trip using actual VeraPort modules",
+  "reason_not_executed": "No current authorized execution surface contains the exact full GitHub candidate tree; hosted workflow execution has not been authorized.",
+  "non_claims": [
+    "no pass/fail result",
+    "no deployment",
+    "no Windows qualification",
+    "no ChatGPT/MCP qualification"
+  ]
+}
