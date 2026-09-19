@@ -1,0 +1,19 @@
+{
+  "schema": "VERAPORT_WINDOWS_ACL_SOURCE_V1",
+  "date": "2026-09-19",
+  "status": "SOURCE_CREATED_TEST_PENDING",
+  "service_account_model": "LocalSystem",
+  "private_material_allowed_principals": [
+    "NT AUTHORITY\\SYSTEM",
+    "BUILTIN\\Administrators"
+  ],
+  "protected_material": [
+    "service config",
+    "TLS certificate",
+    "TLS private key",
+    "workstation private key",
+    "controller trust file"
+  ],
+  "startup_rule": "ACL validation must pass before start_host creates a listener",
+  "claim_ceiling": "source only until exact Windows candidate is exercised"
+}

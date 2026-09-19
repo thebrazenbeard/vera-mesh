@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .lappy_host import start_host
 from .service_config import WindowsServiceConfig
+from .windows_acl import validate_service_materials
 
 
 DEFAULT_CONFIG_PATH = Path(r"C:\ProgramData\VeraMesh\veraport.json")
@@ -27,7 +28,9 @@ class WindowsServiceUnavailable(RuntimeError):
 
 
 async def run_until_stop(config_path: str | Path, stop_event: threading.Event) -> None:
+    config_path = Path(config_path)
     config = WindowsServiceConfig.load(config_path)
+    validate_service_materials(config_path, config)
     prepared, server = await start_host(config)
     try:
         async with server:
