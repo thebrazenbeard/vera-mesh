@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import asyncio
+import sys
+from pathlib import Path
+
+import pytest
+
+from veraport_agent.core import (
+    CapabilityDenied,
+    ClaimMode,
+    CollisionBlocked,
+    LaneExpired,
+    LaneRegistry,
+    ResourceClaim,
+    StaleFence,
+)
+from veraport_agent.executor import LocalExecutor, PathOutsideRoots
+from veraport_agent.protocol import VeraPortAgent
+
+
+def claim(namespace: str, path: Path, mode: ClaimMode) -> ResourceClaim:
+    return ResourceClaim(f"{namespace}:{path.resolve().as_posix()}", mode)
+
+
+def test_capabilities_only_narrow() -> None:
+    registry = LaneRegistry({"fs.read"})
+    with pytest.raises(CapabilityDenied):
+        registry.open_lane(
+            lane_id="lane-a",
+            task_id="task-a",
+            capabilities={"fs.read", "fs.write"},
+        )
+
+
+def test_write_collision_blocks_but_read_read_parallelism_is_allowed(tmp_path: Path) -> None:
+    resource = claim("fs", tmp_path, ClaimMode.READ)
+    registry = LaneRegistry({"fs.read", "fs.write"})
+    registry.open_lane(lane_id="r1", task_id="t1", capabilities={"fs.read"}, claims=(resource,))
+    registry.open_lane(lane_id="r2", task_id="t2", capabilities={"fs.read"}, claims=(resource,))
+
+    with pytest.raises(CollisionBlocked):
+        registry.open_lane(
+            lane_id="writer",
+            task_id="t3",
+            capabilities={"fs.write"},
+            claims=(claim("fs", tmp_path, ClaimMode.WRITE),),
+        )
+
+
+def test_stale_fence_cannot_reuse_reopened_lane_id() -> None:
+    registry = LaneRegistry({"fs.read"})
+    first = registry.open_lane(lane_id="same", task_id="t1", capabilities={"fs.read"})
+    registry.close(first.lane_id, first.fencing_token)
+    second = registry.open_lane(lane_id="same", task_id="t2", capabilities={"fs.read"})
+    assert second.fencing_token > first.fencing_token
+    with pytest.raises(StaleFence):
+        registry.authorize("same", first.fencing_token, "fs.read")
+
+
+def test_expired_lane_fails_closed() -> None:
+    registry = LaneRegistry({"fs.read"})
+    lane = registry.open_lane(lane_id="a", task_id="t", capabilities={"fs.read"}, ttl_s=1, now=10)
+    with pytest.raises(LaneExpired):
+        registry.authorize("a", lane.fencing_token, "fs.read", now=11)
+
+
+@pytest.mark.asyncio
+async def test_filesystem_is_root_bounded_and_atomic(tmp_path: Path) -> None:
+    registry = LaneRegistry({"fs.read", "fs.write"})
+    root_claim = claim("fs", tmp_path, ClaimMode.WRITE)
+    lane = registry.open_lane(
+        lane_id="files",
+        task_id="t",
+        capabilities={"fs.read", "fs.write"},
+        claims=(root_claim,),
+    )
+    executor = LocalExecutor(registry, allowed_roots=(tmp_path,))
+    target = tmp_path / "a" / "hello.txt"
+    await executor.write_text(
+        lane_id=lane.lane_id,
+        fencing_token=lane.fencing_token,
+        path=str(target),
+        content="hello",
+    )
+    assert await executor.read_text(
+        lane_id=lane.lane_id,
+        fencing_token=lane.fencing_token,
+        path=str(target),
+    ) == "hello"
+
+    with pytest.raises(PathOutsideRoots):
+        await executor.read_text(
+            lane_id=lane.lane_id,
+            fencing_token=lane.fencing_token,
+            path=str(tmp_path.parent / "outside.txt"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_process_exec_uses_argv_not_shell(tmp_path: Path) -> None:
+    registry = LaneRegistry({"process.exec"})
+    lane = registry.open_lane(
+        lane_id="proc",
+        task_id="t",
+        capabilities={"process.exec"},
+        claims=(claim("cwd", tmp_path, ClaimMode.WRITE),),
+    )
+    executor = LocalExecutor(registry, allowed_roots=(tmp_path,))
+    result = await executor.run_process(
+        lane_id=lane.lane_id,
+        fencing_token=lane.fencing_token,
+        argv=[sys.executable, "-c", "print('safe;literal')"],
+        cwd=str(tmp_path),
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "safe;literal"
+
+
+@pytest.mark.asyncio
+async def test_agent_can_dispatch_independent_lanes_concurrently(tmp_path: Path) -> None:
+    registry = LaneRegistry({"process.exec"}, max_lanes=4)
+    agent = VeraPortAgent(registry, LocalExecutor(registry, allowed_roots=(tmp_path,)))
+
+    open_a = await agent.handle({
+        "protocol_version": "veraport-v1",
+        "request_id": "1",
+        "operation": "lane.open",
+        "lane_id": "a",
+        "task_id": "ta",
+        "capabilities": ["process.exec"],
+        "claims": [{"key": f"cwd:{(tmp_path / 'a').as_posix()}", "mode": "write"}],
+    })
+    open_b = await agent.handle({
+        "protocol_version": "veraport-v1",
+        "request_id": "2",
+        "operation": "lane.open",
+        "lane_id": "b",
+        "task_id": "tb",
+        "capabilities": ["process.exec"],
+        "claims": [{"key": f"cwd:{(tmp_path / 'b').as_posix()}", "mode": "write"}],
+    })
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+
+    async def execute(request_id: str, lane: str, fence: int, cwd: Path, word: str):
+        return await agent.handle({
+            "protocol_version": "veraport-v1",
+            "request_id": request_id,
+            "operation": "process.exec",
+            "lane_id": lane,
+            "fencing_token": fence,
+            "argv": [sys.executable, "-c", f"import time; time.sleep(.05); print('{word}')"],
+            "cwd": str(cwd),
+            "timeout_s": 2,
+        })
+
+    a, b = await asyncio.gather(
+        execute("3", "a", open_a["result"]["fencing_token"], tmp_path / "a", "alpha"),
+        execute("4", "b", open_b["result"]["fencing_token"], tmp_path / "b", "beta"),
+    )
+    assert a["ok"] and b["ok"]
+    assert a["result"]["stdout"].strip() == "alpha"
+    assert b["result"]["stdout"].strip() == "beta"

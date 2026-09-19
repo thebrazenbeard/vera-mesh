@@ -1,0 +1,30 @@
+{
+  "schema": "VERAPORT_REFERENCE_LOCAL_TEST_V1",
+  "date": "2026-09-19",
+  "status": "LOCAL_TEST_PASS_ONLY",
+  "subject": "reference/veraport_agent",
+  "python": "3.13.5",
+  "pytest": "9.0.2",
+  "command": "python -m pytest -q",
+  "result": {
+    "passed": 7,
+    "failed": 0,
+    "duration_seconds_observed": 3.13
+  },
+  "coverage_claims": [
+    "capability expansion rejects",
+    "read/read overlap is allowed while overlapping writer is blocked",
+    "stale fencing token rejects after lane reopen",
+    "expired lane fails closed",
+    "filesystem operations are allowed-root bounded and atomic-write tested",
+    "process execution uses argv without implicit shell",
+    "two independent process lanes dispatch concurrently"
+  ],
+  "non_claims": [
+    "no network adapter qualification",
+    "no Windows/Lappy qualification",
+    "no VeraRelay deployment",
+    "no MCP/controller adapter connection",
+    "no end-to-end acceptance"
+  ]
+}

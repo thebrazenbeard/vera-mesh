@@ -34,4 +34,12 @@ VeraMesh routing / delivery semantics
 Vera host node
 ```
 
-See `docs/ARCHITECTURE.md`, `docs/SECURITY_MODEL.md`, and `docs/VALIDATION_MATRIX.md` for the current foundation.
+## VeraPort / VeraRDC extension candidate
+
+VeraPort adds capability-bounded logical workstation lanes to VeraMesh. A VeraPort is not a literal TCP/UDP port: one authenticated session can multiplex many independent execution lanes without opening one public network socket per task.
+
+The proposed split keeps VeraRelay as a durable control-plane courier while a future authenticated live data plane carries higher-volume terminal, file, screen, and UI traffic. The workstation agent owns execution authority; relay custody, VLAN placement, LAN/tailnet membership, or message possession does not grant OS capability.
+
+The current reference slice lives in `protocol/veraport/v1/` and `reference/veraport_agent/`. It implements capability narrowing, lane leases/fencing, collision claims, root-bounded file access, argv-based process execution, and concurrent JSONL dispatch over a local stdio adapter. It does **not** expose a network listener or claim Lappy installation/end-to-end acceptance.
+
+See `docs/ARCHITECTURE.md`, `docs/SECURITY_MODEL.md`, `docs/VALIDATION_MATRIX.md`, and `docs/superpowers/specs/2026-09-19-veraport-rdc-v1-design.md`.

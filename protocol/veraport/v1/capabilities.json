@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "protocol_version": "veraport-v1",
+  "principle": "capabilities_narrow_only",
+  "capabilities": {
+    "fs.read": {"class": "read", "reference_agent": "implemented", "resource_namespace": "fs"},
+    "fs.write": {"class": "mutation", "reference_agent": "implemented", "resource_namespace": "fs"},
+    "process.exec": {"class": "mutation", "reference_agent": "implemented", "resource_namespace": "cwd", "notes": "argv vector only; no implicit shell expansion"},
+    "process.list": {"class": "read", "reference_agent": "planned"},
+    "process.signal": {"class": "mutation", "reference_agent": "planned"},
+    "screen.capture": {"class": "read", "reference_agent": "planned"},
+    "ui.observe": {"class": "read", "reference_agent": "planned"},
+    "ui.control": {"class": "mutation", "reference_agent": "planned"}
+  },
+  "invariants": [
+    "A lane capability set MUST be a subset of the authenticated session capability ceiling.",
+    "A child or parallel lane MUST NOT synthesize authority absent from its session ceiling.",
+    "Filesystem and process operations MUST be constrained by local workstation policy in addition to remote capability claims.",
+    "Network or transport membership MUST NOT itself grant any VeraPort capability."
+  ]
+}
