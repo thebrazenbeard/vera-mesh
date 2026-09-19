@@ -1,11 +1,17 @@
 {
   "schema": "VERAPORT_WINDOWS_ACL_SOURCE_V1",
   "date": "2026-09-19",
-  "status": "SOURCE_CREATED_TEST_PENDING",
+  "status": "PASS_EXACT_WINDOWS",
+  "exact_qualified_head": "07ff6643b7aec5e47106b6f58e2bf42ec38d820f",
+  "exact_qualified_tree": "41447e1cba477b77fdf7ca77b759f2fbe61e6cb5",
   "service_account_model": "LocalSystem",
   "private_material_allowed_principals": [
     "NT AUTHORITY\\SYSTEM",
     "BUILTIN\\Administrators"
+  ],
+  "private_material_allowed_sids": [
+    "S-1-5-18",
+    "S-1-5-32-544"
   ],
   "protected_material": [
     "service config",
@@ -14,6 +20,25 @@
     "workstation private key",
     "controller trust file"
   ],
-  "startup_rule": "ACL validation must pass before start_host creates a listener",
-  "claim_ceiling": "source only until exact Windows candidate is exercised"
+  "protected_directories": [
+    "service config directory",
+    "state database directory",
+    "private key/trust material directories"
+  ],
+  "startup_rule": "ACL validation passes before listener creation",
+  "actual_windows_test": {
+    "focused_acl_tests": "2/2 PASS",
+    "combined_acl_service_runtime_tests": "4/4 PASS",
+    "SCM_service_material_validation": "PASS",
+    "observed_owner": "BUILTIN\\Administrators",
+    "observed_sensitive_file_acl": [
+      "NT AUTHORITY\\SYSTEM Read, Synchronize",
+      "BUILTIN\\Administrators FullControl"
+    ],
+    "observed_directory_acl": [
+      "NT AUTHORITY\\SYSTEM FullControl",
+      "BUILTIN\\Administrators FullControl"
+    ],
+    "inheritance_protected": true
+  }
 }
