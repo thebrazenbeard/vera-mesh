@@ -18,6 +18,15 @@
         "code": {"type": "string", "minLength": 1},
         "message": {"type": "string"}
       }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["durable_evidence", "current_state_not_implied"],
+      "properties": {
+        "durable_evidence": {"const": true},
+        "current_state_not_implied": {"const": true}
+      }
     }
   },
   "allOf": [

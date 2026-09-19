@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 from enum import StrEnum
 from threading import RLock
+from typing import Callable
 
 
 class VeraPortError(RuntimeError):
@@ -64,13 +65,20 @@ class LaneRegistry:
     Fencing tokens prevent a stale lane holder from resuming after expiry/reopen.
     """
 
-    def __init__(self, session_capabilities: set[str] | frozenset[str], *, max_lanes: int = 32) -> None:
+    def __init__(
+        self,
+        session_capabilities: set[str] | frozenset[str],
+        *,
+        max_lanes: int = 32,
+        fence_allocator: Callable[[], int] | None = None,
+    ) -> None:
         if max_lanes < 1:
             raise ValueError("max_lanes must be positive")
         self._session_capabilities = frozenset(session_capabilities)
         self._max_lanes = max_lanes
         self._lanes: dict[str, Lane] = {}
         self._last_fence = 0
+        self._fence_allocator = fence_allocator
         self._lock = RLock()
 
     @property
@@ -110,13 +118,20 @@ class LaneRegistry:
                     raise CollisionBlocked(
                         f"resource collision with lane {existing.lane_id}: {conflict}"
                     )
-            self._last_fence += 1
+            if self._fence_allocator is None:
+                self._last_fence += 1
+                fencing_token = self._last_fence
+            else:
+                fencing_token = self._fence_allocator()
+                if fencing_token <= self._last_fence:
+                    raise RuntimeError("fence allocator did not advance monotonically")
+                self._last_fence = fencing_token
             lane = Lane(
                 lane_id=lane_id,
                 task_id=task_id,
                 capabilities=requested,
                 claims=claim_tuple,
-                fencing_token=self._last_fence,
+                fencing_token=fencing_token,
                 expires_at=current_time + ttl_s,
             )
             self._lanes[lane_id] = lane

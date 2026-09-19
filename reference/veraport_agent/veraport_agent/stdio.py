@@ -9,6 +9,7 @@ from pathlib import Path
 from .core import LaneRegistry
 from .executor import LocalExecutor
 from .protocol import VeraPortAgent
+from .state import AgentStateStore
 
 
 BASE_CAPABILITIES = frozenset({"fs.read", "fs.write"})
@@ -59,19 +60,31 @@ async def serve(agent: VeraPortAgent) -> int:
     return 0
 
 
-def build_agent(roots: tuple[Path, ...], max_lanes: int, *, allow_process_exec: bool = False) -> VeraPortAgent:
+def build_agent(
+    roots: tuple[Path, ...],
+    max_lanes: int,
+    *,
+    allow_process_exec: bool = False,
+    state_db: Path | None = None,
+) -> VeraPortAgent:
     capabilities = set(BASE_CAPABILITIES)
     if allow_process_exec:
         capabilities.add("process.exec")
-    registry = LaneRegistry(capabilities, max_lanes=max_lanes)
+    state_store = AgentStateStore(state_db) if state_db is not None else None
+    registry = LaneRegistry(
+        capabilities,
+        max_lanes=max_lanes,
+        fence_allocator=state_store.next_fence if state_store is not None else None,
+    )
     executor = LocalExecutor(registry, allowed_roots=roots, allow_process_exec=allow_process_exec)
-    return VeraPortAgent(registry, executor)
+    return VeraPortAgent(registry, executor, state_store)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Local VeraPort reference agent over JSONL stdio")
     parser.add_argument("--root", action="append", required=True, help="Allowed filesystem/process root")
     parser.add_argument("--max-lanes", type=int, default=32)
+    parser.add_argument("--state-db", help="SQLite path for durable fencing/idempotency state")
     parser.add_argument(
         "--allow-process-exec",
         action="store_true",
@@ -79,7 +92,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     roots = tuple(Path(value) for value in args.root)
-    return asyncio.run(serve(build_agent(roots, args.max_lanes, allow_process_exec=args.allow_process_exec)))
+    state_db = Path(args.state_db) if args.state_db else None
+    return asyncio.run(
+        serve(
+            build_agent(
+                roots,
+                args.max_lanes,
+                allow_process_exec=args.allow_process_exec,
+                state_db=state_db,
+            )
+        )
+    )
 
 
 if __name__ == "__main__":

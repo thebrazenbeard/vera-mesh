@@ -181,3 +181,120 @@ async def test_agent_can_dispatch_independent_lanes_concurrently(tmp_path: Path)
     assert a["ok"] and b["ok"]
     assert a["result"]["stdout"].strip() == "alpha"
     assert b["result"]["stdout"].strip() == "beta"
+
+
+def test_durable_fence_survives_state_store_reopen(tmp_path: Path) -> None:
+    from veraport_agent.state import AgentStateStore
+
+    db = tmp_path / "agent.sqlite3"
+    store = AgentStateStore(db)
+    first_registry = LaneRegistry({"fs.read"}, fence_allocator=store.next_fence)
+    first = first_registry.open_lane(lane_id="a", task_id="t1", capabilities={"fs.read"})
+    store.close()
+
+    reopened = AgentStateStore(db)
+    second_registry = LaneRegistry({"fs.read"}, fence_allocator=reopened.next_fence)
+    second = second_registry.open_lane(lane_id="b", task_id="t2", capabilities={"fs.read"})
+    reopened.close()
+
+    assert second.fencing_token > first.fencing_token
+
+
+@pytest.mark.asyncio
+async def test_durable_idempotency_replays_completed_request(tmp_path: Path) -> None:
+    from veraport_agent.state import AgentStateStore
+
+    store = AgentStateStore(tmp_path / "agent.sqlite3")
+    registry = LaneRegistry({"fs.read"}, fence_allocator=store.next_fence)
+    agent = VeraPortAgent(registry, LocalExecutor(registry, allowed_roots=(tmp_path,)), store)
+    request = {
+        "protocol_version": "veraport-v1",
+        "request_id": "idem-1",
+        "operation": "lane.open",
+        "lane_id": "idem-lane",
+        "task_id": "idem-task",
+        "capabilities": ["fs.read"],
+        "claims": [],
+    }
+
+    first = await agent.handle(request)
+    second = await agent.handle(request)
+    store.close()
+
+    assert first["ok"] is True
+    assert second["ok"] is True
+    assert second["request_id"] == first["request_id"]
+    assert second["result"] == first["result"]
+    assert second["replay"] == {
+        "durable_evidence": True,
+        "current_state_not_implied": True,
+    }
+    assert len(registry.snapshot()) == 1
+
+
+@pytest.mark.asyncio
+async def test_durable_idempotency_rejects_same_id_different_request(tmp_path: Path) -> None:
+    from veraport_agent.state import AgentStateStore
+
+    store = AgentStateStore(tmp_path / "agent.sqlite3")
+    registry = LaneRegistry({"fs.read"}, fence_allocator=store.next_fence)
+    agent = VeraPortAgent(registry, LocalExecutor(registry, allowed_roots=(tmp_path,)), store)
+    first = await agent.handle({
+        "protocol_version": "veraport-v1",
+        "request_id": "collision-1",
+        "operation": "lane.list",
+    })
+    second = await agent.handle({
+        "protocol_version": "veraport-v1",
+        "request_id": "collision-1",
+        "operation": "lane.open",
+        "lane_id": "different",
+        "task_id": "different",
+        "capabilities": ["fs.read"],
+        "claims": [],
+    })
+    store.close()
+
+    assert first["ok"] is True
+    assert second["ok"] is False
+    assert second["error"]["code"] == "IDEMPOTENCY_CONFLICT"
+
+
+def test_pending_request_survives_restart_as_outcome_unknown(tmp_path: Path) -> None:
+    import hashlib
+    import json
+
+    from veraport_agent.state import AgentStateStore, RequestOutcomeUnknown
+
+    db = tmp_path / "agent.sqlite3"
+    request = {"protocol_version": "veraport-v1", "request_id": "pending-1", "operation": "lane.list"}
+    digest = hashlib.sha256(
+        json.dumps(request, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    ).hexdigest()
+
+    store = AgentStateStore(db)
+    assert store.begin_request("pending-1", digest).disposition == "NEW"
+    store.close()
+
+    reopened = AgentStateStore(db)
+    with pytest.raises(RequestOutcomeUnknown):
+        reopened.begin_request("pending-1", digest)
+    reopened.close()
+
+
+def test_durable_fence_is_atomic_across_store_connections(tmp_path: Path) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    from veraport_agent.state import AgentStateStore
+
+    db = tmp_path / "agent.sqlite3"
+    stores = [AgentStateStore(db), AgentStateStore(db)]
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = [pool.submit(stores[index % 2].next_fence) for index in range(20)]
+            values = sorted(future.result() for future in futures)
+    finally:
+        for store in stores:
+            store.close()
+
+    assert values == list(range(1, 21))

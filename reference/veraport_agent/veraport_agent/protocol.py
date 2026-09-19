@@ -1,20 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 from .core import ClaimMode, ResourceClaim, VeraPortError, LaneRegistry
 from .executor import LocalExecutor, PathOutsideRoots
+from .state import AgentStateStore, RequestOutcomeUnknown
 
 
 class VeraPortAgent:
     """Transport-neutral request dispatcher for the reference VeraPort agent."""
 
-    def __init__(self, registry: LaneRegistry, executor: LocalExecutor) -> None:
+    def __init__(
+        self,
+        registry: LaneRegistry,
+        executor: LocalExecutor,
+        state_store: AgentStateStore | None = None,
+    ) -> None:
         self.registry = registry
         self.executor = executor
+        self.state_store = state_store
 
     async def handle(self, request: dict[str, Any]) -> dict[str, Any]:
         request_id = request.get("request_id")
@@ -26,8 +35,31 @@ class VeraPortAgent:
                 raise ValueError("request_id is required")
             if not isinstance(operation, str) or not operation:
                 raise ValueError("operation is required")
-            result = await self._dispatch(operation, request)
-            return {"protocol_version": "veraport-v1", "request_id": request_id, "ok": True, "result": result}
+            request_sha256 = self._request_sha256(request)
+            if self.state_store is not None:
+                begun = self.state_store.begin_request(request_id, request_sha256)
+                if begun.disposition == "REPLAY":
+                    assert begun.response is not None
+                    replayed = dict(begun.response)
+                    replayed["replay"] = {
+                        "durable_evidence": True,
+                        "current_state_not_implied": True,
+                    }
+                    return replayed
+            try:
+                result = await self._dispatch(operation, request)
+                response = {"protocol_version": "veraport-v1", "request_id": request_id, "ok": True, "result": result}
+            except Exception as exc:
+                code = getattr(exc, "code", exc.__class__.__name__.upper())
+                response = {
+                    "protocol_version": "veraport-v1",
+                    "request_id": request_id,
+                    "ok": False,
+                    "error": {"code": code, "message": str(exc)},
+                }
+            if self.state_store is not None:
+                self.state_store.complete_request(request_id, request_sha256, response)
+            return response
         except Exception as exc:
             code = getattr(exc, "code", exc.__class__.__name__.upper())
             return {
@@ -100,6 +132,11 @@ class VeraPortAgent:
             return asdict(result)
 
         raise ValueError(f"unknown operation: {operation}")
+
+    @staticmethod
+    def _request_sha256(request: dict[str, Any]) -> str:
+        canonical = json.dumps(request, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        return hashlib.sha256(canonical).hexdigest()
 
     @staticmethod
     def _lane_json(lane) -> dict[str, Any]:

@@ -61,6 +61,20 @@ Read/read overlap is allowed. If overlapping claims include a writer, the later 
 
 Every operation carries the current fencing token. Expired/closed/reopened lanes reject stale tokens so a disconnected old worker cannot resume mutations after ownership has changed.
 
+## Durable restart and idempotency semantics
+
+The local reference may use a SQLite state database configured by `--state-db`. It stores a monotonic fence counter and request-idempotency ledger with `PENDING` / `COMPLETED` state.
+
+Fence allocation uses SQLite `BEGIN IMMEDIATE` transactions so distinct store connections cannot allocate the same fencing token. This preserves stale-worker exclusion across agent restart.
+
+A stable request ID is bound to a SHA-256 digest of the canonical request object. Reusing the ID with different content is `IDEMPOTENCY_CONFLICT`.
+
+A completed duplicate request is not executed again. Its stored response is returned with replay metadata stating that it is durable evidence and that current state is not implied. This distinction matters especially for `lane.open`: a historical acceptance does not mean that the lane survived a process restart.
+
+A request left `PENDING` by process death remains `REQUEST_OUTCOME_UNKNOWN`. The agent refuses to infer absence and refuses to rerun it automatically. Reconciliation must happen at the operation/target layer.
+
+Active lanes remain process-local in this reference cut. Restart invalidates the live lane set while the durable fence counter continues advancing.
+
 ## Execution primitives
 
 Filesystem access is bounded by local allowed roots. Remote capability claims cannot widen those roots.
@@ -93,7 +107,8 @@ No network listener is exposed in this source cut. Before a network adapter is a
 8. standard reviewed transport confidentiality/integrity;
 9. no relay possession of endpoint OS credentials;
 10. `process.exec` remains absent unless local workstation policy explicitly enables broad host execution or a reviewed narrower sandbox/profile;
-11. hostile end-to-end testing before Lappy installation.
+11. durable request identity integrates with transport/session replay controls rather than being silently replaced by connection-local state;
+12. hostile end-to-end testing before Lappy installation.
 
 A VLAN may reduce lateral-movement blast radius, but it is optional containment, not VeraPort identity or authorization.
 
@@ -109,6 +124,10 @@ VeraPort is intentionally independent of one controller vendor. An MCP/app adapt
 - hierarchical read/write collision claims;
 - expiring leases;
 - monotonic fencing;
+- optional SQLite-persisted cross-restart fence allocation;
+- stable request digest/idempotency ledger;
+- explicit completed-replay currentness boundary;
+- explicit outcome-unknown handling for interrupted requests;
 - stale-fence rejection;
 - filesystem root containment;
 - atomic text replacement;
@@ -119,7 +138,7 @@ VeraPort is intentionally independent of one controller vendor. An MCP/app adapt
 
 The stdio adapter is deliberately local-only. It is a reference multiplexing surface to be wrapped by the future authenticated bridge, not an Internet-facing shell.
 
-Fresh local construction test result: **8 passed / 0 failed** on Python 3.13.5 / pytest 9.0.2.
+Fresh local construction test result: **13 passed / 0 failed** on Python 3.13.5 / pytest 9.0.2.
 
 No Lappy process, network listener, relay deployment, credential, MCP registration, port exposure, merge, or OS mutation occurred.
 
@@ -131,4 +150,4 @@ No earlier state implies a later state.
 
 ## Next frontier
 
-Build the authenticated network/session adapter and controller gateway around the existing lane engine, with a real least-privilege decision for process execution, without widening authority.
+Build the authenticated network/session adapter and controller gateway around the existing durable lane engine, with a real least-privilege decision for process execution, without widening authority.

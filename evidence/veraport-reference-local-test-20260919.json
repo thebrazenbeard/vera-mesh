@@ -7,9 +7,9 @@
   "pytest": "9.0.2",
   "command": "python -m pytest -q",
   "result": {
-    "passed": 8,
+    "passed": 13,
     "failed": 0,
-    "duration_seconds_observed": 3.14
+    "duration_seconds_observed": 3.04
   },
   "coverage_claims": [
     "capability expansion rejects",
@@ -19,10 +19,16 @@
     "filesystem operations are allowed-root bounded and atomic-write tested",
     "process.exec is disabled by default local workstation policy",
     "explicitly enabled process execution uses argv without implicit shell",
-    "two independent explicitly enabled process lanes dispatch concurrently"
+    "two independent explicitly enabled process lanes dispatch concurrently",
+    "durable fencing remains monotonic across state-store reopen",
+    "completed duplicate request replays without duplicate execution and marks current-state nonimplication",
+    "same request ID with different request content rejects as idempotency conflict",
+    "pending request survives restart as outcome-unknown rather than retryable absence",
+    "fence allocation is atomic across two SQLite store connections"
   ],
   "non_claims": [
     "allowed filesystem roots do not sandbox child process side effects",
+    "active live lanes are not restored as current after agent restart",
     "no network adapter qualification",
     "no Windows/Lappy qualification",
     "no VeraRelay deployment",

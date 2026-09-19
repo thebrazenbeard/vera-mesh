@@ -21,4 +21,8 @@ A lane can only narrow authority from its authenticated session ceiling. VLAN pl
 
 `process.exec` is deliberately treated as broad host execution authority. A `cwd:` claim constrains the selected working directory for collision/accounting purposes; it is **not** an OS sandbox for the child process. The reference agent therefore excludes `process.exec` from its default session ceiling and only enables it when the workstation operator starts the agent with the explicit local `--allow-process-exec` grant.
 
+The reference agent may be started with `--state-db PATH` to use SQLite-backed durable fencing and request idempotency. Fencing tokens then continue monotonically across process restarts. A repeated completed request is returned as durable historical evidence with `current_state_not_implied=true`; a request that was pending when the agent disappeared is reported as `REQUEST_OUTCOME_UNKNOWN` and is not automatically re-executed.
+
+Active lane membership itself is currently process-local: restart invalidates the live lane set. A prior `lane.open` receipt therefore proves a prior acceptance, not that the lane is still current after restart.
+
 `reference/veraport_agent` is a local reference implementation. Its JSONL stdio adapter demonstrates multiplexed concurrent requests without exposing a network listener. The authenticated network/MCP bridge is the next implementation stage.
