@@ -9,7 +9,8 @@ def base():
     return {
         "schema": "VERAPORT_CONTROLLER_MCP_CONFIG_V1",
         "controller_key": "controller.pem",
-        "workstation_cert": "workstation-cert.pem",
+        "tls_ca": "tls-ca.pem",
+        "workstation_public_key": "workstation-public.pem",
         "requested_capabilities": ["fs.read"],
         "gateway_operations": [
             "lane.list",
