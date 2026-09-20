@@ -107,7 +107,7 @@ class ControllerRuntime:
             self._live.clear()
 
     async def machine_info(self) -> dict[str, Any]:
-        await self.refresh_paths()
+        await self.ensure_started()
         decision = self._route_decision()
         return {
             "schema": "VERAPORT_MCP_MACHINE_INFO_V1",
@@ -140,27 +140,27 @@ class ControllerRuntime:
         }
 
     async def list_lanes(self) -> dict[str, Any]:
-        await self.refresh_paths()
+        await self.ensure_started()
         return await self.gateway.list_lanes()
 
     async def open_lane(self, **kwargs: Any) -> dict[str, Any]:
-        await self.refresh_paths()
+        await self.ensure_started()
         return await self.gateway.open_lane(**kwargs)
 
     async def renew_lane(self, **kwargs: Any) -> dict[str, Any]:
-        await self.refresh_paths()
+        await self.ensure_started()
         return await self.gateway.renew_lane(**kwargs)
 
     async def close_lane(self, **kwargs: Any) -> dict[str, Any]:
-        await self.refresh_paths()
+        await self.ensure_started()
         return await self.gateway.close_lane(**kwargs)
 
     async def read_text(self, **kwargs: Any) -> dict[str, Any]:
-        await self.refresh_paths()
+        await self.ensure_started()
         return await self.gateway.read_text(**kwargs)
 
     async def write_text(self, **kwargs: Any) -> dict[str, Any]:
-        await self.refresh_paths()
+        await self.ensure_started()
         return await self.gateway.write_text(**kwargs)
 
     def _load_identities_once(self) -> None:
