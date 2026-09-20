@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "veraport-agent-reference"
-version = "0.4.0"
+version = "0.3.0"
 description = "Reference VeraPort persistent workstation bridge for VeraMesh"
 requires-python = ">=3.11"
 dependencies = [
