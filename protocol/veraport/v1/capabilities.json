@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "protocol_version": "veraport-v1",
+  "principle": "capabilities_narrow_only",
+  "capabilities": {
+    "fs.read": {
+      "class": "read",
+      "reference_agent": "implemented",
+      "resource_namespace": "fs"
+    },
+    "fs.write": {
+      "class": "mutation",
+      "reference_agent": "implemented",
+      "resource_namespace": "fs"
+    },
+    "process.exec": {
+      "class": "broad_host_mutation",
+      "reference_agent": "implemented_local_gate_required",
+      "resource_namespace": "cwd",
+      "notes": "argv vector only; no implicit shell expansion; cwd claim is not an OS sandbox; reference agent requires explicit local allow_process_exec grant"
+    },
+    "process.inspect": {
+      "class": "read",
+      "reference_agent": "implemented_local_gate_required",
+      "resource_namespace": "cwd",
+      "notes": "managed VeraPort process handles only; no arbitrary host PID adoption"
+    },
+    "process.control": {
+      "class": "mutation",
+      "reference_agent": "implemented_local_gate_required",
+      "resource_namespace": "cwd",
+      "notes": "termination accepts only opaque managed process handles; PID alone is never authority"
+    },
+    "screen.capture": {
+      "class": "read",
+      "reference_agent": "planned"
+    },
+    "ui.observe": {
+      "class": "read",
+      "reference_agent": "planned"
+    },
+    "ui.control": {
+      "class": "mutation",
+      "reference_agent": "planned"
+    }
+  },
+  "invariants": [
+    "A lane capability set MUST be a subset of the authenticated session capability ceiling.",
+    "A child or parallel lane MUST NOT synthesize authority absent from its session ceiling.",
+    "Filesystem operations MUST be constrained by local workstation policy in addition to remote capability claims.",
+    "A cwd resource claim is collision/accounting metadata and MUST NOT be represented as sandboxing arbitrary process side effects.",
+    "All process execution, inspection and control MUST remain disabled unless the workstation operator grants allow_process_exec explicitly at local startup.",
+    "Managed-process termination MUST use an opaque process handle bound to the original Popen object; PID-only control is forbidden.",
+    "Network or transport membership MUST NOT itself grant any VeraPort capability."
+  ]
+}

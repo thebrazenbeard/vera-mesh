@@ -1,0 +1,33 @@
+{
+  "schema": "VERAPORT_MCP_TOOL_CONTRACT_V1",
+  "transport": {
+    "kind": "MCP_STREAMABLE_HTTP",
+    "default_bind": "127.0.0.1:17446",
+    "mcp_client_reconnect_recreates_veraport_application_session": false,
+    "controller_process_restart_recreates_veraport_application_session": true
+  },
+  "tools": {
+    "machine_info": {"operation_class": "READ_ONLY", "veraport_operation": null},
+    "lane_list": {"operation_class": "READ_ONLY", "veraport_operation": "lane.list"},
+    "lane_open": {"operation_class": "SESSION_CONTROL", "veraport_operation": "lane.open"},
+    "lane_renew": {"operation_class": "SESSION_CONTROL", "veraport_operation": "lane.renew"},
+    "lane_close": {"operation_class": "SESSION_CONTROL", "veraport_operation": "lane.close"},
+    "fs_read_text": {"operation_class": "READ_ONLY", "veraport_operation": "fs.read_text"},
+    "fs_write_text": {"operation_class": "MUTATING", "veraport_operation": "fs.write_text"},
+    "process_exec": {"operation_class": "PROCESS_EXECUTION", "veraport_operation": "process.exec"},
+    "process_start": {"operation_class": "PROCESS_EXECUTION", "veraport_operation": "process.start"},
+    "process_list": {"operation_class": "READ_ONLY", "veraport_operation": "process.list"},
+    "process_status": {"operation_class": "READ_ONLY", "veraport_operation": "process.status"},
+    "process_output": {"operation_class": "READ_ONLY", "veraport_operation": "process.output"},
+    "process_terminate": {"operation_class": "PROCESS_CONTROL", "veraport_operation": "process.terminate"}
+  },
+  "authority": [
+    "TOOL_DISCOVERABILITY_NE_AUTHORITY",
+    "GATEWAY_POLICY_NARROWS_ONLY",
+    "WORKSTATION_LOCAL_POLICY_NARROWS_ONLY",
+    "AUTHENTICATED_SESSION_CAPABILITIES_NARROW_ONLY",
+    "LANE_CAPABILITIES_AND_RESOURCE_CLAIMS_NARROW_ONLY"
+  ],
+  "route_order": ["DIRECT_STREAM", "EDGE_STREAM"],
+  "durable_relay": "NOT_IMPLEMENTED_NOT_CURRENT"
+}

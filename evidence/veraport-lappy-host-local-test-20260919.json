@@ -1,0 +1,19 @@
+{
+  "schema": "VERAPORT_LAPPY_HOST_LOCAL_TEST_V1",
+  "date": "2026-09-19",
+  "status": "FOCUSED_LOCAL_TEST_PASS_ONLY",
+  "subject": "reference/veraport_agent/veraport_agent/lappy_host.py",
+  "result": {"passed": 5, "failed": 0, "duration_seconds_observed": 0.07},
+  "coverage_claims": [
+    "identity/config validation precedes runtime construction",
+    "identity failure occurs before state/listener creation",
+    "listener is created only after full host preparation",
+    "listener creation failure closes durable state",
+    "process execution remains absent without local config grant"
+  ],
+  "non_claims": [
+    "dependency-injected focused test does not replace full end-to-end runtime test",
+    "no listener deployed",
+    "no Windows service installed"
+  ]
+}
