@@ -1,0 +1,79 @@
+{
+  "schema": "VERAMESH_ROUTE_HEALTH_CONVERGENCE_V1",
+  "status": "SOURCE_DESIGN_ONLY_NOT_RUNTIME_ACTIVATED",
+  "route_states": [
+    "DISCOVERED",
+    "CONTROL_PLANE_REACHABLE",
+    "DATA_PLANE_VERIFIED",
+    "DEGRADED",
+    "INELIGIBLE"
+  ],
+  "separations": [
+    "TRANSPORT_REACHABILITY_NE_APPLICATION_AUTHORIZATION",
+    "HANDSHAKE_SUCCESS_NE_DATA_PLANE_HEALTH",
+    "PROCESS_HEALTH_NE_END_TO_END_ROUTE_HEALTH",
+    "LAST_KNOWN_GOOD_NE_CURRENTLY_VERIFIED",
+    "ROUTE_SELECTED_NE_EFFECT_AUTHORIZED"
+  ],
+  "data_plane_verification": {
+    "required": true,
+    "required_bindings": [
+      "route_id",
+      "source_node_id",
+      "destination_node_id",
+      "transport_adapter_id",
+      "transport_config_digest",
+      "probe_or_message_id",
+      "relay_custody_receipt_digest",
+      "recipient_receipt_digest",
+      "observed_result",
+      "observed_at"
+    ],
+    "success_result": "PASS",
+    "handshake_only_is_sufficient": false,
+    "freshness": {
+      "required": true,
+      "numeric_window_is_policy_defined": true,
+      "policy_digest_required": true
+    }
+  },
+  "last_known_good": {
+    "may_be_probe_priority": true,
+    "may_become_current_without_fresh_data_plane_pass": false,
+    "stale_success_is_currentness_evidence": false
+  },
+  "convergence": {
+    "failed_route_becomes": "DEGRADED",
+    "alternate_route_requires_fresh_data_plane_pass": true,
+    "control_plane_reachability_alone_may_promote_alternate": false,
+    "no_verified_alternate_result": "ROUTE_UNAVAILABLE_FAIL_CLOSED"
+  },
+  "authority": {
+    "route_health_grants_application_authority": false,
+    "route_selection_grants_protected_effect_authority": false,
+    "transport_membership_grants_vera_authority": false
+  },
+  "external_pattern_provenance": [
+    {
+      "repository": "encodeous/nylon",
+      "head": "c4a96c804f7aa08512721dec7994907eab100bc8",
+      "use": "self-healing route convergence after link failure",
+      "code_imported": false
+    },
+    {
+      "repository": "CluvexStudio/Aether",
+      "head": "0e6f6a5218e65ed4cddc68d1a71d9b9633f89e3f",
+      "use": "validate route health with actual data-plane traffic and retain last-known-good as reconnect candidate",
+      "code_imported": false,
+      "license_note": "AGPL-3.0_SOURCE_RESEARCH_ONLY_NO_CODE_IMPORT"
+    }
+  ],
+  "claim_ceiling": [
+    "NO_RUNTIME_ACTIVATION",
+    "NO_TRANSPORT_SELECTION",
+    "NO_ROUTE_CUTOVER",
+    "NO_NETWORK_EFFECT",
+    "NO_AUTHORITY_GRANT",
+    "NO_PROVIDER_DEPENDENCY"
+  ]
+}
