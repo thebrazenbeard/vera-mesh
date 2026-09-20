@@ -6,7 +6,6 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
-from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
@@ -183,19 +182,18 @@ class ControllerRuntime:
             )
 
         try:
-            cert = x509.load_pem_x509_certificate(
-                self.config.workstation_cert.read_bytes()
+            public = serialization.load_pem_public_key(
+                self.config.workstation_public_key.read_bytes()
             )
         except Exception as exc:
             raise ControllerBootstrapError(
-                "cannot load workstation certificate"
+                "cannot load workstation application public key"
             ) from exc
-        public = cert.public_key()
         if not isinstance(public, ec.EllipticCurvePublicKey) or not isinstance(
             public.curve, ec.SECP256R1
         ):
             raise ControllerBootstrapError(
-                "workstation certificate key must be EC P-256"
+                "workstation application public key must be EC P-256"
             )
 
         self._controller_private_key = private
@@ -252,7 +250,7 @@ class ControllerRuntime:
         assert self._controller_principal is not None
         assert self._workstation_principal is not None
 
-        context = make_client_context(cafile=self.config.workstation_cert)
+        context = make_client_context(cafile=self.config.tls_ca)
         started = time.perf_counter()
         channel, binding = await self.open_session(
             host=spec.host,
