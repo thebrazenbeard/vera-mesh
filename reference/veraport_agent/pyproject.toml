@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "veraport-agent-reference"
-version = "0.3.0"
-description = "Reference VeraPort persistent workstation bridge for VeraMesh"
+version = "0.4.0"
+description = "Reference VeraPort persistent workstation bridge and MCP adapter for VeraMesh"
 requires-python = ">=3.11"
 dependencies = [
-  "cryptography>=42,<49"
+  "cryptography>=42,<49",
+  "mcp>=2,<3"
 ]
 
 [project.optional-dependencies]
@@ -23,6 +24,7 @@ test = [
 [project.scripts]
 veraport-agent = "veraport_agent.stdio:main"
 veraport-service = "veraport_agent.windows_service:service_cli"
+veraport-mcp = "veraport_agent.mcp_server:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
