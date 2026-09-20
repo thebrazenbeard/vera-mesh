@@ -47,6 +47,7 @@ class Channel:
 def materials(tmp_path: Path):
     controller = ec.generate_private_key(ec.SECP256R1())
     workstation = ec.generate_private_key(ec.SECP256R1())
+    tls_key = ec.generate_private_key(ec.SECP256R1())
     controller_path = tmp_path / "controller.pem"
     controller_path.write_bytes(
         controller.private_bytes(
@@ -64,7 +65,7 @@ def materials(tmp_path: Path):
         x509.CertificateBuilder()
         .subject_name(subject)
         .issuer_name(issuer)
-        .public_key(workstation.public_key())
+        .public_key(tls_key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - datetime.timedelta(minutes=1))
         .not_valid_after(now + datetime.timedelta(days=1))
@@ -188,8 +189,14 @@ async def test_mcp_reconnect_reuses_persistent_veraport_sessions(tmp_path: Path)
 async def test_tls_handshake_without_lane_list_does_not_make_path_current(
     tmp_path: Path,
 ):
-    controller, workstation, controller_path, cert_path = materials(tmp_path)
-    cfg = config(controller_path, cert_path)
+    (
+        controller,
+        workstation,
+        controller_path,
+        cert_path,
+        workstation_public_path,
+    ) = materials(tmp_path)
+    cfg = config(controller_path, cert_path, workstation_public_path)
 
     async def opener(**kwargs):
         label = (
@@ -220,8 +227,14 @@ async def test_tls_handshake_without_lane_list_does_not_make_path_current(
 
 @pytest.mark.asyncio
 async def test_wrong_controller_principal_is_not_registered(tmp_path: Path):
-    controller, workstation, controller_path, cert_path = materials(tmp_path)
-    cfg = config(controller_path, cert_path)
+    (
+        controller,
+        workstation,
+        controller_path,
+        cert_path,
+        workstation_public_path,
+    ) = materials(tmp_path)
+    cfg = config(controller_path, cert_path, workstation_public_path)
 
     async def opener(**kwargs):
         return Channel("bad"), SessionBinding(
@@ -245,8 +258,14 @@ async def test_wrong_controller_principal_is_not_registered(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_stale_sessions_are_recreated_before_tool_call(tmp_path: Path):
-    controller, workstation, controller_path, cert_path = materials(tmp_path)
-    cfg = config(controller_path, cert_path)
+    (
+        controller,
+        workstation,
+        controller_path,
+        cert_path,
+        workstation_public_path,
+    ) = materials(tmp_path)
+    cfg = config(controller_path, cert_path, workstation_public_path)
     count = 0
 
     async def opener(**kwargs):
@@ -285,8 +304,14 @@ async def test_stale_sessions_are_recreated_before_tool_call(tmp_path: Path):
 async def test_lane_capability_cannot_exceed_controller_ceiling(
     tmp_path: Path,
 ):
-    controller, workstation, controller_path, cert_path = materials(tmp_path)
-    cfg = config(controller_path, cert_path)
+    (
+        controller,
+        workstation,
+        controller_path,
+        cert_path,
+        workstation_public_path,
+    ) = materials(tmp_path)
+    cfg = config(controller_path, cert_path, workstation_public_path)
 
     async def opener(**kwargs):
         label = (
