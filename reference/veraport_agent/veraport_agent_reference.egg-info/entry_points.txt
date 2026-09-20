@@ -1,0 +1,4 @@
+[console_scripts]
+veraport-agent = veraport_agent.stdio:main
+veraport-mcp = veraport_agent.mcp_server:main
+veraport-service = veraport_agent.windows_service:service_cli

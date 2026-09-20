@@ -13,6 +13,7 @@ from .controller import HotSessionPool, SessionEndpoint
 from .controller_config import ControllerConfig, EndpointConfig
 from .gateway import VeraPortGateway
 from .hot_session import SessionBinding, principal_id
+from .read_lane import MirroredReadLaneRouter
 from .synchrony import PathDecision, PathObservation, select_path
 from .tls_transport import make_client_context, open_tls_session
 
@@ -63,6 +64,12 @@ class ControllerRuntime:
         self._controller_principal: str | None = None
         self._workstation_principal: str | None = None
         self._gateway: VeraPortGateway | None = None
+        self._read_router = MirroredReadLaneRouter(
+            live_endpoints=lambda: tuple(self._live.values()),
+            now_ms=self.now_ms,
+            request_id_factory=self.request_id_factory,
+            max_path_age_ms=self.config.max_path_age_ms,
+        )
 
     @property
     def gateway(self) -> VeraPortGateway:
@@ -130,6 +137,7 @@ class ControllerRuntime:
                     "authenticated": endpoint.path.authenticated,
                     "data_plane_verified": endpoint.path.healthy,
                     "durable_idempotency": endpoint.config.durable_idempotency,
+                    "granted_capabilities": sorted(endpoint.binding.granted_capabilities),
                 }
                 for endpoint in sorted(
                     self._live.values(), key=lambda item: item.config.endpoint_id
@@ -144,18 +152,32 @@ class ControllerRuntime:
 
     async def open_lane(self, **kwargs: Any) -> dict[str, Any]:
         await self.ensure_started()
+        if self._read_router.supports_open(**kwargs):
+            return await self._read_router.open(**kwargs)
         return await self.gateway.open_lane(**kwargs)
 
     async def renew_lane(self, **kwargs: Any) -> dict[str, Any]:
         await self.ensure_started()
+        lane_id = kwargs.get("lane_id")
+        fencing_token = kwargs.get("fencing_token")
+        if isinstance(lane_id, str) and type(fencing_token) is int and self._read_router.owns(lane_id, fencing_token):
+            return await self._read_router.renew(**kwargs)
         return await self.gateway.renew_lane(**kwargs)
 
     async def close_lane(self, **kwargs: Any) -> dict[str, Any]:
         await self.ensure_started()
+        lane_id = kwargs.get("lane_id")
+        fencing_token = kwargs.get("fencing_token")
+        if isinstance(lane_id, str) and type(fencing_token) is int and self._read_router.owns(lane_id, fencing_token):
+            return await self._read_router.close(**kwargs)
         return await self.gateway.close_lane(**kwargs)
 
     async def read_text(self, **kwargs: Any) -> dict[str, Any]:
         await self.ensure_started()
+        lane_id = kwargs.get("lane_id")
+        fencing_token = kwargs.get("fencing_token")
+        if isinstance(lane_id, str) and type(fencing_token) is int and self._read_router.owns(lane_id, fencing_token):
+            return await self._read_router.read_text(**kwargs)
         return await self.gateway.read_text(**kwargs)
 
     async def write_text(self, **kwargs: Any) -> dict[str, Any]:

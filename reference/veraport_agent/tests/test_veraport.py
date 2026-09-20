@@ -15,7 +15,7 @@ from veraport_agent.core import (
     ResourceClaim,
     StaleFence,
 )
-from veraport_agent.executor import LocalExecutor, PathOutsideRoots, ProcessExecutionDisabled
+from veraport_agent.executor import FileReadLimitExceeded, LocalExecutor, PathOutsideRoots, ProcessExecutionDisabled
 from veraport_agent.protocol import VeraPortAgent
 
 
@@ -94,6 +94,30 @@ async def test_filesystem_is_root_bounded_and_atomic(tmp_path: Path) -> None:
             lane_id=lane.lane_id,
             fencing_token=lane.fencing_token,
             path=str(tmp_path.parent / "outside.txt"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_filesystem_read_is_bounded_at_workstation(tmp_path: Path) -> None:
+    registry = LaneRegistry({"fs.read"})
+    lane = registry.open_lane(
+        lane_id="bounded",
+        task_id="t",
+        capabilities={"fs.read"},
+        claims=(claim("fs", tmp_path, ClaimMode.READ),),
+    )
+    target = tmp_path / "large.txt"
+    target.write_bytes(b"x" * 33)
+    executor = LocalExecutor(
+        registry,
+        allowed_roots=(tmp_path,),
+        max_read_bytes=32,
+    )
+    with pytest.raises(FileReadLimitExceeded):
+        await executor.read_text(
+            lane_id=lane.lane_id,
+            fencing_token=lane.fencing_token,
+            path=str(target),
         )
 
 

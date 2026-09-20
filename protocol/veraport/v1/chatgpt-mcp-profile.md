@@ -64,3 +64,17 @@ deployment or supported private MCP tunnel is a separate install/route step.
 
 Repository source does not establish MCP server runtime, plugin registration, current route,
 or live VeraPort operation.
+
+
+## R2 hostile repairs
+
+- Workstation text reads are bounded by local max_read_bytes; oversized files fail
+  closed before their complete contents are loaded or returned.
+- The initial MCP listener is source-enforced loopback-only. Remote ChatGPT exposure must
+  use a separately reviewed secure tunnel or HTTPS adapter that forwards to loopback.
+- Read-only filesystem lanes are controller-logical lanes. Each VeraPort application
+  session receives its own read-only mirror and fencing token. A direct to edge read
+  failover therefore materializes authority inside the edge application session instead
+  of reusing a fence from another session.
+- Write, process, and other session-mutating operations do not acquire cross-session
+  logical mirroring.
