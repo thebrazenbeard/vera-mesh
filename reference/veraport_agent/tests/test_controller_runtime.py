@@ -76,15 +76,33 @@ def materials(tmp_path: Path):
     )
     cert_path = tmp_path / "workstation-cert.pem"
     cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
-    return controller, workstation, controller_path, cert_path
+    workstation_public_path = tmp_path / "workstation-public.pem"
+    workstation_public_path.write_bytes(
+        workstation.public_key().public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+    )
+    return (
+        controller,
+        workstation,
+        controller_path,
+        cert_path,
+        workstation_public_path,
+    )
 
 
-def config(controller_path: Path, cert_path: Path):
+def config(
+    controller_path: Path,
+    cert_path: Path,
+    workstation_public_path: Path,
+):
     return ControllerConfig.from_dict(
         {
             "schema": "VERAPORT_CONTROLLER_MCP_CONFIG_V1",
             "controller_key": str(controller_path),
-            "workstation_cert": str(cert_path),
+            "tls_ca": str(cert_path),
+            "workstation_public_key": str(workstation_public_path),
             "requested_capabilities": ["fs.read"],
             "gateway_operations": [
                 "lane.list",
@@ -117,8 +135,14 @@ def config(controller_path: Path, cert_path: Path):
 
 @pytest.mark.asyncio
 async def test_mcp_reconnect_reuses_persistent_veraport_sessions(tmp_path: Path):
-    controller, workstation, controller_path, cert_path = materials(tmp_path)
-    cfg = config(controller_path, cert_path)
+    (
+        controller,
+        workstation,
+        controller_path,
+        cert_path,
+        workstation_public_path,
+    ) = materials(tmp_path)
+    cfg = config(controller_path, cert_path, workstation_public_path)
     opens = []
     channels = {}
 
