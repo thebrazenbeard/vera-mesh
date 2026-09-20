@@ -23,8 +23,9 @@ The controller authenticates every candidate endpoint and then performs a real
 `lane.list` application request before the path becomes healthy/current. Direct is preferred
 over edge only among fresh authenticated data-plane-verified paths.
 
-The controller private key and pinned workstation certificate are external runtime
-configuration. They are never repository material.
+The controller private key, TLS trust anchor, and independently pinned VeraPort workstation
+application public key are external runtime configuration. TLS identity is not reused as
+proof of VeraPort application identity. These materials are never repository secrets.
 
 MCP reconnects reuse the controller process's existing VeraPort sessions. Session recreation
 occurs only when an application session is absent or expired, not because an MCP client
