@@ -86,4 +86,3 @@ def test_read_bound_defaults_and_is_policy_bounded(tmp_path):
         WindowsServiceConfig.from_dict(config(tmp_path, max_read_bytes=0))
     with pytest.raises(ServiceConfigError, match="max_read_bytes"):
         WindowsServiceConfig.from_dict(config(tmp_path, max_read_bytes=16_777_217))
-
