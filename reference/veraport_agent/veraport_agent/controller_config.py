@@ -54,7 +54,8 @@ class EndpointConfig:
 @dataclass(frozen=True)
 class ControllerConfig:
     controller_key: Path
-    workstation_cert: Path
+    tls_ca: Path
+    workstation_public_key: Path
     requested_capabilities: frozenset[str]
     gateway_operations: frozenset[str]
     endpoints: tuple[EndpointConfig, ...]
@@ -75,7 +76,8 @@ class ControllerConfig:
             raise ControllerConfigError("wrong controller config schema")
         base = Path.cwd() if base_dir is None else base_dir
         controller_key = cls._path(base, value.get("controller_key"))
-        workstation_cert = cls._path(base, value.get("workstation_cert"))
+        tls_ca = cls._path(base, value.get("tls_ca"))
+        workstation_public_key = cls._path(base, value.get("workstation_public_key"))
 
         requested = value.get("requested_capabilities")
         if not isinstance(requested, list) or not requested:
@@ -113,7 +115,8 @@ class ControllerConfig:
 
         return cls(
             controller_key=controller_key,
-            workstation_cert=workstation_cert,
+            tls_ca=tls_ca,
+            workstation_public_key=workstation_public_key,
             requested_capabilities=requested_caps,
             gateway_operations=gateway_operations,
             endpoints=endpoints,
