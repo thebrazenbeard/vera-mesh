@@ -62,10 +62,14 @@ class MultiplexClient:
         writer: asyncio.StreamWriter,
         *,
         max_frame_bytes: int = 1_048_576,
+        request_timeout_s: float = 5.0,
     ) -> None:
+        if request_timeout_s <= 0:
+            raise ValueError("request_timeout_s must be positive")
         self.reader = reader
         self.writer = writer
         self.max_frame_bytes = max_frame_bytes
+        self.request_timeout_s = request_timeout_s
         self._write_lock = asyncio.Lock()
         self._pending: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._closed = False
@@ -84,8 +88,22 @@ class MultiplexClient:
         self._pending[request_id] = future
         try:
             async with self._write_lock:
-                await write_frame(self.writer, request, max_frame_bytes=self.max_frame_bytes)
-            return await future
+                await write_frame(
+                    self.writer,
+                    request,
+                    max_frame_bytes=self.max_frame_bytes,
+                )
+            try:
+                return await asyncio.wait_for(
+                    future,
+                    timeout=self.request_timeout_s,
+                )
+            except TimeoutError as exc:
+                self._pending.pop(request_id, None)
+                await self.close()
+                raise StreamClosed(
+                    f"request timed out: {request_id}"
+                ) from exc
         except Exception:
             self._pending.pop(request_id, None)
             raise
