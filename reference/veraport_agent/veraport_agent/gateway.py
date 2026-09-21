@@ -60,6 +60,8 @@ class VeraPortGateway:
         allowed_operations: Iterable[str],
         now_ms: Callable[[], int] | None = None,
         request_id_factory: Callable[[], str] | None = None,
+        max_path_age_ms: int = 5_000,
+        operation_timeout_s: float = 15.0,
     ) -> None:
         if not workstation_principal:
             raise ValueError("workstation_principal is required")
@@ -73,8 +75,14 @@ class VeraPortGateway:
         self.workstation_principal = workstation_principal
         self.controller_principal = controller_principal
         self.allowed_operations = allowed
+        if max_path_age_ms < 1:
+            raise ValueError("max_path_age_ms must be positive")
+        if operation_timeout_s <= 0:
+            raise ValueError("operation_timeout_s must be positive")
         self.now_ms = now_ms or (lambda: int(time.time() * 1000))
         self.request_id_factory = request_id_factory or (lambda: uuid.uuid4().hex)
+        self.max_path_age_ms = max_path_age_ms
+        self.operation_timeout_s = operation_timeout_s
 
     async def list_lanes(self) -> dict[str, Any]:
         return await self._call("lane.list", {})
@@ -168,4 +176,6 @@ class VeraPortGateway:
             self.controller_principal,
             request,
             now_ms=self.now_ms(),
+            max_path_age_ms=self.max_path_age_ms,
+            operation_timeout_s=self.operation_timeout_s,
         )
