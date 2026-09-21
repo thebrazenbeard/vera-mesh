@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .core import ClaimMode, LaneRegistry
+from .operation_guard import LaneOperationCoordinator
 
 
 class PathOutsideRoots(PermissionError):
@@ -38,8 +39,9 @@ class LocalExecutor:
         *,
         allowed_roots: tuple[Path, ...],
         max_output_bytes: int = 1_048_576,
-        max_read_bytes: int = 1_048_576,
+        max_read_bytes: int = 131_072,
         allow_process_exec: bool = False,
+        lane_close_timeout_s: float = 10.0,
     ) -> None:
         if not allowed_roots:
             raise ValueError("at least one allowed root is required")
@@ -52,6 +54,10 @@ class LocalExecutor:
         self.max_output_bytes = max_output_bytes
         self.max_read_bytes = max_read_bytes
         self.allow_process_exec = allow_process_exec
+        self.activity = LaneOperationCoordinator(
+            registry,
+            close_timeout_s=lane_close_timeout_s,
+        )
 
     def _resolve_allowed(self, value: str | Path) -> Path:
         path = Path(value).expanduser().resolve()
@@ -73,14 +79,14 @@ class LocalExecutor:
 
     async def read_text(self, *, lane_id: str, fencing_token: int, path: str, encoding: str = "utf-8") -> str:
         resolved = self._resolve_allowed(path)
-        self.registry.authorize(
+        async with self.activity.operation(
             lane_id,
             fencing_token,
             "fs.read",
             resource_key=self._fs_resource(resolved),
             resource_mode=ClaimMode.READ,
-        )
-        return await asyncio.to_thread(self._read_text_bounded, resolved, encoding)
+        ):
+            return await asyncio.to_thread(self._read_text_bounded, resolved, encoding)
 
     def _read_text_bounded(self, path: Path, encoding: str) -> str:
         with path.open("rb") as handle:
@@ -101,14 +107,14 @@ class LocalExecutor:
         encoding: str = "utf-8",
     ) -> None:
         resolved = self._resolve_allowed(path)
-        self.registry.authorize(
+        async with self.activity.operation(
             lane_id,
             fencing_token,
             "fs.write",
             resource_key=self._fs_resource(resolved),
             resource_mode=ClaimMode.WRITE,
-        )
-        await asyncio.to_thread(self._atomic_write, resolved, content, encoding)
+        ):
+            await asyncio.to_thread(self._atomic_write, resolved, content, encoding)
 
     @staticmethod
     def _atomic_write(path: Path, content: str, encoding: str) -> None:
@@ -143,34 +149,50 @@ class LocalExecutor:
         if timeout_s <= 0:
             raise ValueError("timeout_s must be positive")
         resolved_cwd = self._resolve_allowed(cwd)
-        self.registry.authorize(
+        async with self.activity.operation(
             lane_id,
             fencing_token,
             "process.exec",
             resource_key=self._cwd_resource(resolved_cwd),
             resource_mode=ClaimMode.WRITE,
-        )
-        if os.name == "nt":
-            return await asyncio.to_thread(
-                self._run_process_windows,
-                argv,
-                resolved_cwd,
-                timeout_s,
-            )
+        ):
+            if os.name == "nt":
+                return await asyncio.to_thread(
+                    self._run_process_windows,
+                    argv,
+                    resolved_cwd,
+                    timeout_s,
+                )
 
-        process = await asyncio.create_subprocess_exec(
-            *argv,
-            cwd=resolved_cwd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            process = await asyncio.create_subprocess_exec(
+                *argv,
+                cwd=resolved_cwd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                stdout_b, stderr_b = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=timeout_s,
+                )
+            except TimeoutError:
+                process.kill()
+                await process.wait()
+                raise
+            return self._result(process.returncode, stdout_b, stderr_b)
+
+    async def close_lane(
+        self,
+        lane_id: str,
+        fencing_token: int,
+        *,
+        timeout_s: float | None = None,
+    ):
+        return await self.activity.close_lane(
+            lane_id,
+            fencing_token,
+            timeout_s=timeout_s,
         )
-        try:
-            stdout_b, stderr_b = await asyncio.wait_for(process.communicate(), timeout=timeout_s)
-        except TimeoutError:
-            process.kill()
-            await process.wait()
-            raise
-        return self._result(process.returncode, stdout_b, stderr_b)
 
     def _run_process_windows(
         self,
