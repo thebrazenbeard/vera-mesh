@@ -24,6 +24,7 @@ class VeraPortAgent:
         self.registry = registry
         self.executor = executor
         self.state_store = state_store
+        self._lane_locks: dict[str, asyncio.Lock] = {}
 
     async def handle(self, request: dict[str, Any]) -> dict[str, Any]:
         request_id = request.get("request_id")
@@ -47,7 +48,19 @@ class VeraPortAgent:
                     }
                     return replayed
             try:
-                result = await self._dispatch(operation, request)
+                lane_id = request.get("lane_id")
+                if operation in {
+                    "lane.open",
+                    "lane.renew",
+                    "lane.close",
+                    "fs.read_text",
+                    "fs.write_text",
+                    "process.exec",
+                } and isinstance(lane_id, str) and lane_id:
+                    async with self._lane_lock(lane_id):
+                        result = await self._dispatch(operation, request)
+                else:
+                    result = await self._dispatch(operation, request)
                 response = {"protocol_version": "veraport-v1", "request_id": request_id, "ok": True, "result": result}
             except Exception as exc:
                 code = getattr(exc, "code", exc.__class__.__name__.upper())
@@ -68,6 +81,38 @@ class VeraPortAgent:
                 "ok": False,
                 "error": {"code": code, "message": str(exc)},
             }
+
+
+    def _lane_lock(self, lane_id: str) -> asyncio.Lock:
+        lock = self._lane_locks.get(lane_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._lane_locks[lane_id] = lock
+        return lock
+
+    async def close_session(self, lane_prefix: str) -> None:
+        """Drain then reap lanes belonging to one authenticated session namespace."""
+        candidates = [
+            lane
+            for lane in self.registry.snapshot()
+            if lane.lane_id.startswith(lane_prefix)
+        ]
+        for candidate in candidates:
+            async with self._lane_lock(candidate.lane_id):
+                current = next(
+                    (
+                        lane
+                        for lane in self.registry.snapshot()
+                        if lane.lane_id == candidate.lane_id
+                    ),
+                    None,
+                )
+                if current is None:
+                    continue
+                try:
+                    self.registry.close(current.lane_id, current.fencing_token)
+                except VeraPortError:
+                    continue
 
     async def _dispatch(self, operation: str, request: dict[str, Any]) -> dict[str, Any]:
         if operation == "lane.open":
