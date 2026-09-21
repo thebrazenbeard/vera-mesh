@@ -11,6 +11,14 @@ from .core import ClaimMode, ResourceClaim, VeraPortError, LaneRegistry
 from .executor import LocalExecutor, PathOutsideRoots
 from .state import AgentStateStore, RequestOutcomeUnknown
 
+_MUTATING_OPERATIONS = frozenset({
+    "lane.open",
+    "lane.renew",
+    "lane.close",
+    "fs.write_text",
+    "process.exec",
+})
+
 
 class VeraPortAgent:
     """Transport-neutral request dispatcher for the reference VeraPort agent."""
@@ -36,8 +44,16 @@ class VeraPortAgent:
             if not isinstance(operation, str) or not operation:
                 raise ValueError("operation is required")
             request_sha256 = self._request_sha256(request)
-            if self.state_store is not None:
-                begun = self.state_store.begin_request(request_id, request_sha256)
+            durable = (
+                self.state_store is not None
+                and operation in _MUTATING_OPERATIONS
+            )
+            if durable:
+                assert self.state_store is not None
+                begun = self.state_store.begin_request(
+                    request_id,
+                    request_sha256,
+                )
                 if begun.disposition == "REPLAY":
                     assert begun.response is not None
                     replayed = dict(begun.response)
@@ -57,8 +73,13 @@ class VeraPortAgent:
                     "ok": False,
                     "error": {"code": code, "message": str(exc)},
                 }
-            if self.state_store is not None:
-                self.state_store.complete_request(request_id, request_sha256, response)
+            if durable:
+                assert self.state_store is not None
+                self.state_store.complete_request(
+                    request_id,
+                    request_sha256,
+                    response,
+                )
             return response
         except Exception as exc:
             code = getattr(exc, "code", exc.__class__.__name__.upper())
@@ -93,11 +114,19 @@ class VeraPortAgent:
             return self._lane_json(lane)
 
         if operation == "lane.close":
-            lane = self.registry.close(str(request["lane_id"]), int(request["fencing_token"]))
+            lane = await self.executor.close_lane(
+                str(request["lane_id"]),
+                int(request["fencing_token"]),
+            )
             return {"lane_id": lane.lane_id, "closed": True}
 
         if operation == "lane.list":
             return {"lanes": [self._lane_json(lane) for lane in self.registry.snapshot()]}
+
+        if operation == "state.health":
+            if self.state_store is None:
+                return {"status": "NO_DURABLE_STORE"}
+            return self.state_store.health()
 
         if operation == "fs.read_text":
             content = await self.executor.read_text(
@@ -132,6 +161,28 @@ class VeraPortAgent:
             return asdict(result)
 
         raise ValueError(f"unknown operation: {operation}")
+
+    async def close_session(self, session_id: str) -> dict[str, Any]:
+        prefix = session_id + "::"
+        unresolved: list[str] = []
+        closed: list[str] = []
+        for lane in self.registry.snapshot():
+            if not lane.lane_id.startswith(prefix):
+                continue
+            try:
+                await self.executor.close_lane(
+                    lane.lane_id,
+                    lane.fencing_token,
+                )
+                closed.append(lane.lane_id)
+            except Exception:
+                unresolved.append(lane.lane_id)
+        return {
+            "session_id": session_id,
+            "closed_lanes": sorted(closed),
+            "unresolved_lanes": sorted(unresolved),
+            "drained": not unresolved,
+        }
 
     @staticmethod
     def _request_sha256(request: dict[str, Any]) -> str:
