@@ -322,3 +322,93 @@ def test_durable_fence_is_atomic_across_store_connections(tmp_path: Path) -> Non
             store.close()
 
     assert values == list(range(1, 21))
+
+
+class BlockingReadExecutor:
+    def __init__(self, registry):
+        self.registry = registry
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def read_text(
+        self,
+        *,
+        lane_id,
+        fencing_token,
+        path,
+        encoding="utf-8",
+    ):
+        resolved = Path(path).resolve()
+        self.registry.authorize(
+            lane_id,
+            fencing_token,
+            "fs.read",
+            resource_key="fs:" + resolved.as_posix(),
+            resource_mode=ClaimMode.READ,
+        )
+        self.started.set()
+        await self.release.wait()
+        return "inflight-complete"
+
+
+@pytest.mark.asyncio
+async def test_lane_close_is_workstation_quiescence_barrier(tmp_path: Path) -> None:
+    registry = LaneRegistry({"fs.read"})
+    executor = BlockingReadExecutor(registry)
+    agent = VeraPortAgent(registry, executor)
+    target = tmp_path / "x.txt"
+    target.write_text("x", encoding="utf-8")
+
+    opened = await agent.handle({
+        "protocol_version": "veraport-v1",
+        "request_id": "open-quiesce",
+        "operation": "lane.open",
+        "lane_id": "quiesce",
+        "task_id": "task",
+        "capabilities": ["fs.read"],
+        "claims": [{
+            "key": "fs:" + tmp_path.resolve().as_posix(),
+            "mode": "read",
+        }],
+    })
+    fence = opened["result"]["fencing_token"]
+
+    read_task = asyncio.create_task(agent.handle({
+        "protocol_version": "veraport-v1",
+        "request_id": "read-quiesce",
+        "operation": "fs.read_text",
+        "lane_id": "quiesce",
+        "fencing_token": fence,
+        "path": str(target),
+    }))
+    await executor.started.wait()
+
+    close_task = asyncio.create_task(agent.handle({
+        "protocol_version": "veraport-v1",
+        "request_id": "close-quiesce",
+        "operation": "lane.close",
+        "lane_id": "quiesce",
+        "fencing_token": fence,
+    }))
+    await asyncio.sleep(0)
+    assert close_task.done() is False
+
+    executor.release.set()
+    read_result = await read_task
+    close_result = await close_task
+
+    assert read_result["ok"] is True
+    assert read_result["result"]["content"] == "inflight-complete"
+    assert close_result["ok"] is True
+    assert close_result["result"]["closed"] is True
+
+    after = await agent.handle({
+        "protocol_version": "veraport-v1",
+        "request_id": "read-after-close",
+        "operation": "fs.read_text",
+        "lane_id": "quiesce",
+        "fencing_token": fence,
+        "path": str(target),
+    })
+    assert after["ok"] is False
+    assert after["error"]["code"] == "LANE_NOT_FOUND"
