@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Protocol, Any
 
@@ -84,7 +85,12 @@ class HotSessionPool:
         *,
         now_ms: int,
         max_path_age_ms: int = 5_000,
+        operation_timeout_s: float = 15.0,
     ) -> dict[str, Any]:
+        if max_path_age_ms < 1:
+            raise ValueError("max_path_age_ms must be positive")
+        if operation_timeout_s <= 0:
+            raise ValueError("operation_timeout_s must be positive")
         request_id = request.get("request_id")
         operation = request.get("operation")
         if not isinstance(request_id, str) or not request_id:
@@ -126,7 +132,18 @@ class HotSessionPool:
             endpoint = next(item for item in remaining if item.path.path_id == decision.selected.path_id)
             attempted.add(endpoint.endpoint_id)
             try:
-                return await endpoint.channel.request(request)
+                return await asyncio.wait_for(
+                    endpoint.channel.request(request),
+                    timeout=operation_timeout_s,
+                )
+            except TimeoutError as exc:
+                last_error = exc
+                mutating = operation in _MUTATING_OPERATIONS
+                if mutating:
+                    raise AmbiguousDelivery(
+                        f"{request_id} timed out after possible mutation; retry requires explicit reconciliation"
+                    ) from exc
+                continue
             except StreamClosed as exc:
                 last_error = exc
                 mutating = operation in _MUTATING_OPERATIONS
