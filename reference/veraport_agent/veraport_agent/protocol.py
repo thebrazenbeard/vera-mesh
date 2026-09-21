@@ -9,7 +9,16 @@ from typing import Any, AsyncIterator
 
 from .core import ClaimMode, ResourceClaim, VeraPortError, LaneRegistry
 from .executor import LocalExecutor, PathOutsideRoots
-from .state import AgentStateStore, RequestOutcomeUnknown
+from .state import AgentStateStore
+
+
+DURABLE_MUTATING_OPERATIONS = frozenset({
+    "lane.open",
+    "lane.renew",
+    "lane.close",
+    "fs.write_text",
+    "process.exec",
+})
 
 
 class VeraPortAgent:
@@ -30,18 +39,15 @@ class VeraPortAgent:
 
     @asynccontextmanager
     async def _lane_operation(self, lane_id: str) -> AsyncIterator[None]:
-        """Serialize workstation operations with close for one internal lane.
-
-        A successful lane.close is therefore a quiescence barrier: every
-        operation admitted before it has completed, and every operation that
-        arrives afterward must re-authorize against the closed/reopened lane.
-        """
+        """Serialize workstation operations with close for one internal lane."""
         async with self._lane_locks_guard:
             lock = self._lane_locks.get(lane_id)
             if lock is None:
                 lock = asyncio.Lock()
                 self._lane_locks[lane_id] = lock
-            self._lane_lock_users[lane_id] = self._lane_lock_users.get(lane_id, 0) + 1
+            self._lane_lock_users[lane_id] = (
+                self._lane_lock_users.get(lane_id, 0) + 1
+            )
 
         await lock.acquire()
         try:
@@ -62,14 +68,24 @@ class VeraPortAgent:
         operation = request.get("operation")
         try:
             if request.get("protocol_version") != "veraport-v1":
-                raise ValueError("protocol_version must be veraport-v1")
+                raise ValueError(
+                    "protocol_version must be veraport-v1"
+                )
             if not isinstance(request_id, str) or not request_id:
                 raise ValueError("request_id is required")
             if not isinstance(operation, str) or not operation:
                 raise ValueError("operation is required")
-            request_sha256 = self._request_sha256(request)
-            if self.state_store is not None:
-                begun = self.state_store.begin_request(request_id, request_sha256)
+
+            durable_mutation = (
+                self.state_store is not None
+                and operation in DURABLE_MUTATING_OPERATIONS
+            )
+            request_sha256: str | None = None
+            if durable_mutation:
+                request_sha256 = self._request_sha256(request)
+                begun = self.state_store.begin_request(
+                    request_id, request_sha256
+                )
                 if begun.disposition == "REPLAY":
                     assert begun.response is not None
                     replayed = dict(begun.response)
@@ -78,6 +94,7 @@ class VeraPortAgent:
                         "current_state_not_implied": True,
                     }
                     return replayed
+
             try:
                 result = await self._dispatch(operation, request)
                 response = {
@@ -87,18 +104,28 @@ class VeraPortAgent:
                     "result": result,
                 }
             except Exception as exc:
-                code = getattr(exc, "code", exc.__class__.__name__.upper())
+                code = getattr(
+                    exc, "code", exc.__class__.__name__.upper()
+                )
                 response = {
                     "protocol_version": "veraport-v1",
                     "request_id": request_id,
                     "ok": False,
                     "error": {"code": code, "message": str(exc)},
                 }
-            if self.state_store is not None:
-                self.state_store.complete_request(request_id, request_sha256, response)
+
+            if durable_mutation:
+                assert request_sha256 is not None
+                self.state_store.complete_request(
+                    request_id,
+                    request_sha256,
+                    response,
+                )
             return response
         except Exception as exc:
-            code = getattr(exc, "code", exc.__class__.__name__.upper())
+            code = getattr(
+                exc, "code", exc.__class__.__name__.upper()
+            )
             return {
                 "protocol_version": "veraport-v1",
                 "request_id": request_id,
@@ -106,19 +133,29 @@ class VeraPortAgent:
                 "error": {"code": code, "message": str(exc)},
             }
 
-    async def _dispatch(self, operation: str, request: dict[str, Any]) -> dict[str, Any]:
+    async def _dispatch(
+        self,
+        operation: str,
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
         if operation == "lane.open":
             lane_id = str(request["lane_id"])
             async with self._lane_operation(lane_id):
                 claims = tuple(
-                    ResourceClaim(str(item["key"]), ClaimMode(str(item["mode"])))
+                    ResourceClaim(
+                        str(item["key"]),
+                        ClaimMode(str(item["mode"])),
+                    )
                     for item in request.get("claims", [])
                 )
                 lane = self.registry.open_lane(
                     lane_id=lane_id,
                     task_id=str(request["task_id"]),
                     capabilities=frozenset(
-                        str(item) for item in request.get("capabilities", [])
+                        str(item)
+                        for item in request.get(
+                            "capabilities", []
+                        )
                     ),
                     claims=claims,
                     ttl_s=float(request.get("ttl_s", 300.0)),
@@ -142,15 +179,23 @@ class VeraPortAgent:
                     lane_id,
                     int(request["fencing_token"]),
                 )
-                return {"lane_id": lane.lane_id, "closed": True}
+                return {
+                    "lane_id": lane.lane_id,
+                    "closed": True,
+                }
 
         if operation == "lane.list":
-            return {
+            result: dict[str, Any] = {
                 "lanes": [
                     self._lane_json(lane)
                     for lane in self.registry.snapshot()
                 ]
             }
+            if self.state_store is not None:
+                result["request_ledger"] = (
+                    self.state_store.request_ledger_health()
+                )
+            return result
 
         if operation == "fs.read_text":
             lane_id = str(request["lane_id"])
@@ -159,7 +204,9 @@ class VeraPortAgent:
                     lane_id=lane_id,
                     fencing_token=int(request["fencing_token"]),
                     path=str(request["path"]),
-                    encoding=str(request.get("encoding", "utf-8")),
+                    encoding=str(
+                        request.get("encoding", "utf-8")
+                    ),
                 )
                 return {"content": content}
 
@@ -171,7 +218,9 @@ class VeraPortAgent:
                     fencing_token=int(request["fencing_token"]),
                     path=str(request["path"]),
                     content=str(request["content"]),
-                    encoding=str(request.get("encoding", "utf-8")),
+                    encoding=str(
+                        request.get("encoding", "utf-8")
+                    ),
                 )
                 return {"written": True}
 
@@ -186,7 +235,9 @@ class VeraPortAgent:
                     fencing_token=int(request["fencing_token"]),
                     argv=[str(item) for item in argv],
                     cwd=str(request["cwd"]),
-                    timeout_s=float(request.get("timeout_s", 60.0)),
+                    timeout_s=float(
+                        request.get("timeout_s", 60.0)
+                    ),
                 )
                 return asdict(result)
 
