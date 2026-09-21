@@ -160,18 +160,32 @@ async def open_tls_session(
     requested_capabilities: set[str] | frozenset[str],
     now_ms: Callable[[], int] | None = None,
     max_frame_bytes: int = 1_048_576,
+    connect_timeout_s: float = 5.0,
+    request_timeout_s: float = 5.0,
 ) -> tuple[MultiplexClient, SessionBinding]:
+    if connect_timeout_s <= 0:
+        raise ValueError("connect_timeout_s must be positive")
+    if request_timeout_s <= 0:
+        raise ValueError("request_timeout_s must be positive")
     clock = now_ms or (lambda: int(time.time() * 1000))
-    reader, writer = await asyncio.open_connection(
-        host,
-        port,
-        ssl=ssl_context,
-        server_hostname=server_hostname,
+    reader, writer = await asyncio.wait_for(
+        asyncio.open_connection(
+            host,
+            port,
+            ssl=ssl_context,
+            server_hostname=server_hostname,
+        ),
+        timeout=connect_timeout_s,
     )
     try:
         _require_tls_policy(writer)
         challenge = _parse_challenge(
-            dict(await read_frame(reader, max_frame_bytes=max_frame_bytes))
+            dict(
+                await asyncio.wait_for(
+                    read_frame(reader, max_frame_bytes=max_frame_bytes),
+                    timeout=connect_timeout_s,
+                )
+            )
         )
         client_auth = ClientAuth.create(
             controller_private_key=controller_private_key,
@@ -179,8 +193,18 @@ async def open_tls_session(
             server_challenge=challenge.challenge,
             requested_capabilities=requested_capabilities,
         )
-        await write_frame(writer, _client_auth_frame(client_auth), max_frame_bytes=max_frame_bytes)
-        raw_accept = await read_frame(reader, max_frame_bytes=max_frame_bytes)
+        await asyncio.wait_for(
+            write_frame(
+                writer,
+                _client_auth_frame(client_auth),
+                max_frame_bytes=max_frame_bytes,
+            ),
+            timeout=connect_timeout_s,
+        )
+        raw_accept = await asyncio.wait_for(
+            read_frame(reader, max_frame_bytes=max_frame_bytes),
+            timeout=connect_timeout_s,
+        )
         accept = _parse_accept(dict(raw_accept))
         binding = verify_server_accept(
             challenge,
@@ -189,8 +213,16 @@ async def open_tls_session(
             workstation_public_key=workstation_public_key,
             now_ms=clock(),
         )
-        return MultiplexClient(reader, writer, max_frame_bytes=max_frame_bytes), binding
-    except Exception:
+        return (
+            MultiplexClient(
+                reader,
+                writer,
+                max_frame_bytes=max_frame_bytes,
+                request_timeout_s=request_timeout_s,
+            ),
+            binding,
+        )
+    except BaseException:
         writer.close()
         try:
             await writer.wait_closed()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import os
 from typing import Any
 
@@ -203,6 +204,23 @@ def build_mcp_server(runtime: ControllerRuntime):
     return mcp
 
 
+def require_loopback_mcp_host(host: str) -> str:
+    normalized = host.strip()
+    if normalized.lower() == "localhost":
+        return normalized
+    try:
+        address = ipaddress.ip_address(normalized)
+    except ValueError as exc:
+        raise ValueError(
+            "initial VeraPort MCP bind must be localhost or a literal loopback address"
+        ) from exc
+    if not address.is_loopback:
+        raise ValueError(
+            "initial VeraPort MCP bind must remain loopback-only; use a separately reviewed secure tunnel for remote exposure"
+        )
+    return normalized
+
+
 def main() -> None:
     config_path = os.environ.get("VERAPORT_CONTROLLER_CONFIG")
     if not config_path:
@@ -212,7 +230,9 @@ def main() -> None:
     runtime = ControllerRuntime(config)
     mcp = build_mcp_server(runtime)
 
-    host = os.environ.get("VERAPORT_MCP_HOST", "127.0.0.1")
+    host = require_loopback_mcp_host(
+        os.environ.get("VERAPORT_MCP_HOST", "127.0.0.1")
+    )
     port = int(os.environ.get("VERAPORT_MCP_PORT", "17446"))
     mcp.run(
         transport="streamable-http",

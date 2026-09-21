@@ -83,6 +83,7 @@ def prepare_host(
         executor = deps.executor_cls(
             registry,
             allowed_roots=config.allowed_roots,
+            max_read_bytes=config.max_read_bytes,
             allow_process_exec=config.allow_process_exec,
         )
         agent = deps.agent_cls(registry, executor, state_store)

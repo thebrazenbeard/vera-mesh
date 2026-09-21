@@ -78,3 +78,11 @@ async def test_unauthenticated_edge_paths_reject():
         await LiveEdgeProxy(no, authenticated=False).request({"request_id": "a"})
     with pytest.raises(EdgeUnauthenticated):
         await DurableRelayFallback(no, authenticated=False).enqueue({"request_id": "b"})
+
+def test_read_bound_defaults_and_is_policy_bounded(tmp_path):
+    cfg = WindowsServiceConfig.from_dict(config(tmp_path))
+    assert cfg.max_read_bytes == 1_048_576
+    with pytest.raises(ServiceConfigError, match="max_read_bytes"):
+        WindowsServiceConfig.from_dict(config(tmp_path, max_read_bytes=0))
+    with pytest.raises(ServiceConfigError, match="max_read_bytes"):
+        WindowsServiceConfig.from_dict(config(tmp_path, max_read_bytes=16_777_217))

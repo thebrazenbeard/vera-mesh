@@ -18,6 +18,10 @@ class ProcessExecutionDisabled(PermissionError):
     pass
 
 
+class FileReadLimitExceeded(PermissionError):
+    code = "FILE_READ_LIMIT_EXCEEDED"
+
+
 @dataclass(frozen=True)
 class ProcessResult:
     returncode: int
@@ -34,15 +38,19 @@ class LocalExecutor:
         *,
         allowed_roots: tuple[Path, ...],
         max_output_bytes: int = 1_048_576,
+        max_read_bytes: int = 1_048_576,
         allow_process_exec: bool = False,
     ) -> None:
         if not allowed_roots:
             raise ValueError("at least one allowed root is required")
         if max_output_bytes < 1:
             raise ValueError("max_output_bytes must be positive")
+        if max_read_bytes < 1:
+            raise ValueError("max_read_bytes must be positive")
         self.registry = registry
         self.allowed_roots = tuple(root.expanduser().resolve() for root in allowed_roots)
         self.max_output_bytes = max_output_bytes
+        self.max_read_bytes = max_read_bytes
         self.allow_process_exec = allow_process_exec
 
     def _resolve_allowed(self, value: str | Path) -> Path:
@@ -72,7 +80,16 @@ class LocalExecutor:
             resource_key=self._fs_resource(resolved),
             resource_mode=ClaimMode.READ,
         )
-        return await asyncio.to_thread(resolved.read_text, encoding=encoding)
+        return await asyncio.to_thread(self._read_text_bounded, resolved, encoding)
+
+    def _read_text_bounded(self, path: Path, encoding: str) -> str:
+        with path.open("rb") as handle:
+            payload = handle.read(self.max_read_bytes + 1)
+        if len(payload) > self.max_read_bytes:
+            raise FileReadLimitExceeded(
+                f"file exceeds max_read_bytes={self.max_read_bytes}"
+            )
+        return payload.decode(encoding)
 
     async def write_text(
         self,

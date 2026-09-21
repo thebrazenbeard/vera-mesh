@@ -25,6 +25,7 @@ class WindowsServiceConfig:
     allow_non_loopback_listener: bool = False
     max_lanes: int = 32
     max_inflight: int = 64
+    max_read_bytes: int = 1_048_576
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "WindowsServiceConfig":
@@ -53,6 +54,7 @@ class WindowsServiceConfig:
             allow_non_loopback_listener=value.get("allow_non_loopback_listener", False) is True,
             max_lanes=int(value.get("max_lanes", 32)),
             max_inflight=int(value.get("max_inflight", 64)),
+            max_read_bytes=int(value.get("max_read_bytes", 1_048_576)),
         )
         cfg.validate_static()
         return cfg
@@ -81,6 +83,8 @@ class WindowsServiceConfig:
             raise ServiceConfigError("max_lanes outside policy")
         if self.max_inflight < 1 or self.max_inflight > 4096:
             raise ServiceConfigError("max_inflight outside policy")
+        if self.max_read_bytes < 1 or self.max_read_bytes > 16_777_216:
+            raise ServiceConfigError("max_read_bytes outside policy")
         if len(set(self.allowed_roots)) != len(self.allowed_roots):
             raise ServiceConfigError("allowed_roots contains duplicates")
 

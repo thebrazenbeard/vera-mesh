@@ -7,8 +7,24 @@ class Pool:
     def __init__(self):
         self.calls = []
 
-    async def request(self, workstation, controller, request, *, now_ms):
-        self.calls.append((workstation, controller, dict(request), now_ms))
+    async def request(
+        self,
+        workstation,
+        controller,
+        request,
+        *,
+        now_ms,
+        max_path_age_ms=5000,
+        request_timeout_s=5.0,
+    ):
+        self.calls.append((
+            workstation,
+            controller,
+            dict(request),
+            now_ms,
+            max_path_age_ms,
+            request_timeout_s,
+        ))
         return {
             "ok": True,
             "request_id": request["request_id"],
@@ -106,3 +122,24 @@ def test_unknown_operation_in_gateway_policy_rejected_at_construction():
             controller_principal="controller:c",
             allowed_operations={"magic.root"},
         )
+
+
+@pytest.mark.asyncio
+async def test_gateway_forwards_configured_freshness_and_request_deadline():
+    pool = Pool()
+    gateway = VeraPortGateway(
+        pool,
+        workstation_principal="workstation:w",
+        controller_principal="controller:c",
+        allowed_operations=READ_OPERATIONS,
+        now_ms=lambda: 4321,
+        request_id_factory=lambda: "policy-1",
+        max_path_age_ms=777,
+        request_timeout_s=0.25,
+    )
+
+    await gateway.list_lanes()
+
+    assert pool.calls[0][3] == 4321
+    assert pool.calls[0][4] == 777
+    assert pool.calls[0][5] == 0.25

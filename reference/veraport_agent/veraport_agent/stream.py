@@ -62,10 +62,14 @@ class MultiplexClient:
         writer: asyncio.StreamWriter,
         *,
         max_frame_bytes: int = 1_048_576,
+        request_timeout_s: float = 5.0,
     ) -> None:
+        if request_timeout_s <= 0:
+            raise ValueError("request_timeout_s must be positive")
         self.reader = reader
         self.writer = writer
         self.max_frame_bytes = max_frame_bytes
+        self.request_timeout_s = request_timeout_s
         self._write_lock = asyncio.Lock()
         self._pending: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._closed = False
@@ -84,8 +88,22 @@ class MultiplexClient:
         self._pending[request_id] = future
         try:
             async with self._write_lock:
-                await write_frame(self.writer, request, max_frame_bytes=self.max_frame_bytes)
-            return await future
+                await write_frame(
+                    self.writer,
+                    request,
+                    max_frame_bytes=self.max_frame_bytes,
+                )
+            try:
+                return await asyncio.wait_for(
+                    future,
+                    timeout=self.request_timeout_s,
+                )
+            except TimeoutError as exc:
+                self._pending.pop(request_id, None)
+                await self.close()
+                raise StreamClosed(
+                    f"request timed out: {request_id}"
+                ) from exc
         except Exception:
             self._pending.pop(request_id, None)
             raise
@@ -134,20 +152,21 @@ async def serve_multiplexed(
     max_frame_bytes: int = 1_048_576,
     max_inflight: int = 64,
 ) -> None:
-    """Dispatch independent frames concurrently over one stream connection.
+    """Dispatch bounded independent frames over one authenticated connection.
 
-    Authentication/session admission is intentionally outside this function:
-    callers must only invoke it after the connection is bound to an accepted
-    VeraMesh hot session.
+    max_inflight is an admission bound, not only an execution bound. Capacity is
+    acquired before another frame is read and before another task is created.
+    When all slots are occupied, TCP backpressure is the deterministic overload
+    behavior; no unbounded in-process waiting-task queue is created.
     """
     if max_inflight < 1:
         raise ValueError("max_inflight must be positive")
     write_lock = asyncio.Lock()
-    semaphore = asyncio.Semaphore(max_inflight)
+    capacity = asyncio.Semaphore(max_inflight)
     tasks: set[asyncio.Task[None]] = set()
 
     async def run_one(request: dict[str, Any]) -> None:
-        async with semaphore:
+        try:
             try:
                 response = await handler(request)
             except Exception as exc:
@@ -159,11 +178,22 @@ async def serve_multiplexed(
                 }
             async with write_lock:
                 await write_frame(writer, response, max_frame_bytes=max_frame_bytes)
+        finally:
+            capacity.release()
 
     try:
         while True:
-            request = await read_frame(reader, max_frame_bytes=max_frame_bytes)
-            task = asyncio.create_task(run_one(request))
+            await capacity.acquire()
+            try:
+                request = await read_frame(reader, max_frame_bytes=max_frame_bytes)
+            except BaseException:
+                capacity.release()
+                raise
+            try:
+                task = asyncio.create_task(run_one(request))
+            except BaseException:
+                capacity.release()
+                raise
             tasks.add(task)
             task.add_done_callback(tasks.discard)
     except StreamClosed:
