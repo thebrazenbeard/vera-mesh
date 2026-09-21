@@ -69,6 +69,7 @@ class ControllerRuntime:
             now_ms=self.now_ms,
             request_id_factory=self.request_id_factory,
             max_path_age_ms=self.config.max_path_age_ms,
+            request_timeout_s=self.config.request_timeout_s,
         )
 
     @property
@@ -95,6 +96,8 @@ class ControllerRuntime:
                     allowed_operations=self.config.gateway_operations,
                     now_ms=self.now_ms,
                     request_id_factory=self.request_id_factory,
+                    max_path_age_ms=self.config.max_path_age_ms,
+                    request_timeout_s=self.config.request_timeout_s,
                 )
 
     async def refresh_paths(self) -> None:
@@ -274,15 +277,20 @@ class ControllerRuntime:
 
         context = make_client_context(cafile=self.config.tls_ca)
         started = time.perf_counter()
-        channel, binding = await self.open_session(
-            host=spec.host,
-            port=spec.port,
-            ssl_context=context,
-            server_hostname=spec.server_hostname,
-            controller_private_key=self._controller_private_key,
-            workstation_public_key=self._workstation_public_key,
-            requested_capabilities=self.config.requested_capabilities,
-            now_ms=self.now_ms,
+        channel, binding = await asyncio.wait_for(
+            self.open_session(
+                host=spec.host,
+                port=spec.port,
+                ssl_context=context,
+                server_hostname=spec.server_hostname,
+                controller_private_key=self._controller_private_key,
+                workstation_public_key=self._workstation_public_key,
+                requested_capabilities=self.config.requested_capabilities,
+                now_ms=self.now_ms,
+                connect_timeout_s=self.config.connect_timeout_s,
+                request_timeout_s=self.config.request_timeout_s,
+            ),
+            timeout=self.config.connect_timeout_s,
         )
 
         if binding.controller_principal != self._controller_principal:
@@ -328,12 +336,15 @@ class ControllerRuntime:
             else connect_started
         )
         request_id = "probe-" + self.request_id_factory()
-        response = await channel.request(
-            {
-                "protocol_version": "veraport-v1",
-                "request_id": request_id,
-                "operation": "lane.list",
-            }
+        response = await asyncio.wait_for(
+            channel.request(
+                {
+                    "protocol_version": "veraport-v1",
+                    "request_id": request_id,
+                    "operation": "lane.list",
+                }
+            ),
+            timeout=self.config.request_timeout_s,
         )
         if (
             response.get("request_id") != request_id
