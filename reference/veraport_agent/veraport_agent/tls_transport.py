@@ -108,6 +108,8 @@ async def serve_tls_connection(
     max_inflight: int = 64,
 ) -> None:
     clock = now_ms or (lambda: int(time.time() * 1000))
+    handler = None
+    accepted = False
     try:
         _require_tls_policy(writer)
         challenge = authenticator.challenge()
@@ -120,33 +122,45 @@ async def serve_tls_connection(
             now_ms=clock(),
             ttl_ms=session_ttl_ms,
         )
+        handler = handler_factory(binding)
         await write_frame(writer, _accept_frame(accept), max_frame_bytes=max_frame_bytes)
+        accepted = True
         await serve_multiplexed(
             reader,
             writer,
-            handler_factory(binding),
+            handler,
             max_frame_bytes=max_frame_bytes,
             max_inflight=max_inflight,
         )
-        return
     except Exception as exc:
+        if not accepted:
+            try:
+                await write_frame(
+                    writer,
+                    {
+                        "frame_type": "session_reject",
+                        "code": getattr(exc, "code", exc.__class__.__name__.upper()),
+                        "message": str(exc),
+                    },
+                    max_frame_bytes=max_frame_bytes,
+                )
+            except Exception:
+                pass
+    finally:
+        if handler is not None:
+            cleanup = getattr(handler, "close_session", None)
+            if cleanup is not None:
+                try:
+                    result = cleanup()
+                    if asyncio.iscoroutine(result):
+                        await result
+                except Exception:
+                    pass
+        writer.close()
         try:
-            await write_frame(
-                writer,
-                {
-                    "frame_type": "session_reject",
-                    "code": getattr(exc, "code", exc.__class__.__name__.upper()),
-                    "message": str(exc),
-                },
-                max_frame_bytes=max_frame_bytes,
-            )
+            await writer.wait_closed()
         except Exception:
             pass
-    writer.close()
-    try:
-        await writer.wait_closed()
-    except Exception:
-        pass
 
 
 async def open_tls_session(
