@@ -61,6 +61,22 @@ class SessionBoundHandler:
                 )
 
         internal = dict(request)
+        if operation == "lane.open":
+            remaining_ms = self.binding.expires_at_ms - self.now_ms()
+            if remaining_ms <= 0:
+                return self._error(
+                    external_request_id,
+                    SessionExpired.code,
+                    "VeraPort session expired",
+                )
+            requested_ttl_s = float(internal.get("ttl_s", 300.0))
+            if requested_ttl_s <= 0:
+                return self._error(
+                    external_request_id,
+                    "INVALID_REQUEST",
+                    "ttl_s must be positive",
+                )
+            internal["ttl_s"] = min(requested_ttl_s, remaining_ms / 1000.0)
         internal["request_id"] = _request_prefix(self.binding) + external_request_id
         if "lane_id" in internal:
             lane_id = internal["lane_id"]
@@ -70,6 +86,15 @@ class SessionBoundHandler:
 
         response = await self.agent.handle(internal)
         return self._externalize(response, external_request_id)
+
+
+    async def close_session(self) -> None:
+        close_session = getattr(self.agent, "close_session", None)
+        if close_session is None:
+            return
+        result = close_session(_lane_prefix(self.binding))
+        if hasattr(result, "__await__"):
+            await result
 
     def _externalize(self, response: dict[str, Any], external_request_id: str) -> dict[str, Any]:
         result = dict(response)
