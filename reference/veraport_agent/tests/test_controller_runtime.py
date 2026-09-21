@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -344,3 +346,51 @@ async def test_lane_capability_cannot_exceed_controller_ceiling(
             ["fs.write"],
             [{"key": "fs:/tmp", "mode": "write"}],
         )
+
+
+@pytest.mark.asyncio
+async def test_startup_blackhole_is_bounded_and_later_endpoint_is_tried(
+    tmp_path: Path,
+):
+    (
+        controller,
+        workstation,
+        controller_path,
+        cert_path,
+        workstation_public_path,
+    ) = materials(tmp_path)
+    cfg = replace(
+        config(controller_path, cert_path, workstation_public_path),
+        connect_timeout_s=0.01,
+        request_timeout_s=0.05,
+    )
+    opens = []
+
+    async def opener(**kwargs):
+        label = "direct" if kwargs["host"] == "127.0.0.1" else "edge"
+        opens.append(label)
+        if label == "direct":
+            await asyncio.sleep(60)
+            raise AssertionError("blackholed opener should be cancelled")
+        return Channel(label), SessionBinding(
+            session_id="session-edge",
+            controller_principal=principal_id(
+                controller.public_key(), "controller"
+            ),
+            workstation_principal=principal_id(
+                workstation.public_key(), "workstation"
+            ),
+            granted_capabilities=frozenset({"fs.read"}),
+            expires_at_ms=999999,
+        )
+
+    runtime = ControllerRuntime(
+        cfg,
+        open_session=opener,
+        now_ms=lambda: 1000,
+    )
+    info = await runtime.machine_info()
+
+    assert opens == ["direct", "edge"]
+    assert info["selected_path_id"] == "edge"
+    assert [item["endpoint_id"] for item in info["paths"]] == ["edge"]
