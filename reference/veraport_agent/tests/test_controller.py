@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from veraport_agent.controller import (
@@ -300,3 +302,43 @@ async def test_mutation_failover_does_not_cross_application_session_id():
 
     assert first.calls == 1
     assert second.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_blackholed_read_request_times_out_and_fails_over_to_edge():
+    async def blackhole(request):
+        await asyncio.sleep(60)
+        return {"request_id": request["request_id"], "via": "never"}
+
+    async def edge(request):
+        return {"request_id": request["request_id"], "via": "edge"}
+
+    direct_channel = Channel(blackhole)
+    edge_channel = Channel(edge)
+    pool = HotSessionPool()
+    pool.register(SessionEndpoint(
+        "direct-endpoint",
+        binding(),
+        path("direct", PathMode.DIRECT_STREAM),
+        direct_channel,
+        False,
+    ))
+    pool.register(SessionEndpoint(
+        "edge-endpoint",
+        binding(),
+        path("edge", PathMode.EDGE_STREAM),
+        edge_channel,
+        False,
+    ))
+
+    result = await pool.request(
+        "workstation:w",
+        "controller:c",
+        {"request_id": "timeout-read", "operation": "fs.read_text"},
+        now_ms=1001,
+        request_timeout_s=0.01,
+    )
+
+    assert result["via"] == "edge"
+    assert direct_channel.calls == 1
+    assert edge_channel.calls == 1
