@@ -60,6 +60,8 @@ class ControllerConfig:
     gateway_operations: frozenset[str]
     endpoints: tuple[EndpointConfig, ...]
     max_path_age_ms: int = 5_000
+    connect_timeout_s: float = 5.0
+    request_timeout_s: float = 5.0
 
     @classmethod
     def load(cls, path: str | Path) -> "ControllerConfig":
@@ -113,6 +115,13 @@ class ControllerConfig:
         if max_path_age_ms < 100 or max_path_age_ms > 300_000:
             raise ControllerConfigError("max_path_age_ms outside policy")
 
+        connect_timeout_s = float(value.get("connect_timeout_s", 5.0))
+        request_timeout_s = float(value.get("request_timeout_s", 5.0))
+        if connect_timeout_s < 0.05 or connect_timeout_s > 60.0:
+            raise ControllerConfigError("connect_timeout_s outside policy")
+        if request_timeout_s < 0.05 or request_timeout_s > 60.0:
+            raise ControllerConfigError("request_timeout_s outside policy")
+
         return cls(
             controller_key=controller_key,
             tls_ca=tls_ca,
@@ -121,6 +130,8 @@ class ControllerConfig:
             gateway_operations=gateway_operations,
             endpoints=endpoints,
             max_path_age_ms=max_path_age_ms,
+            connect_timeout_s=connect_timeout_s,
+            request_timeout_s=request_timeout_s,
         )
 
     @staticmethod
