@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import socket
 from typing import Any
 
 from .controller_config import ControllerConfig
@@ -207,6 +208,21 @@ def build_mcp_server(runtime: ControllerRuntime):
 def require_loopback_mcp_host(host: str) -> str:
     normalized = host.strip()
     if normalized.lower() == "localhost":
+        try:
+            resolved = {
+                item[4][0]
+                for item in socket.getaddrinfo(
+                    normalized,
+                    None,
+                    type=socket.SOCK_STREAM,
+                )
+            }
+        except OSError as exc:
+            raise ValueError("localhost resolution failed") from exc
+        if not resolved:
+            raise ValueError("localhost resolution returned no addresses")
+        if not all(ipaddress.ip_address(value).is_loopback for value in resolved):
+            raise ValueError("localhost resolved to a non-loopback address")
         return normalized
     try:
         address = ipaddress.ip_address(normalized)
