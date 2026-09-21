@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Protocol, Any
 
@@ -84,6 +85,7 @@ class HotSessionPool:
         *,
         now_ms: int,
         max_path_age_ms: int = 5_000,
+        request_timeout_s: float = 5.0,
     ) -> dict[str, Any]:
         request_id = request.get("request_id")
         operation = request.get("operation")
@@ -91,6 +93,8 @@ class HotSessionPool:
             raise ValueError("request_id is required")
         if not isinstance(operation, str) or not operation:
             raise ValueError("operation is required")
+        if request_timeout_s <= 0:
+            raise ValueError("request_timeout_s must be positive")
 
         candidates = self._current_endpoints(
             workstation_principal,
@@ -126,15 +130,25 @@ class HotSessionPool:
             endpoint = next(item for item in remaining if item.path.path_id == decision.selected.path_id)
             attempted.add(endpoint.endpoint_id)
             try:
-                return await endpoint.channel.request(request)
-            except StreamClosed as exc:
-                last_error = exc
+                return await asyncio.wait_for(
+                    endpoint.channel.request(request),
+                    timeout=request_timeout_s,
+                )
+            except (StreamClosed, TimeoutError) as exc:
+                transport_error = (
+                    exc
+                    if isinstance(exc, StreamClosed)
+                    else StreamClosed(
+                        f"{request_id} timed out on {endpoint.endpoint_id}"
+                    )
+                )
+                last_error = transport_error
                 mutating = operation in _MUTATING_OPERATIONS
                 if mutating:
                     if not endpoint.durable_idempotency:
                         raise AmbiguousDelivery(
                             f"{request_id} lost transport after possible mutation; retry blocked without durable idempotency"
-                        ) from exc
+                        ) from transport_error
                     mutation_retry_session_id = endpoint.binding.session_id
                     compatible = any(
                         item.endpoint_id not in attempted
@@ -145,7 +159,7 @@ class HotSessionPool:
                     if not compatible:
                         raise AmbiguousDelivery(
                             f"{request_id} lost transport after possible mutation; no same-session durable failover path"
-                        ) from exc
+                        ) from transport_error
                 continue
 
     def _current_endpoints(
