@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 from pathlib import Path
 
 import pytest
@@ -72,6 +73,46 @@ async def test_ranged_byte_reads_reconstruct_exact_file(tmp_path: Path) -> None:
             break
 
     assert bytes(rebuilt) == payload
+
+
+@pytest.mark.asyncio
+async def test_default_ranged_chunk_fits_default_frame_budget(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "default-chunk.bin"
+    target.write_bytes(b"z" * 262_144)
+
+    registry = LaneRegistry({"fs.read"})
+    lane = registry.open_lane(
+        lane_id="default-range",
+        task_id="default-range",
+        capabilities={"fs.read"},
+        claims=(read_claim(tmp_path),),
+    )
+    agent = VeraPortAgent(
+        registry,
+        LocalExecutor(registry, allowed_roots=(tmp_path,)),
+    )
+
+    response = await agent.handle({
+        "protocol_version": "veraport-v1",
+        "request_id": "default-range",
+        "operation": "fs.read_bytes",
+        "lane_id": lane.lane_id,
+        "fencing_token": lane.fencing_token,
+        "path": str(target),
+        "offset": 0,
+    })
+    assert response["ok"] is True
+    assert response["result"]["bytes_read"] == 262_144
+
+    encoded = json.dumps(
+        response,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    assert len(encoded) < 1_048_576
 
 
 @pytest.mark.asyncio
