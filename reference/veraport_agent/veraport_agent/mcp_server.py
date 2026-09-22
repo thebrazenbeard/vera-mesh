@@ -164,6 +164,35 @@ class VeraPortMCPFacade:
             case_sensitive=case_sensitive,
         )
 
+    async def fs_search_content(
+        self,
+        lane_id: str,
+        fencing_token: int,
+        root: str,
+        query: str,
+        file_pattern: str = "*",
+        offset: int = 0,
+        max_results: int = 100,
+        max_entries: int = 10_000,
+        max_depth: int = 12,
+        max_total_bytes: int = 8 * 1024 * 1024,
+        case_sensitive: bool = False,
+    ) -> dict[str, Any]:
+        return await self._read_operation(
+            "fs.search_content",
+            lane_id,
+            fencing_token,
+            root=root,
+            query=query,
+            file_pattern=file_pattern,
+            offset=offset,
+            max_results=max_results,
+            max_entries=max_entries,
+            max_depth=max_depth,
+            max_total_bytes=max_total_bytes,
+            case_sensitive=case_sensitive,
+        )
+
     async def fs_write_text(
         self,
         lane_id: str,
@@ -519,6 +548,36 @@ def build_mcp_server(
             return await facade.fs_search(
                 lane_id, fencing_token, root, query, offset,
                 max_results, max_entries, max_depth, case_sensitive,
+            )
+
+    if "fs.search_content" in runtime.config.gateway_operations:
+        @mcp.tool(annotations=read_only)
+        async def fs_search_content(
+            lane_id: str,
+            fencing_token: int,
+            root: str,
+            query: str,
+            file_pattern: str = "*",
+            offset: int = 0,
+            max_results: int = 100,
+            max_entries: int = 10_000,
+            max_depth: int = 12,
+            max_total_bytes: int = 8 * 1024 * 1024,
+            case_sensitive: bool = False,
+        ) -> dict[str, Any]:
+            """Search bounded UTF-8-decoded file content below a claimed root."""
+            return await facade.fs_search_content(
+                lane_id,
+                fencing_token,
+                root,
+                query,
+                file_pattern,
+                offset,
+                max_results,
+                max_entries,
+                max_depth,
+                max_total_bytes,
+                case_sensitive,
             )
 
     if "fs.write_text" in runtime.config.gateway_operations:
