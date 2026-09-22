@@ -436,6 +436,19 @@ class RdcSurface:
 
     def _watchdog(self, item: _ManagedProcess) -> None:
         while item.process.poll() is None:
+            try:
+                self._authorize_cwd(
+                    item.owner_lane_id,
+                    item.owner_fencing_token,
+                    "process.exec",
+                    item.cwd,
+                    ClaimMode.WRITE,
+                )
+            except Exception:
+                with self._process_lock:
+                    item.watchdog_terminated = True
+                self._terminate_sync(item, 0.5)
+                return
             remaining_ns = item.deadline_ns - time.time_ns()
             if remaining_ns <= 0:
                 with self._process_lock:
