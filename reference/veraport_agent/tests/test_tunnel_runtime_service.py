@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -11,13 +12,19 @@ import pytest
 import veraport_agent.tunnel_runtime_service as trs
 
 
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def config(tmp_path: Path) -> trs.TunnelRuntimeServiceConfig:
     tunnel = tmp_path / "tunnel-client.exe"
+    mcp = tmp_path / "veraport-mcp-stdio.exe"
     key = tmp_path / "runtime.key"
     controller = tmp_path / "controller.json"
     profiles = tmp_path / "profiles"
     state = tmp_path / "state"
     tunnel.write_text("binary-placeholder", encoding="utf-8")
+    mcp.write_text("mcp-placeholder", encoding="utf-8")
     key.write_text("sk-secret-that-must-not-leak\n", encoding="utf-8")
     controller.write_text("{}", encoding="utf-8")
     profiles.mkdir()
@@ -25,11 +32,13 @@ def config(tmp_path: Path) -> trs.TunnelRuntimeServiceConfig:
     return trs.TunnelRuntimeServiceConfig.from_dict({
         "schema": "VERAMESH_TUNNEL_RUNTIME_SERVICE_V1",
         "tunnel_client": str(tunnel),
+        "tunnel_client_sha256": digest(tunnel),
         "alias": "veramesh-lappy",
         "tunnel_id": "tunnel_0123456789abcdef0123456789abcdef",
         "runtime_api_key_file": str(key),
         "controller_config": str(controller),
-        "mcp_command": r"C:\VeraMesh\veraport-mcp-stdio.exe",
+        "mcp_executable": str(mcp),
+        "mcp_executable_sha256": digest(mcp),
         "profile_dir": str(profiles),
         "state_dir": str(state),
         "status_interval_s": 5,
@@ -53,7 +62,8 @@ def test_connect_uses_file_secret_locator_not_secret_contents(tmp_path):
     assert "file:" + str(cfg.runtime_api_key_file) in args
     assert "sk-secret-that-must-not-leak" not in rendered
     assert "--mcp-command" in args
-    assert cfg.mcp_command in args
+    command = args[args.index("--mcp-command") + 1]
+    assert command == "'" + str(cfg.mcp_executable) + "'"
 
 
 def test_runtime_environment_strips_ambient_api_keys(tmp_path):
@@ -106,11 +116,13 @@ def test_run_until_stop_connects_verifies_and_stops(tmp_path, monkeypatch):
     config_path.write_text(json.dumps({
         "schema": "VERAMESH_TUNNEL_RUNTIME_SERVICE_V1",
         "tunnel_client": str(cfg.tunnel_client),
+        "tunnel_client_sha256": cfg.tunnel_client_sha256,
         "alias": cfg.alias,
         "tunnel_id": cfg.tunnel_id,
         "runtime_api_key_file": str(cfg.runtime_api_key_file),
         "controller_config": str(cfg.controller_config),
-        "mcp_command": cfg.mcp_command,
+        "mcp_executable": str(cfg.mcp_executable),
+        "mcp_executable_sha256": cfg.mcp_executable_sha256,
         "profile_dir": str(cfg.profile_dir),
         "state_dir": str(cfg.state_dir),
         "status_interval_s": cfg.status_interval_s,
@@ -206,7 +218,9 @@ def test_tunnel_service_materials_harden_and_validate_on_windows(tmp_path):
     }), encoding="utf-8")
 
     tunnel = tmp_path / "tunnel-client.exe"
+    mcp = tmp_path / "veraport-mcp-stdio.exe"
     tunnel.write_text("binary-placeholder", encoding="utf-8")
+    mcp.write_text("mcp-placeholder", encoding="utf-8")
     runtime_key = tmp_path / "runtime.key"
     runtime_key.write_text("runtime-secret", encoding="utf-8")
     profiles = tmp_path / "profiles"
@@ -218,11 +232,13 @@ def test_tunnel_service_materials_harden_and_validate_on_windows(tmp_path):
     cfg = trs.TunnelRuntimeServiceConfig.from_dict({
         "schema": "VERAMESH_TUNNEL_RUNTIME_SERVICE_V1",
         "tunnel_client": str(tunnel),
+        "tunnel_client_sha256": digest(tunnel),
         "alias": "veramesh-lappy",
         "tunnel_id": "tunnel_0123456789abcdef0123456789abcdef",
         "runtime_api_key_file": str(runtime_key),
         "controller_config": str(controller_config),
-        "mcp_command": r"C:\VeraMesh\veraport-mcp-stdio.exe",
+        "mcp_executable": str(mcp),
+        "mcp_executable_sha256": digest(mcp),
         "profile_dir": str(profiles),
         "state_dir": str(state)
     })
@@ -241,3 +257,21 @@ def test_tunnel_windows_service_depends_on_veraport_agent():
     assert trs.VeraMeshTunnelRuntimeService._svc_deps_ == [
         "VeraPortAgent"
     ]
+
+
+
+def test_runtime_file_hash_mismatch_fails_closed(tmp_path):
+    cfg = config(tmp_path)
+    cfg.tunnel_client.write_text("tampered", encoding="utf-8")
+    with pytest.raises(
+        trs.TunnelRuntimeServiceError,
+        match="tunnel-client executable SHA-256 mismatch",
+    ):
+        cfg.validate_runtime_files()
+
+
+def test_mcp_command_uses_single_quotes_for_windows_backslashes(tmp_path):
+    cfg = config(tmp_path)
+    command = trs.connect_args(cfg)[-1]
+    assert command.startswith("'") and command.endswith("'")
+    assert str(cfg.mcp_executable) in command
