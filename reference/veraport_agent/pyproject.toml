@@ -32,6 +32,7 @@ veraport-live-edge = "veraport_agent.verarelay_live_edge:main"
 veramesh-tunnel-service = "veraport_agent.tunnel_runtime_service:service_cli"
 veraport-provision-local = "veraport_agent.provision:main"
 veramesh-bootstrap-local = "veraport_agent.bootstrap:main"
+veramesh-oauth-qualify = "veraport_agent.oauth_qualification:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
