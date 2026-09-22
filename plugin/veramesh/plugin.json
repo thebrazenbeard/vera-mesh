@@ -1,0 +1,17 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "veramesh",
+  "version": "0.1.0",
+  "description": "Securely work with your enrolled computer through VeraPort-scoped file and managed-process tools.",
+  "author": {
+    "name": "V.E.R.A. Build Team Two"
+  },
+  "repository": "https://github.com/thebrazenbeard/vera-mesh",
+  "keywords": [
+    "remote-computer",
+    "filesystem",
+    "development",
+    "veraport",
+    "synology"
+  ]
+}
