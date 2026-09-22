@@ -229,7 +229,7 @@ func dispatchTool(ctx context.Context, f *Facade, name string, a map[string]any)
 		if err != nil { return nil, err }
 		var maxBytes any
 		if raw, ok := a["max_bytes"]; ok {
-			v, err := exactInt64(raw)
+			v, err := exactJSONInt64(raw)
 			if err != nil { return nil, argError("max_bytes", err) }
 			maxBytes = v
 		}
@@ -423,14 +423,14 @@ func optInt64(a map[string]any, key string, def int64) (int64, error) {
 	if !exists {
 		return def, nil
 	}
-	value, err := exactInt64(raw)
+	value, err := exactJSONInt64(raw)
 	if err != nil {
 		return 0, argError(key, err)
 	}
 	return value, nil
 }
 
-func exactInt64(raw any) (int64, error) {
+func exactJSONInt64(raw any) (int64, error) {
 	switch v := raw.(type) {
 	case json.Number:
 		value, err := v.Int64()
