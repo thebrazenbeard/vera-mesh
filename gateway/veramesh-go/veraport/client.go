@@ -14,6 +14,12 @@ import (
 	"time"
 )
 
+type ClientCredentials struct {
+	RootCAs              *x509.CertPool
+	ControllerPrivateKey *ecdsa.PrivateKey
+	WorkstationPublicKey *ecdsa.PublicKey
+}
+
 type ClientConfig struct {
 	Host                  string
 	Port                  int
