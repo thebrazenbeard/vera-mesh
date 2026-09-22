@@ -29,6 +29,7 @@ veraport-service = "veraport_agent.windows_service:service_cli"
 veraport-mcp = "veraport_agent.mcp_server:main"
 veraport-mcp-stdio = "veraport_agent.mcp_server:stdio_main"
 veraport-live-edge = "veraport_agent.verarelay_live_edge:main"
+veramesh-tunnel-service = "veraport_agent.tunnel_runtime_service:service_cli"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
