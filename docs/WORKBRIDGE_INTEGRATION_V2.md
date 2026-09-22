@@ -4,7 +4,7 @@ Source compatibility subject:
 
 - WorkBridge repository: `thebrazenbeard/WorkBridgeMCP`
 - WorkBridge PR: #5
-- current PR head: `4e534b8a0e44648745bc6b5a5f35f509f5af5888`
+- current PR head: `92c66159d9b610a94f59066ab2bb6416f4513093`
 - interface-bearing ancestor: `0b80fe050d8f03da54ee14123737af26740c1605`
 - VeraMesh successor base: PR #25 @ `60d233c8ccc25871b0666d00c53fa9be26c7cc74`
 
@@ -23,4 +23,4 @@ Security invariants:
 
 This binding qualifies source compatibility only. It does not establish that the exact WorkBridge binary is installed, that WorkBridge and VeraPort runtime root sets are equivalent, that either backend is currently selected, or that a workstation effect occurred.
 
-Currentness note: the WorkBridge movement from `0b80fe050d8f03da54ee14123737af26740c1605` to `4e534b8a0e44648745bc6b5a5f35f509f5af5888` changes only `.github/workflows/ci.yml` and adds `scripts/Install-WorkBridgeLappy.ps1`. The MCP/runtime interface consumed by this adapter is unchanged. Exact-head independent review must nevertheless bind the newer PR head before source-integration closure.
+Currentness note: the WorkBridge movement from `0b80fe050d8f03da54ee14123737af26740c1605` to `92c66159d9b610a94f59066ab2bb6416f4513093` changes exactly `.github/workflows/ci.yml`, `scripts/Install-WorkBridgeLappy.ps1`, `scripts/Test-WorkBridgeBinary.ps1`, and `scripts/Test-WorkBridgeHttpBinary.ps1`. The MCP/runtime interface consumed by this adapter is unchanged. Current WorkBridge exact-head push run `35797927305` and PR run `35797931646` pass; independent exact-head review remains a separate gate.
