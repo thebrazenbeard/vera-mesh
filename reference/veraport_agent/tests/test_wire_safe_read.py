@@ -299,7 +299,7 @@ async def test_legacy_text_read_overflow_returns_correlated_error(
         })
         assert response["request_id"] == "read"
         assert response["ok"] is False
-        assert response["error"]["code"] == "FRAME_TOO_LARGE"
+        assert response["error"]["code"] == "RESPONSE_FRAME_TOO_LARGE"
     finally:
         await client.close()
         server.close()
