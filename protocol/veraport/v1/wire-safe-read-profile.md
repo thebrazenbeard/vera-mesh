@@ -103,3 +103,20 @@ This profile describes source behavior only.
 It does not establish workstation installation, live route, live filesystem access,
 MCP registration, deployment, credential state, write/process authority, or
 RDC-equivalence.
+
+
+## Serialization and transport failure
+
+The server preflights handler output with the same strict JSON serializer used by the
+wire writer.
+
+If handler output is not JSON-serializable, the server returns a correlated
+`RESPONSE_SERIALIZATION_ERROR` when that bounded error itself fits the frame policy.
+
+If a bounded error cannot fit, or an actual response write/drain fails, the server closes
+the stream. It does not leave a request task failed while keeping the transport
+apparently usable. Pending client calls therefore resolve through stream failure or their
+existing request deadline.
+
+This strengthens the legacy whole-text overflow rule without changing ranged-read
+filesystem authority.
