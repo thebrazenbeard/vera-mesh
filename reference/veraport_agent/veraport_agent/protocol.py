@@ -414,6 +414,13 @@ class VeraPortAgent:
 
         raise ValueError(f"unknown operation: {operation}")
 
+    async def close_all_processes(self) -> dict[str, Any]:
+        terminated = await self.rdc.close_all_processes()
+        return {
+            "terminated_process_handles": sorted(terminated),
+            "drained": True,
+        }
+
     async def close_session(self, session_id: str) -> dict[str, Any]:
         prefix = session_id + "::"
         unresolved: list[str] = []
