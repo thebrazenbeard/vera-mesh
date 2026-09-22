@@ -28,8 +28,14 @@ type ProcessLease struct {
 	CWD            string
 }
 
+type ControllerAPI interface {
+	Config() *Config
+	Call(context.Context, string, map[string]any) (map[string]any, error)
+	MachineInfo(context.Context) map[string]any
+}
+
 type Facade struct {
-	controller *Controller
+	controller ControllerAPI
 	actorID    string
 	actorTag   string
 
@@ -37,7 +43,7 @@ type Facade struct {
 	processes map[string]ProcessLease
 }
 
-func NewFacade(controller *Controller, actorID string) (*Facade, error) {
+func NewFacade(controller ControllerAPI, actorID string) (*Facade, error) {
 	actorID = strings.TrimSpace(actorID)
 	if controller == nil || actorID == "" {
 		return nil, errors.New("controller and actor_id are required")
