@@ -1,0 +1,61 @@
+{
+  "schema": "VERAMESH_SYNOLOGY_READONLY_INSPECTION_EVIDENCE_V1",
+  "observed_at_utc": "2026-09-22T19:27:43Z",
+  "probe_source": {
+    "repository": "thebrazenbeard/vera-mesh",
+    "commit": "b1b6c9d782b45361c932381ff61108e0e38740cd",
+    "path": "tools/synology_inspect_existing_veramesh.sh"
+  },
+  "subject": {
+    "hostname": "TheSimsVault",
+    "kernel": "Linux 3.10.108 armv7l",
+    "machine": "armv7l",
+    "dsm": {
+      "productversion": "7.2.2",
+      "buildnumber": "72806",
+      "smallfixnumber": "9"
+    },
+    "operator": {
+      "uid": 1027,
+      "primary_gid": 100,
+      "groups": [
+        "users",
+        "administrators",
+        "http",
+        "video"
+      ]
+    }
+  },
+  "runtime": {
+    "veramesh_package": {
+      "target_present": true,
+      "synopkg_status": "stop",
+      "synopkg_status_code": 263,
+      "synopkg_description": "Status: [263], package is stopped",
+      "active_status_description": "failed to get unit status"
+    },
+    "python_version": "Python 3.11.15",
+    "node_version": "v22.22.3",
+    "gateway_binary_found": false,
+    "observed_listeners": [
+      "127.0.0.1:17445",
+      "100.115.152.20:17445",
+      "127.0.0.1:17443",
+      "fd7a:115c:a1e0::c:17445"
+    ],
+    "matching_process_lines": []
+  },
+  "interpretation": {
+    "package_runtime_state": "PACKAGE_MANAGER_STOPPED",
+    "socket_runtime_state": "LISTENERS_PRESENT",
+    "relationship": "UNRESOLVED",
+    "note": "The package-manager state and observed socket state disagree. Listener ownership and semantic forwarding remain unqualified."
+  },
+  "claim_ceiling": [
+    "Qualifies the observed DSM/kernel/architecture/runtime versions and socket bindings at the stated timestamp.",
+    "Qualifies only that Synology Package Center reported VeraMesh stopped while /var/packages/VeraMesh/target existed.",
+    "Does not identify which executable or service owns ports 17443 or 17445.",
+    "Does not prove VeraPort forwarding, Tailscale forwarding, TLS pass-through, application authentication, or lane.list behavior.",
+    "Does not authorize package start/stop/restart, installation, firewall/Tailscale mutation, credential access, or deployment."
+  ]
+}
