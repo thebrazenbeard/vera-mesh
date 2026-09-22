@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 from pathlib import Path
@@ -15,6 +16,9 @@ SCRIPT = (
 
 
 def test_activation_packet_pins_reviewed_subject_and_read_only_authority():
+    assert hashlib.sha256(SCRIPT.read_bytes()).hexdigest() == (
+        "092eb9bde109dc203d9202b916616645fa2d5ac2774b8863470445e57c976956"
+    )
     text = SCRIPT.read_text(encoding="utf-8")
     assert "95e1c8a3d60e8b1ac9165f46ab317b50e58c57f9" in text
     assert "v0.0.11" in text
