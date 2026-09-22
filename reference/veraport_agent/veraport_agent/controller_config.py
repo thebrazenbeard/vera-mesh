@@ -97,8 +97,16 @@ class ControllerConfig:
         required_caps = {
             "fs.read_text": "fs.read",
             "fs.read_bytes": "fs.read",
+            "fs.stat": "fs.read",
+            "fs.list_dir": "fs.read",
+            "fs.search": "fs.read",
             "fs.write_text": "fs.write",
             "process.exec": "process.exec",
+            "process.start": "process.exec",
+            "process.list": "process.inspect",
+            "process.status": "process.inspect",
+            "process.output": "process.inspect",
+            "process.terminate": "process.control",
         }
         for operation, capability in required_caps.items():
             if operation in gateway_operations and capability not in requested_caps:
