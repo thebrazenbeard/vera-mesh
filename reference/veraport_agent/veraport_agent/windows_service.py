@@ -41,6 +41,9 @@ async def run_until_stop(config_path: str | Path, stop_event: threading.Event) -
         server.close()
         try:
             await server.wait_closed()
+            close_all = getattr(prepared.agent, "close_all_processes", None)
+            if callable(close_all):
+                await close_all()
         finally:
             prepared.state_store.close()
 
