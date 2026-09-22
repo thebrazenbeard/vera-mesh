@@ -102,8 +102,13 @@ async def run_mcp_until_stop(
     stop_task: asyncio.Task[Any] | None = None
     server_task: asyncio.Task[Any] | None = None
     try:
-        mcp = deps.mcp_builder(runtime)
-        app = mcp.streamable_http_app(stateless_http=False)
+        mcp = deps.mcp_builder(
+            runtime,
+            host=host,
+            port=port,
+            stateless_http=False,
+        )
+        app = mcp.streamable_http_app()
         uvicorn_config = deps.uvicorn_config_cls(
             app,
             host=host,
