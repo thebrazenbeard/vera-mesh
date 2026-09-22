@@ -6,7 +6,7 @@ import subprocess
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,10 @@ class ProcessOutputOffsetUnavailable(RuntimeError):
     code = "PROCESS_OUTPUT_OFFSET_UNAVAILABLE"
 
 
+class ProcessInputUnavailable(RuntimeError):
+    code = "PROCESS_INPUT_UNAVAILABLE"
+
+
 @dataclass
 class _ManagedProcess:
     handle: str
@@ -38,6 +42,7 @@ class _ManagedProcess:
     deadline_ns: int
     stdout: bytearray
     stderr: bytearray
+    stdin_lock: threading.Lock = field(default_factory=threading.Lock)
     stdout_total_bytes: int = 0
     stderr_total_bytes: int = 0
     stdout_truncated: bool = False
@@ -378,7 +383,7 @@ class RdcSurface:
             cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
+            stdin=subprocess.PIPE,
             shell=False,
         )
         now_ns = time.time_ns()
@@ -595,6 +600,53 @@ class RdcSurface:
             "stdout_truncated": stdout_truncated,
             "stderr_truncated": stderr_truncated,
         }
+
+    async def process_input(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        process_handle: str,
+        input_text: str,
+        append_newline: bool = True,
+    ) -> dict[str, Any]:
+        self._require_process_policy()
+        if not isinstance(input_text, str):
+            raise ValueError("input_text must be string")
+        if type(append_newline) is not bool:
+            raise ValueError("append_newline must be bool")
+        payload = input_text.encode("utf-8")
+        if append_newline:
+            payload += b"\n"
+        if len(payload) > 65_536:
+            raise ValueError("process input exceeds 65536-byte limit")
+
+        item = self._owned_process(lane_id, fencing_token, process_handle)
+        self._authorize_cwd(
+            lane_id,
+            fencing_token,
+            "process.interact",
+            item.cwd,
+            ClaimMode.WRITE,
+        )
+        await asyncio.to_thread(self._write_process_input, item, payload)
+        return {
+            **self._status_json(item),
+            "bytes_written": len(payload),
+        }
+
+    @staticmethod
+    def _write_process_input(item: _ManagedProcess, payload: bytes) -> None:
+        if item.process.poll() is not None or item.process.stdin is None:
+            raise ProcessInputUnavailable("process stdin is unavailable")
+        with item.stdin_lock:
+            try:
+                item.process.stdin.write(payload)
+                item.process.stdin.flush()
+            except (BrokenPipeError, OSError, ValueError) as exc:
+                raise ProcessInputUnavailable(
+                    "process stdin is unavailable"
+                ) from exc
 
     async def process_terminate(
         self,
