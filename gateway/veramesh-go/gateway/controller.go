@@ -244,7 +244,6 @@ func (c *Controller) invalidate(client veraportSession) {
 
 func (c *Controller) Close() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	var errs []error
 	for id, item := range c.paths {
 		if item != nil && item.client != nil {
@@ -254,6 +253,11 @@ func (c *Controller) Close() error {
 		}
 		delete(c.paths, id)
 	}
+	c.mu.Unlock()
+
+	// Path/session shutdown and logical-lane bookkeeping deliberately use
+	// non-nested locks. Read failover may invalidate a path while holding
+	// laneMu, so nesting mu -> laneMu here would create a lock-order cycle.
 	c.laneMu.Lock()
 	c.readLanes = map[string]*logicalReadLane{}
 	c.laneMu.Unlock()
@@ -263,6 +267,11 @@ func (c *Controller) Close() error {
 func (c *Controller) Call(ctx context.Context, operation string, body map[string]any) (map[string]any, error) {
 	if _, ok := c.cfg.OperationSet()[operation]; !ok {
 		return nil, fmt.Errorf("operation not enabled by controller config: %s", operation)
+	}
+	for _, reserved := range []string{"protocol_version", "request_id", "operation"} {
+		if _, exists := body[reserved]; exists {
+			return nil, fmt.Errorf("body attempts to override reserved field: %s", reserved)
+		}
 	}
 	if operation == "lane.open" && isReadOnlyLaneOpen(body) {
 		return c.openLogicalReadLane(ctx, body)
