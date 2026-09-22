@@ -266,7 +266,11 @@ async def test_durable_idempotency_rejects_same_id_different_request(tmp_path: P
     first = await agent.handle({
         "protocol_version": "veraport-v1",
         "request_id": "collision-1",
-        "operation": "lane.list",
+        "operation": "lane.open",
+        "lane_id": "first",
+        "task_id": "first",
+        "capabilities": ["fs.read"],
+        "claims": [],
     })
     second = await agent.handle({
         "protocol_version": "veraport-v1",

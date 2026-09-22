@@ -82,6 +82,21 @@ def harden_private_file(path: str | Path) -> None:
     )
 
 
+def harden_private_executable(path: str | Path) -> None:
+    ntsecuritycon, _, _ = _modules()
+    target = Path(path)
+    if not target.is_file():
+        raise WindowsAclError(f"private executable file missing: {target}")
+    _set_protected_dacl(
+        target,
+        service_mask=(
+            ntsecuritycon.FILE_GENERIC_READ
+            | ntsecuritycon.FILE_GENERIC_EXECUTE
+        ),
+        directory=False,
+    )
+
+
 def harden_private_directory(path: str | Path) -> None:
     ntsecuritycon, _, _ = _modules()
     target = Path(path)
@@ -138,6 +153,10 @@ def _validate_path_acl(path: Path, *, require_directory: bool) -> None:
 
 
 def validate_private_file(path: str | Path) -> None:
+    _validate_path_acl(Path(path), require_directory=False)
+
+
+def validate_private_executable(path: str | Path) -> None:
     _validate_path_acl(Path(path), require_directory=False)
 
 

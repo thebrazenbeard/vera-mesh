@@ -124,3 +124,49 @@ def test_process_exec_not_added_without_local_config_grant(tmp_path):
     events = []
     prepared = prepare_host(cfg(tmp_path), deps=deps(events))
     assert prepared.config.allow_process_exec is False
+
+
+def test_process_policy_expands_to_exec_inspect_and_control(tmp_path):
+    events = []
+    value = cfg(tmp_path)
+    value = WindowsServiceConfig.from_dict({
+        "bind_host": value.bind_host,
+        "bind_port": value.bind_port,
+        "allowed_roots": [str(root) for root in value.allowed_roots],
+        "state_db": str(value.state_db),
+        "tls_cert": str(value.tls_cert),
+        "tls_key": str(value.tls_key),
+        "workstation_key": str(value.workstation_key),
+        "controller_trust": str(value.controller_trust),
+        "allow_process_exec": True,
+    })
+
+    base = deps(events)
+    captured = {}
+    original_registry = base.lane_registry_cls
+
+    def registry(caps, **kwargs):
+        captured["caps"] = frozenset(caps)
+        return original_registry(caps, **kwargs)
+
+    wrapped = HostDependencies(
+        base.load_identity,
+        base.state_store_cls,
+        registry,
+        base.executor_cls,
+        base.agent_cls,
+        base.authenticator_cls,
+        base.handler_factory_cls,
+        base.make_server_context,
+        base.serve_tls_connection,
+        base.start_server,
+    )
+    prepare_host(value, deps=wrapped)
+    assert captured["caps"] == frozenset({
+        "fs.read",
+        "fs.write",
+        "process.exec",
+        "process.inspect",
+        "process.interact",
+        "process.control",
+    })

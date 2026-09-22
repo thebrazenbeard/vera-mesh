@@ -35,6 +35,17 @@ class Channel:
                 "result": {"lanes": []},
                 "via": self.label,
             }
+        if request["operation"] == "lane.open":
+            return {
+                "request_id": request["request_id"],
+                "ok": True,
+                "result": {
+                    "lane_id": request["lane_id"],
+                    "fencing_token": 17,
+                    "via": self.label,
+                },
+                "via": self.label,
+            }
         return {
             "request_id": request["request_id"],
             "ok": True,
@@ -182,6 +193,7 @@ async def test_mcp_reconnect_reuses_persistent_veraport_sessions(tmp_path: Path)
     assert opens == ["direct", "edge"]
     assert info1["selected_path_id"] == "direct"
     assert info2["selected_path_id"] == "direct"
+    assert {x["path_id"] for x in info2["paths"]} == {"direct", "edge"}
     assert {x["session_id"] for x in info2["paths"]} == {
         "session-direct",
         "session-edge",
@@ -226,6 +238,7 @@ async def test_tls_handshake_without_lane_list_does_not_make_path_current(
 
     assert info["selected_path_id"] == "edge"
     assert [x["endpoint_id"] for x in info["paths"]] == ["edge"]
+    assert [x["path_id"] for x in info["paths"]] == ["edge"]
 
 
 @pytest.mark.asyncio
@@ -395,3 +408,63 @@ async def test_startup_blackhole_is_bounded_and_later_endpoint_is_tried(
     assert opens == ["direct", "edge"]
     assert info["selected_path_id"] == "edge"
     assert [item["endpoint_id"] for item in info["paths"]] == ["edge"]
+    assert [item["path_id"] for item in info["paths"]] == ["edge"]
+
+
+@pytest.mark.asyncio
+async def test_public_read_operation_routes_without_private_router_access(tmp_path: Path):
+    (
+        controller,
+        workstation,
+        controller_path,
+        cert_path,
+        workstation_public_path,
+    ) = materials(tmp_path)
+    cfg = replace(
+        config(controller_path, cert_path, workstation_public_path),
+        gateway_operations=frozenset({
+            "lane.list",
+            "lane.open",
+            "lane.renew",
+            "lane.close",
+            "fs.read_text",
+            "fs.read_bytes",
+            "fs.stat",
+        }),
+    )
+
+    async def opener(**kwargs):
+        label = "direct" if kwargs["host"] == "127.0.0.1" else "edge"
+        return Channel(label), SessionBinding(
+            session_id="session-" + label,
+            controller_principal=principal_id(
+                controller.public_key(), "controller"
+            ),
+            workstation_principal=principal_id(
+                workstation.public_key(), "workstation"
+            ),
+            granted_capabilities=frozenset({"fs.read"}),
+            expires_at_ms=999999,
+        )
+
+    runtime = ControllerRuntime(
+        cfg,
+        open_session=opener,
+        now_ms=lambda: 1000,
+        request_id_factory=lambda: "readop",
+    )
+    opened = await runtime.open_lane(
+        lane_id="logical",
+        task_id="readop",
+        capabilities=["fs.read"],
+        claims=[{"key": "fs:/tmp", "mode": "read"}],
+    )
+    fence = opened["result"]["fencing_token"]
+    result = await runtime.read_operation(
+        "fs.stat",
+        lane_id="logical",
+        fencing_token=fence,
+        path="/tmp/file.txt",
+    )
+    assert result["ok"] is True
+    assert result["result"]["via"] == "direct"

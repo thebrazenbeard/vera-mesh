@@ -1,0 +1,80 @@
+{
+  "schema": "VERAPORT_LAPPY_EXISTING_INSTALL_SOURCE_BINDING_V1",
+  "date": "2026-09-22",
+  "status": "BOUNDED_SEVEN_FILE_EXACT_MATCH",
+  "inspection_evidence": "evidence/lappy-existing-veraport-inspection-20260922.json",
+  "inspection_observed_at_utc": "2026-09-22T18:53:07.4048464Z",
+  "source_subject": {
+    "repository": "thebrazenbeard/vera-mesh",
+    "exact_matching_commit": "07ff6643b7aec5e47106b6f58e2bf42ec38d820f",
+    "exact_matching_tree": "41447e1cba477b77fdf7ca77b759f2fbe61e6cb5",
+    "immediate_successor_commit": "1d5d2893e2119135ea26660abc73a708d0261a2e",
+    "immediate_successor_kind": "evidence-only qualification commit",
+    "immediate_successor_parent": "07ff6643b7aec5e47106b6f58e2bf42ec38d820f"
+  },
+  "normalization": {
+    "reason": "GitHub connector returns repository text with LF; installed Windows checkout files use CRLF",
+    "operation": "replace LF line endings with CRLF before SHA-256 comparison",
+    "semantic_change": false
+  },
+  "exact_matches": [
+    {
+      "path": "reference/veraport_agent/veraport_agent/windows_service.py",
+      "installed_sha256": "378b8f2a71fe3724944e1b6e16e6c712700c84939fdccde0f94503adb612ad1b",
+      "normalized_source_sha256": "378b8f2a71fe3724944e1b6e16e6c712700c84939fdccde0f94503adb612ad1b",
+      "match": true
+    },
+    {
+      "path": "reference/veraport_agent/veraport_agent/lappy_host.py",
+      "installed_sha256": "1c237117b75a4c12a1e4491ff1555ae6fe831fca7235709203af78cb6af65546",
+      "normalized_source_sha256": "1c237117b75a4c12a1e4491ff1555ae6fe831fca7235709203af78cb6af65546",
+      "match": true
+    },
+    {
+      "path": "reference/veraport_agent/veraport_agent/service_config.py",
+      "installed_sha256": "9cda2cafc20a1b74557726bde5b9fd8221caeff196645043de5cfe5fac493b5b",
+      "normalized_source_sha256": "9cda2cafc20a1b74557726bde5b9fd8221caeff196645043de5cfe5fac493b5b",
+      "match": true
+    },
+    {
+      "path": "reference/veraport_agent/veraport_agent/protocol.py",
+      "installed_sha256": "2b22208435b56f0ee668e19229febd91ab6eaf16bb0a82e764450a2d5a38a0c4",
+      "normalized_source_sha256": "2b22208435b56f0ee668e19229febd91ab6eaf16bb0a82e764450a2d5a38a0c4",
+      "match": true
+    },
+    {
+      "path": "reference/veraport_agent/veraport_agent/executor.py",
+      "installed_sha256": "6b90d3f79de8e76bb18e02808e29e09b8e49fc65d5ca3212f28ec8d220457de4",
+      "normalized_source_sha256": "6b90d3f79de8e76bb18e02808e29e09b8e49fc65d5ca3212f28ec8d220457de4",
+      "match": true
+    },
+    {
+      "path": "reference/veraport_agent/veraport_agent/hot_session.py",
+      "installed_sha256": "e8a52f8744e4cb509389b54f50cb81f60473b0a2aeb68a68556a607b29a8fe93",
+      "normalized_source_sha256": "e8a52f8744e4cb509389b54f50cb81f60473b0a2aeb68a68556a607b29a8fe93",
+      "match": true
+    },
+    {
+      "path": "reference/veraport_agent/veraport_agent/tls_transport.py",
+      "installed_sha256": "11b016cadd0c70ba4621381e39ee34296e39288e92dbd0e96b26d0d6015b09e0",
+      "normalized_source_sha256": "11b016cadd0c70ba4621381e39ee34296e39288e92dbd0e96b26d0d6015b09e0",
+      "match": true
+    }
+  ],
+  "observations": {
+    "service_state_at_inspection": "Running",
+    "service_start_mode": "Auto",
+    "service_account": "LocalSystem",
+    "bind": "127.0.0.1:17444",
+    "process_exec_enabled": false,
+    "tailscale_listener_observed": "100.88.50.35:17444"
+  },
+  "claim_ceiling": [
+    "Proves exact byte identity for the seven listed installed implementation files after deterministic LF-to-CRLF normalization against Git commit 07ff6643b7aec5e47106b6f58e2bf42ec38d820f.",
+    "The immediate successor 1d5d2893e2119135ea26660abc73a708d0261a2e is an evidence-only commit whose parent is the exact matching source commit.",
+    "Does not prove every installed package file, dependency, metadata file, configuration file, identity file, or state database came from one exact Git commit.",
+    "Does not qualify the currently running service semantically.",
+    "Does not qualify Tailscale forwarding or non-loopback end-to-end behavior.",
+    "Does not authorize service stop, replacement, migration, identity rotation, process-execution enablement, firewall/Tailscale mutation, or any other protected effect."
+  ]
+}

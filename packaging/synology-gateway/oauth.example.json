@@ -1,0 +1,10 @@
+{
+  "schema": "VERAMESH_OAUTH_INTROSPECTION_V1",
+  "introspection_endpoint": "https://AUTHORIZATION_SERVER.example/oauth2/introspect",
+  "client_id": "VERAMESH_GATEWAY_CLIENT_ID",
+  "client_secret_env": "VERAMESH_OAUTH_CLIENT_SECRET",
+  "expected_issuer": "https://AUTHORIZATION_SERVER.example",
+  "expected_resource": "https://VERAMESH_PUBLIC_HOST.example/mcp",
+  "client_auth_method": "client_secret_basic",
+  "timeout_s": 5
+}

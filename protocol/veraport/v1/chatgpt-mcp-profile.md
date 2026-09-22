@@ -47,14 +47,32 @@ Always registered:
 
 Conditionally registered only when controller policy explicitly includes the operation:
 - `fs_read_bytes`
+- `fs_stat`
+- `fs_list_dir`
+- `fs_search`
 - `fs_write_text`
+- `fs_append_text`
+- `fs_mkdir`
+- `fs_move`
+- `fs_replace_text`
+- `process_exec`
+- `process_start`
+- `process_list`
+- `process_status`
+- `process_output`
+- `process_input`
+- `process_terminate`
 
-The current Lappy production policy observed on 2026-09-20 has
-`allow_process_exec=false`. Process execution is therefore not exposed by this source cut.
+Process capabilities remain additionally gated by Lappy local policy. Tool discovery does
+not enable them. Managed process handles are opaque and bound to the owning lane/fence. Interactive input
+requires a distinct `process.interact` capability and is bounded to 65,536 bytes per call.
+Lane close and application-session disconnect reap owned children.
 
-Process list/status/output/termination are not yet VeraPort V1 primitives. RDC-equivalence
-must remain FAIL/PARTIAL for those rows until explicit process-lifecycle protocol/runtime
-extensions exist and are independently reviewed.
+The current source also includes an independent Python reference live-edge carrier.
+Production `EDGE_STREAM` on Synology is the VeraMesh Python 3.11 SPK edge, not
+VeraRelay. VeraRelay 0.4 is a separate Node.js 22 + SQLite durable-courier role.
+Both live-edge implementations forward opaque VeraPort bytes without terminating
+VeraPort TLS, parsing VeraPort frames, or receiving workstation credentials.
 
 ## ChatGPT product boundary
 

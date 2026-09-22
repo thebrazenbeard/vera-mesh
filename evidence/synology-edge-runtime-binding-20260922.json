@@ -1,0 +1,65 @@
+{
+  "schema": "VERAMESH_SYNOLOGY_EDGE_RUNTIME_BINDING_V1",
+  "date": "2026-09-22",
+  "roles": {
+    "live_edge": {
+      "component": "VeraMesh Synology SPK",
+      "runtime": "Python 3.11",
+      "interpreter_path": "/var/packages/python311/target/bin/python3.11",
+      "package_repository": "thebrazenbeard/vera-synology",
+      "operation": "EDGE_STREAM transparent VeraPort TLS proxy",
+      "durable_relay": false
+    },
+    "durable_relay": {
+      "component": "VeraRelay 0.4",
+      "runtime": "Node.js 22 + SQLite",
+      "source_status": "preserved source snapshot / separate qualification subject",
+      "operation": "DURABLE_RELAY sealed-mailbox custody and receipts",
+      "live_edge": false
+    }
+  },
+  "production_evidence": {
+    "installed_subject": {
+      "source_commit": "84ba5e85639181c202f2030900a17df97e00df36",
+      "spk_sha256": "c8a634554e7e9ffdf89803818ea569f79379a3d0bda609b70cec3c0333b90b5f",
+      "package_version": "0.1.0-0016",
+      "evidence": [
+        "install/postinst passed",
+        "lifecycle RUNNING",
+        "local edge 127.0.0.1:17445 passed",
+        "tailnet-only Tailscale Serve 17445 passed",
+        "Lappy TCP/TLS 1.3 through edge passed",
+        "direct-vs-edge VeraPort certificate fingerprint matched",
+        "VeraPort P-256 application mutual authentication passed",
+        "authenticated read-only lane.list through edge passed"
+      ],
+      "ceiling": "historical installed/runtime-qualified R6 only"
+    },
+    "current_hardened_source": {
+      "pr": 2,
+      "repository": "thebrazenbeard/vera-synology",
+      "head": "6350dc06294d91ce96b269736f7d0f95e0bcf337",
+      "status": "later R7 migration hardening; not installed/runtime-qualified by R6 readback"
+    },
+    "stacked_ui_successor": {
+      "pr": 3,
+      "repository": "thebrazenbeard/vera-synology",
+      "head": "553e3a637833c5469f6b99fbc4d597755a0c9a5e",
+      "package_version": "0.1.0-0017",
+      "status": "DSM UI-route successor; not established by R6 runtime evidence"
+    }
+  },
+  "reference_implementation": {
+    "repository": "thebrazenbeard/vera-mesh",
+    "module": "reference/veraport_agent/veraport_agent/verarelay_live_edge.py",
+    "class": "VeraMeshReferenceLiveEdge",
+    "purpose": "independent conformance/reference implementation of live EDGE_STREAM byte-forwarding semantics",
+    "production_binding": false
+  },
+  "invariants": [
+    "VeraMesh Python SPK EDGE_STREAM is not VeraRelay.",
+    "VeraRelay Node.js durable custody is not synchronous Lappy execution.",
+    "Installed R6 runtime evidence does not qualify later R7/V17 source heads.",
+    "The in-repo Python reference carrier does not replace the production Synology SPK edge."
+  ]
+}

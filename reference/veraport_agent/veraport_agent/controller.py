@@ -30,7 +30,14 @@ _MUTATING_OPERATIONS = frozenset({
     "lane.renew",
     "lane.close",
     "fs.write_text",
+    "fs.append_text",
+    "fs.mkdir",
+    "fs.move",
+    "fs.replace_text",
     "process.exec",
+    "process.start",
+    "process.input",
+    "process.terminate",
 })
 
 

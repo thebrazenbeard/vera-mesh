@@ -121,13 +121,19 @@ async def serve_tls_connection(
             ttl_ms=session_ttl_ms,
         )
         await write_frame(writer, _accept_frame(accept), max_frame_bytes=max_frame_bytes)
-        await serve_multiplexed(
-            reader,
-            writer,
-            handler_factory(binding),
-            max_frame_bytes=max_frame_bytes,
-            max_inflight=max_inflight,
-        )
+        handler = handler_factory(binding)
+        try:
+            await serve_multiplexed(
+                reader,
+                writer,
+                handler,
+                max_frame_bytes=max_frame_bytes,
+                max_inflight=max_inflight,
+            )
+        finally:
+            close_session = getattr(handler, "close_session", None)
+            if callable(close_session):
+                await close_session()
         return
     except Exception as exc:
         try:

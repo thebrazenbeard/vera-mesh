@@ -37,7 +37,23 @@ The adapter layer should remain disposable. Product/account-specific connector l
 - `renew_lane` -> `lane.renew`
 - `close_lane` -> `lane.close`
 - `read_text` -> `fs.read_text`
+- `read_bytes` -> `fs.read_bytes`
+- `stat` -> `fs.stat`
+- `list_dir` -> `fs.list_dir`
+- `search` -> `fs.search`
 - `write_text` -> `fs.write_text`
+- `append_text` -> `fs.append_text`
+- `make_directory` -> `fs.mkdir`
+- `move_path` -> `fs.move`
+- `replace_text` -> `fs.replace_text`
 - `run_process` -> `process.exec`
+- `start_process` -> `process.start`
+- `list_processes` -> `process.list`
+- `process_status` -> `process.status`
+- `process_output` -> `process.output`
+- `process_input` -> `process.input`
+- `terminate_process` -> `process.terminate`
 
-`process.exec` still requires the separate local Lappy grant even when the gateway operation allowlist includes it.
+Process operations still require the separate local Lappy process-policy grant even when
+the gateway operation allowlist includes them. Inspect/control capability checks are
+separate from process-start authority.

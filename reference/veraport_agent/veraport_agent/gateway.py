@@ -14,13 +14,31 @@ class GatewayOperationDenied(GatewayError):
     code = "GATEWAY_OPERATION_DENIED"
 
 
-READ_OPERATIONS = frozenset({"lane.list", "fs.read_text", "fs.read_bytes"})
+READ_OPERATIONS = frozenset({
+    "lane.list",
+    "fs.read_text",
+    "fs.read_bytes",
+    "fs.stat",
+    "fs.list_dir",
+    "fs.search",
+    "fs.search_content",
+    "process.list",
+    "process.status",
+    "process.output",
+})
 MUTATING_OPERATIONS = frozenset({
     "lane.open",
     "lane.renew",
     "lane.close",
     "fs.write_text",
+    "fs.append_text",
+    "fs.mkdir",
+    "fs.move",
+    "fs.replace_text",
     "process.exec",
+    "process.start",
+    "process.input",
+    "process.terminate",
 })
 ALL_OPERATIONS = READ_OPERATIONS | MUTATING_OPERATIONS
 
@@ -39,17 +57,31 @@ TOOL_DESCRIPTORS = (
     ToolDescriptor("close_lane", "lane.close", True),
     ToolDescriptor("read_text", "fs.read_text", False),
     ToolDescriptor("read_bytes", "fs.read_bytes", False),
+    ToolDescriptor("stat", "fs.stat", False),
+    ToolDescriptor("list_dir", "fs.list_dir", False),
+    ToolDescriptor("search", "fs.search", False),
+    ToolDescriptor("search_content", "fs.search_content", False),
     ToolDescriptor("write_text", "fs.write_text", True),
+    ToolDescriptor("append_text", "fs.append_text", True),
+    ToolDescriptor("make_directory", "fs.mkdir", True),
+    ToolDescriptor("move_path", "fs.move", True),
+    ToolDescriptor("replace_text", "fs.replace_text", True),
     ToolDescriptor("run_process", "process.exec", True),
+    ToolDescriptor("start_process", "process.start", True),
+    ToolDescriptor("list_processes", "process.list", False),
+    ToolDescriptor("process_status", "process.status", False),
+    ToolDescriptor("process_output", "process.output", False),
+    ToolDescriptor("process_input", "process.input", True),
+    ToolDescriptor("terminate_process", "process.terminate", True),
 )
 
 
 class VeraPortGateway:
     """Thin tool facade over an already-running HotSessionPool.
 
-    It owns no workstation connection and no execution state. Its job is
-    request validation, stable request-ID creation, and projection into the
-    persistent session pool.
+    Tool discoverability never grants authority. allowed_operations is a
+    controller-side ceiling and workstation/session/lane policy can narrow it
+    further.
     """
 
     def __init__(
@@ -85,6 +117,9 @@ class VeraPortGateway:
         self.max_path_age_ms = max_path_age_ms
         self.request_timeout_s = request_timeout_s
 
+    async def call_operation(self, operation: str, **body: Any) -> dict[str, Any]:
+        return await self._call(operation, body)
+
     async def list_lanes(self) -> dict[str, Any]:
         return await self._call("lane.list", {})
 
@@ -105,20 +140,38 @@ class VeraPortGateway:
             "ttl_s": ttl_s,
         })
 
-    async def renew_lane(self, *, lane_id: str, fencing_token: int, ttl_s: float = 300.0) -> dict[str, Any]:
+    async def renew_lane(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        ttl_s: float = 300.0,
+    ) -> dict[str, Any]:
         return await self._call("lane.renew", {
             "lane_id": lane_id,
             "fencing_token": fencing_token,
             "ttl_s": ttl_s,
         })
 
-    async def close_lane(self, *, lane_id: str, fencing_token: int) -> dict[str, Any]:
+    async def close_lane(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+    ) -> dict[str, Any]:
         return await self._call("lane.close", {
             "lane_id": lane_id,
             "fencing_token": fencing_token,
         })
 
-    async def read_text(self, *, lane_id: str, fencing_token: int, path: str, encoding: str = "utf-8") -> dict[str, Any]:
+    async def read_text(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        encoding: str = "utf-8",
+    ) -> dict[str, Any]:
         return await self._call("fs.read_text", {
             "lane_id": lane_id,
             "fencing_token": fencing_token,
@@ -179,7 +232,11 @@ class VeraPortGateway:
             "timeout_s": timeout_s,
         })
 
-    async def _call(self, operation: str, body: dict[str, Any]) -> dict[str, Any]:
+    async def _call(
+        self,
+        operation: str,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
         if operation not in self.allowed_operations:
             raise GatewayOperationDenied(operation)
         request_id = self.request_id_factory()

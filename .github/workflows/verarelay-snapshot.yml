@@ -1,0 +1,49 @@
+name: VeraRelay 0.4 snapshot qualification
+
+on:
+  push:
+    branches:
+      - "work/veramesh-rdc-replacement-v1-20260922"
+    paths:
+      - "reference/verarelay_0_4_candidate/**"
+      - ".github/workflows/verarelay-snapshot.yml"
+  pull_request:
+    paths:
+      - "reference/verarelay_0_4_candidate/**"
+      - ".github/workflows/verarelay-snapshot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify preserved archive identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="reference/verarelay_0_4_candidate/VERARELAY_LOCAL_SOURCE_20260919.tar.gz"
+          echo "65ed065d4ce86e547b580690b07ac8524168da4aa7f748d50c4396d3dd5e7a7a  $archive" | sha256sum -c -
+      - name: Extract exact snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/verarelay-snapshot"
+          tar -xzf reference/verarelay_0_4_candidate/VERARELAY_LOCAL_SOURCE_20260919.tar.gz -C "$RUNNER_TEMP/verarelay-snapshot"
+          test -f "$RUNNER_TEMP/verarelay-snapshot/package.json"
+      - name: Record runtime contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          node -e 'const p=require(process.env.RUNNER_TEMP+"/verarelay-snapshot/package.json"); console.log(JSON.stringify({name:p.name,version:p.version,engines:p.engines,scripts:p.scripts,dependencies:p.dependencies,devDependencies:p.devDependencies},null,2))'
+      - name: Run preserved VeraRelay tests on Node 22
+        shell: bash
+        working-directory: ${{ runner.temp }}/verarelay-snapshot
+        run: npm test

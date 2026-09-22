@@ -95,14 +95,31 @@ class ControllerConfig:
             raise ControllerConfigError(f"unknown gateway operations: {sorted(unknown)}")
 
         required_caps = {
-            "fs.read_text": "fs.read",
-            "fs.read_bytes": "fs.read",
-            "fs.write_text": "fs.write",
-            "process.exec": "process.exec",
+            "fs.read_text": frozenset({"fs.read"}),
+            "fs.read_bytes": frozenset({"fs.read"}),
+            "fs.stat": frozenset({"fs.read"}),
+            "fs.list_dir": frozenset({"fs.read"}),
+            "fs.search": frozenset({"fs.read"}),
+            "fs.search_content": frozenset({"fs.read"}),
+            "fs.write_text": frozenset({"fs.write"}),
+            "fs.append_text": frozenset({"fs.write"}),
+            "fs.mkdir": frozenset({"fs.write"}),
+            "fs.move": frozenset({"fs.write"}),
+            "fs.replace_text": frozenset({"fs.read", "fs.write"}),
+            "process.exec": frozenset({"process.exec"}),
+            "process.start": frozenset({"process.exec"}),
+            "process.list": frozenset({"process.inspect"}),
+            "process.status": frozenset({"process.inspect"}),
+            "process.output": frozenset({"process.inspect"}),
+            "process.input": frozenset({"process.interact"}),
+            "process.terminate": frozenset({"process.control"}),
         }
-        for operation, capability in required_caps.items():
-            if operation in gateway_operations and capability not in requested_caps:
-                raise ControllerConfigError(f"{operation} requires requested capability {capability}")
+        for operation, capabilities in required_caps.items():
+            missing = capabilities - requested_caps
+            if operation in gateway_operations and missing:
+                raise ControllerConfigError(
+                    f"{operation} requires requested capabilities {sorted(capabilities)}"
+                )
 
         raw_endpoints = value.get("endpoints")
         if not isinstance(raw_endpoints, list) or not raw_endpoints:

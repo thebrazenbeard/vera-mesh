@@ -1,0 +1,49 @@
+{
+  "schema": "VERAPORT_WORK_LAPTOP_LOCAL_QUALIFICATION_V1",
+  "observed_at_date": "2026-09-22",
+  "evidence_origin": "live user-run qualification output from work laptop",
+  "qualified_source_sha": "13a16019f3ec45acd576eb22f75138e6820d6262",
+  "bootstrap_source_commit": "53b2a65a80eb9c9a9f9c944c5bb8a097b46ecfc9",
+  "result": "PASS",
+  "scope": "ephemeral loopback VeraPort TLS/application-auth read-only qualification; no service install",
+  "host_observation": {
+    "hostname": "MT-262029",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "portable_python": "3.11.9"
+  },
+  "identity": {
+    "controller_principal": "controller:2c6b8941cdcd18b7b5ec6326bac4343b1a51b85e02c6c8000c563b1869410356",
+    "workstation_principal": "workstation:d90b7dd5eb5eb61a18fe377d75871c851aee06c7fdb17c1d531d7aef64162c8c"
+  },
+  "path": {
+    "mode": "DIRECT_STREAM",
+    "selected_path_id": "local-qualification",
+    "authenticated": true,
+    "data_plane_verified": true,
+    "granted_capabilities": [
+      "fs.read"
+    ]
+  },
+  "operation": {
+    "lane_opened": true,
+    "read_only_claim": "fs:C:/Users/psims/AppData/Local/Temp/VeraMesh-VeraPort-Qualification-i594dfhf/allowed/sentinel.txt",
+    "sentinel_match": true,
+    "lane_closed": true
+  },
+  "effects": {
+    "firewall_changed": false,
+    "persistent_identity_created": false,
+    "process_execution_enabled": false,
+    "programdata_written": false,
+    "windows_service_installed": false
+  },
+  "elapsed_ms": 309.893,
+  "claim_ceiling": [
+    "Qualifies only the exact source SHA named above.",
+    "Qualifies local loopback TLS/application-auth/read-only data-plane behavior on the observed work laptop.",
+    "Does not qualify Windows service installation or restart persistence.",
+    "Does not qualify process execution.",
+    "Does not qualify non-loopback or remote connectivity.",
+    "Does not qualify Synology gateway, Go gateway, VeraRelay execution, public plugin routing, or phone end-to-end behavior."
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "schema": "VERAMESH_CHAT_CONTINUATION_MANIFEST_V1",
+  "project": "VeraMesh",
+  "repository": "thebrazenbeard/vera-mesh",
+  "branch": "work/veramesh-rdc-replacement-v1-20260922",
+  "draft_pr": 25,
+  "checkpoint_date": "2026-09-22",
+  "primary": "docs/continuation/VERAMESH_CHAT_CONTINUATION_20260922_V1.md",
+  "backup": "docs/continuation/VERAMESH_CHAT_CONTINUATION_20260922_V1_BACKUP.md",
+  "last_fully_verified_code_head": "6869ab669e23f8b887ee219994efc93794ed8ca3",
+  "evidence_capture_commit": "77f96d52a0f381256a36e4a0ee5baabeecc2732e",
+  "evidence": [
+    "evidence/work-laptop-veraport-local-qualification-20260922.json",
+    "evidence/work-laptop-veraport-process-qualification-20260922.json",
+    "evidence/lappy-existing-veraport-inspection-20260922.json"
+  ],
+  "verified_workflows": {
+    "veraport_reference": {
+      "run_number": 381,
+      "conclusion": "success"
+    },
+    "verarelay_snapshot": {
+      "run_number": 82,
+      "conclusion": "success"
+    }
+  },
+  "lappy": {
+    "state": "PRE_EXISTING_RUNNING_INSTALLATION",
+    "service": "VeraPortAgent",
+    "service_state": "Running",
+    "start_mode": "Auto",
+    "account": "LocalSystem",
+    "veraport_bind": "127.0.0.1:17444",
+    "observed_tailscale_listener": "100.88.50.35:17444",
+    "process_exec_enabled": false,
+    "next_action": "READ_ONLY_RECONCILIATION_AND_SEMANTIC_QUALIFICATION_BEFORE_MIGRATION"
+  },
+  "next_frontiers": [
+    "fresh-check PR #25 exact head and CI",
+    "reconstruct/bind existing Lappy install to source without overwriting it",
+    "semantically qualify existing running Lappy VeraPort service",
+    "qualify Lappy Tailscale path from an independent controller side",
+    "design reversible migration only after existing runtime is understood",
+    "harden Go frame integer decoding/session expiry/data-plane probe",
+    "wire Go MCP/OAuth gateway into runnable Synology public executable"
+  ],
+  "protected_effects_not_authorized": [
+    "merge",
+    "production deployment",
+    "public endpoint creation",
+    "OAuth provider configuration",
+    "firewall or Tailscale mutation",
+    "credential rotation",
+    "controller-key transfer",
+    "ChatGPT plugin registration",
+    "destructive cleanup",
+    "replacement of Lappy current service"
+  ]
+}

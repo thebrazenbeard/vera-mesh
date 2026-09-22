@@ -329,6 +329,51 @@ class MirroredReadLaneRouter:
                 "no current endpoint for ranged read"
             )
 
+    async def call_read_operation(
+        self,
+        *,
+        operation: str,
+        lane_id: str,
+        fencing_token: int,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        if operation not in {
+            "fs.stat",
+            "fs.list_dir",
+            "fs.search",
+            "fs.search_content",
+        }:
+            raise ValueError(f"unsupported mirrored read operation: {operation}")
+        lane = self._require(lane_id, fencing_token)
+        async with lane.lock:
+            lane = self._require(lane_id, fencing_token)
+            last_transport_error = None
+            for endpoint in self._ordered_current_endpoints():
+                try:
+                    mirror_fence = await self._ensure_mirror(lane, endpoint)
+                    response = await self._request(
+                        endpoint,
+                        {
+                            "protocol_version": "veraport-v1",
+                            "request_id": (
+                                "logical-read-op-" + self.request_id_factory()
+                            ),
+                            "operation": operation,
+                            "lane_id": lane.lane_id,
+                            "fencing_token": mirror_fence,
+                            **body,
+                        },
+                    )
+                except StreamClosed as exc:
+                    last_transport_error = exc
+                    continue
+                return response
+            if last_transport_error is not None:
+                raise last_transport_error
+            raise LogicalReadLaneError(
+                f"no current endpoint for {operation}"
+            )
+
     def _require(self, lane_id: str, fencing_token: int) -> LogicalReadLane:
         lane = self._lanes.get(lane_id)
         if lane is None:

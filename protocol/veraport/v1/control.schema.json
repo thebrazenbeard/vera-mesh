@@ -4,40 +4,484 @@
   "title": "VeraPort V1 control request",
   "type": "object",
   "additionalProperties": false,
-  "required": ["protocol_version", "request_id", "operation"],
+  "required": [
+    "protocol_version",
+    "request_id",
+    "operation"
+  ],
   "properties": {
-    "protocol_version": {"const": "veraport-v1"},
-    "request_id": {"type": "string", "minLength": 1, "maxLength": 128},
-    "operation": {"enum": ["lane.open", "lane.renew", "lane.close", "lane.list", "fs.read_text", "fs.write_text", "process.exec"]},
-    "lane_id": {"type": "string", "minLength": 1, "maxLength": 128},
-    "task_id": {"type": "string", "minLength": 1, "maxLength": 256},
-    "fencing_token": {"type": "integer", "minimum": 1},
-    "ttl_s": {"type": "number", "exclusiveMinimum": 0, "maximum": 3600},
-    "capabilities": {"type": "array", "uniqueItems": true, "items": {"enum": ["fs.read", "fs.write", "process.exec"]}},
+    "protocol_version": {
+      "const": "veraport-v1"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "operation": {
+      "enum": [
+        "lane.open",
+        "lane.renew",
+        "lane.close",
+        "lane.list",
+        "fs.read_text",
+        "fs.read_bytes",
+        "fs.stat",
+        "fs.list_dir",
+        "fs.search",
+        "fs.write_text",
+        "process.exec",
+        "process.start",
+        "process.list",
+        "process.status",
+        "process.output",
+        "process.terminate",
+        "fs.append_text",
+        "fs.mkdir",
+        "fs.move",
+        "fs.replace_text",
+        "process.input",
+        "fs.search_content"
+      ]
+    },
+    "lane_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "fencing_token": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "ttl_s": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 3600
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "fs.read",
+          "fs.write",
+          "process.exec",
+          "process.inspect",
+          "process.control",
+          "process.interact"
+        ]
+      }
+    },
     "claims": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["key", "mode"],
+        "required": [
+          "key",
+          "mode"
+        ],
         "properties": {
-          "key": {"type": "string", "pattern": "^[a-z][a-z0-9._-]*:.+$"},
-          "mode": {"enum": ["read", "write"]}
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._-]*:.+$"
+          },
+          "mode": {
+            "enum": [
+              "read",
+              "write"
+            ]
+          }
         }
       }
     },
-    "path": {"type": "string", "minLength": 1},
-    "encoding": {"type": "string", "default": "utf-8"},
-    "content": {"type": "string"},
-    "argv": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
-    "cwd": {"type": "string", "minLength": 1},
-    "timeout_s": {"type": "number", "exclusiveMinimum": 0, "maximum": 3600}
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "encoding": {
+      "type": "string",
+      "default": "utf-8"
+    },
+    "content": {
+      "type": "string"
+    },
+    "offset": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "max_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 1048576
+    },
+    "expected_file_version": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "max_entries": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50000
+    },
+    "max_results": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 500
+    },
+    "max_depth": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 32
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1
+    },
+    "case_sensitive": {
+      "type": "boolean"
+    },
+    "argv": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timeout_s": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 3600
+    },
+    "max_runtime_s": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 3600
+    },
+    "process_handle": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "stdout_offset": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stderr_offset": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "grace_s": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 30
+    },
+    "parents": {
+      "type": "boolean"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "destination": {
+      "type": "string",
+      "minLength": 1
+    },
+    "old_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "new_string": {
+      "type": "string"
+    },
+    "expected_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "input_text": {
+      "type": "string"
+    },
+    "append_newline": {
+      "type": "boolean"
+    },
+    "file_pattern": {
+      "type": "string",
+      "minLength": 1
+    },
+    "max_total_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 16777216
+    }
   },
   "allOf": [
-    {"if": {"properties": {"operation": {"const": "lane.open"}}}, "then": {"required": ["lane_id", "task_id", "capabilities", "claims"]}},
-    {"if": {"properties": {"operation": {"enum": ["lane.renew", "lane.close"]}}}, "then": {"required": ["lane_id", "fencing_token"]}},
-    {"if": {"properties": {"operation": {"const": "fs.read_text"}}}, "then": {"required": ["lane_id", "fencing_token", "path"]}},
-    {"if": {"properties": {"operation": {"const": "fs.write_text"}}}, "then": {"required": ["lane_id", "fencing_token", "path", "content"]}},
-    {"if": {"properties": {"operation": {"const": "process.exec"}}}, "then": {"required": ["lane_id", "fencing_token", "argv", "cwd"]}}
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "lane.open"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "task_id",
+          "capabilities",
+          "claims"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "enum": [
+              "lane.renew",
+              "lane.close"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "enum": [
+              "fs.read_text",
+              "fs.read_bytes",
+              "fs.stat",
+              "fs.list_dir"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "path"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.search"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "root",
+          "query"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.write_text"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "path",
+          "content"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "enum": [
+              "process.exec",
+              "process.start"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "argv",
+          "cwd"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "process.list"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "enum": [
+              "process.status",
+              "process.output",
+              "process.terminate"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "process_handle"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.append_text"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "path",
+          "content"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.mkdir"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "path"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.move"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "source",
+          "destination"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.replace_text"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "path",
+          "old_string",
+          "new_string"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "process.input"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "process_handle",
+          "input_text"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.search_content"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "root",
+          "query"
+        ]
+      }
+    }
   ]
 }

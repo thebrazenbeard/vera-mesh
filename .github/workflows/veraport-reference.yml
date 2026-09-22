@@ -1,0 +1,192 @@
+name: VeraPort reference tests
+
+on:
+  push:
+    branches:
+      - "work/veramesh-rdc-replacement-v1-20260922"
+  pull_request:
+    paths:
+      - "reference/veraport_agent/**"
+      - "gateway/veramesh-go/**"
+      - ".github/workflows/veraport-reference.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  plugin-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Test portable plugin renderer
+        run: python -m unittest -v tools/test_render_veramesh_plugin.py
+
+  synology-connector-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate authorized Synology connector syntax
+        run: |
+          sh -n tools/synology_authorize_lappy_veramesh_connection.sh
+          sh -n tools/synology_connect_lappy_veraport.sh
+          sh -n tools/synology_probe_lappy_non_rdc_paths.sh
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("tools/synology_connect_lappy_veraport.sh").read_text(encoding="utf-8")
+          marker = "<<'PY'\n"
+          start = source.index(marker) + len(marker)
+          end = source.rindex("\nPY\n")
+          compile(source[start:end], "synology_connect_lappy_veraport.embedded.py", "exec")
+          PY
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install reference agent
+        run: python -m pip install -e "./reference/veraport_agent[test,mcp]"
+      - name: Compile
+        run: python -m compileall -q reference/veraport_agent/veraport_agent
+      - name: Build wheel
+        run: python -m pip wheel --no-deps "./reference/veraport_agent" --wheel-dir wheelhouse
+      - name: Test
+        run: python -m pytest -q reference/veraport_agent/tests
+
+  windows-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install reference agent with Windows service support
+        run: python -m pip install -e "./reference/veraport_agent[test,mcp,windows-service]"
+      - name: Compile
+        run: python -m compileall -q reference/veraport_agent/veraport_agent
+      - name: Build wheel
+        run: python -m pip wheel --no-deps "./reference/veraport_agent" --wheel-dir wheelhouse
+      - name: Test
+        run: python -m pytest -q reference/veraport_agent/tests
+      - name: Register and remove Windows service entrypoints
+        shell: pwsh
+        run: |
+          $veraInstalled = $false
+          $tunnelInstalled = $false
+          try {
+            veraport-service install
+            $veraInstalled = $true
+            sc.exe query VeraPortAgent
+            veramesh-tunnel-service install
+            $tunnelInstalled = $true
+            sc.exe query VeraMeshTunnelRuntime
+          }
+          finally {
+            if ($tunnelInstalled) {
+              veramesh-tunnel-service remove
+            }
+            if ($veraInstalled) {
+              veraport-service remove
+            }
+          }
+      - name: Full portable VeraPort service install and restart qualification
+        shell: pwsh
+        run: |
+          $allowed = Join-Path $env:RUNNER_TEMP "veramesh-allowed"
+          $export = Join-Path $env:RUNNER_TEMP "veramesh-controller-export"
+          New-Item -ItemType Directory -Path $allowed -Force | Out-Null
+          & .\tools\windows_install_veraport_service.ps1 `
+            -AllowedRoot $allowed `
+            -ControllerExportDir $export `
+            -Apply `
+            -RemoveAfterQualification
+
+  go-veraport-armv7:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway/veramesh-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.0"
+          cache: false
+      - name: Test Go VeraPort interoperability
+        run: go test ./...
+      - name: Cross-build DS216 ARMv7 gateway target without CGO
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: arm
+          GOARM: "7"
+        run: |
+          mkdir -p dist
+          VERSION="$(cat ../../packaging/synology-gateway/VERSION)"
+          go build -trimpath -ldflags "-buildid= -X main.buildVersion=$VERSION -X main.buildCommit=$GITHUB_SHA" -o dist/veramesh-gateway-linux-armv7 ./cmd/veramesh-gateway
+          file dist/veramesh-gateway-linux-armv7
+          sha256sum dist/veramesh-gateway-linux-armv7
+          go version -m dist/veramesh-gateway-linux-armv7 | tee dist/go-build-metadata.txt
+          grep -F "vcs.revision=$GITHUB_SHA" dist/go-build-metadata.txt
+      - name: Build and verify source-bound Synology gateway staging bundle
+        working-directory: .
+        run: |
+          python tools/build_synology_gateway_bundle.py \
+            --binary gateway/veramesh-go/dist/veramesh-gateway-linux-armv7 \
+            --commit "$GITHUB_SHA"
+          BUNDLE="$(find dist -maxdepth 1 -type f -name 'VeraMeshGateway-*-linux-armv7.tar.gz' -print -quit)"
+          test -n "$BUNDLE"
+          python tools/verify_synology_gateway_bundle.py "$BUNDLE" --expected-commit "$GITHUB_SHA"
+
+  verarelay-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify preserved VeraRelay archive identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="reference/verarelay_0_4_candidate/VERARELAY_LOCAL_SOURCE_20260919.tar.gz"
+          echo "65ed065d4ce86e547b580690b07ac8524168da4aa7f748d50c4396d3dd5e7a7a  $archive" | sha256sum -c -
+      - name: Extract exact VeraRelay snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/verarelay-snapshot"
+          tar -xzf reference/verarelay_0_4_candidate/VERARELAY_LOCAL_SOURCE_20260919.tar.gz -C "$RUNNER_TEMP/verarelay-snapshot"
+          test -f "$RUNNER_TEMP/verarelay-snapshot/package.json"
+      - name: Record Node runtime contract
+        shell: bash
+        run: |
+          node --version
+          node -e 'const p=require(process.env.RUNNER_TEMP+"/verarelay-snapshot/package.json"); console.log(JSON.stringify({name:p.name,version:p.version,engines:p.engines,scripts:p.scripts,dependencies:p.dependencies,devDependencies:p.devDependencies},null,2))'
+      - name: Record preserved VeraRelay SPK runtime binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/verarelay-snapshot"
+          for file in spk/INFO spk/scripts/start-stop-status; do
+            if [ -f "$root/$file" ]; then
+              echo "===== $file ====="
+              cat "$root/$file"
+            fi
+          done
+      - name: Run preserved VeraRelay tests
+        shell: bash
+        working-directory: ${{ runner.temp }}/verarelay-snapshot
+        run: npm test
+
