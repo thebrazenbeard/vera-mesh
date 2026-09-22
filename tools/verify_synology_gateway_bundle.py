@@ -46,6 +46,10 @@ def main() -> int:
         raise ValueError("wrong package identity")
     if manifest.get("source_commit") != args.expected_commit:
         raise ValueError("bundle source commit mismatch")
+    if manifest.get("binary_vcs_revision") != args.expected_commit:
+        raise ValueError("bundle binary VCS revision mismatch")
+    if manifest.get("binary_vcs_modified") is not False:
+        raise ValueError("bundle binary was not built from a clean source tree")
     if manifest.get("coexists_with") != "VeraMesh":
         raise ValueError("existing VeraMesh edge coexistence not declared")
     if manifest.get("listen") != "127.0.0.1:17446":

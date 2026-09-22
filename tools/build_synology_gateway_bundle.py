@@ -58,6 +58,33 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def binary_vcs_identity(path: Path) -> tuple[str, bool]:
+    try:
+        proc = subprocess.run(
+            ["go", "version", "-m", str(path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ValueError("Go build metadata unavailable for gateway binary") from exc
+
+    revision = ""
+    modified = None
+    for raw in proc.stdout.splitlines():
+        line = raw.strip()
+        if "vcs.revision=" in line:
+            revision = line.split("vcs.revision=", 1)[1].strip()
+        elif "vcs.modified=" in line:
+            value = line.split("vcs.modified=", 1)[1].strip().lower()
+            if value not in {"true", "false"}:
+                raise ValueError("invalid vcs.modified Go build metadata")
+            modified = value == "true"
+    if not revision or modified is None:
+        raise ValueError("gateway binary lacks complete Go VCS build metadata")
+    return revision, modified
+
+
 def tar_gz(files: list[tuple[str, bytes, int]]) -> bytes:
     raw = io.BytesIO()
     with gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=FIXED_MTIME, compresslevel=9) as gz:
@@ -94,6 +121,13 @@ def main() -> int:
     binary = regular_file_bytes(binary_path)
     if not binary:
         raise ValueError("gateway binary is empty")
+    binary_revision, binary_modified = binary_vcs_identity(binary_path)
+    if binary_revision != head:
+        raise ValueError(
+            f"gateway binary VCS revision {binary_revision} != exact Git HEAD {head}"
+        )
+    if binary_modified:
+        raise ValueError("gateway binary was built from a dirty Git worktree")
 
     files: list[tuple[str, bytes, int]] = [("bin/veramesh-gateway", binary, 0o755)]
     manifest_files = [{
@@ -120,6 +154,8 @@ def main() -> int:
         "version": version,
         "source_repository": "thebrazenbeard/vera-mesh",
         "source_commit": head,
+        "binary_vcs_revision": binary_revision,
+        "binary_vcs_modified": binary_modified,
         "target": {"goos": "linux", "goarch": "arm", "goarm": "7", "cgo": False},
         "listen": "127.0.0.1:17446",
         "coexists_with": "VeraMesh",
