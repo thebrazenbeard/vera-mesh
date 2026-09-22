@@ -47,14 +47,24 @@ Always registered:
 
 Conditionally registered only when controller policy explicitly includes the operation:
 - `fs_read_bytes`
+- `fs_stat`
+- `fs_list_dir`
+- `fs_search`
 - `fs_write_text`
+- `process_exec`
+- `process_start`
+- `process_list`
+- `process_status`
+- `process_output`
+- `process_terminate`
 
-The current Lappy production policy observed on 2026-09-20 has
-`allow_process_exec=false`. Process execution is therefore not exposed by this source cut.
+Process capabilities remain additionally gated by Lappy local policy. Tool discovery does
+not enable them. Managed process handles are opaque and bound to the owning lane/fence;
+lane close and application-session disconnect reap owned children.
 
-Process list/status/output/termination are not yet VeraPort V1 primitives. RDC-equivalence
-must remain FAIL/PARTIAL for those rows until explicit process-lifecycle protocol/runtime
-extensions exist and are independently reviewed.
+The current source also includes a transparent VeraRelay/VeraMesh live edge carrier.
+The edge forwards opaque bytes and does not terminate VeraPort TLS, parse VeraPort frames,
+or receive workstation credentials.
 
 ## ChatGPT product boundary
 
