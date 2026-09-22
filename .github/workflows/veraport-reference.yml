@@ -105,9 +105,19 @@ jobs:
           GOARM: "7"
         run: |
           mkdir -p dist
-          go build -trimpath -o dist/veramesh-gateway-linux-armv7 ./cmd/veramesh-gateway
+          VERSION="$(cat ../../packaging/synology-gateway/VERSION)"
+          go build -trimpath -ldflags "-buildid= -X main.buildVersion=$VERSION -X main.buildCommit=$GITHUB_SHA" -o dist/veramesh-gateway-linux-armv7 ./cmd/veramesh-gateway
           file dist/veramesh-gateway-linux-armv7
           sha256sum dist/veramesh-gateway-linux-armv7
+      - name: Build and verify source-bound Synology gateway staging bundle
+        working-directory: .
+        run: |
+          python tools/build_synology_gateway_bundle.py \
+            --binary gateway/veramesh-go/dist/veramesh-gateway-linux-armv7 \
+            --commit "$GITHUB_SHA"
+          BUNDLE="$(find dist -maxdepth 1 -type f -name 'VeraMeshGateway-*-linux-armv7.tar.gz' -print -quit)"
+          test -n "$BUNDLE"
+          python tools/verify_synology_gateway_bundle.py "$BUNDLE" --expected-commit "$GITHUB_SHA"
 
   verarelay-snapshot:
     runs-on: ubuntu-latest
