@@ -10,27 +10,49 @@ This checkpoint binds the current VeraMesh coordination frontier without perform
 - canonical `main`: `d3bbaa247797dce5f6a26e7006206f37cfef66fe`
 - current implementation successor: PR #12
 - PR #12 branch: `vera/veraport-chatgpt-mcp-v2-20260920`
-- PR #12 exact live head observed for this checkpoint: `9bffc57930587bf74a12657bbeaa913474ab5574`
+- PR #12 exact live head: `9bffc57930587bf74a12657bbeaa913474ab5574`
 - PR #12 remains stacked on PR #11; the repository is intentionally not represented as integrated on `main`.
+- current exact-head disposition: `CHANGES_REQUIRED` for inherited wire-bound and application-session lifecycle defects.
 
-PR #12's prose still names an earlier successor head `87f9be76d3fff35ba1bae7674d4af8957153ac6a`. That is provenance inside the PR body, not current head authority. Current head is the Git ref above.
+PR #12's prose still contains earlier successor-head provenance. Exact-head authority belongs to the current Git ref above.
 
 ## Parallel ownership
 
 ### VeraMesh source lane
 
-Owns source-level continuation from PR #12.
+PR #12 R4 materially closes Issue #17's two immediate source defects:
+- `max_inflight` capacity is acquired before another request frame is read and before handler-task creation;
+- ordinary `lane.list` / `fs.read_text` requests no longer enter the durable mutation ledger;
+- mutation IDs remain fail-closed under a fixed 100,000-record capacity with no automatic forgetting.
 
-Immediate runnable frontier: Issue #17, request-ledger growth and read-only persistence.
+These R4 changes still require independent exact-head execution and hostile review. Older 92-PASS evidence does not transfer to `9bffc579...`.
 
-Required direction:
-- read-only `lane.list`, `fs.read_text`, and route/data-plane probes must not create permanent durable idempotency rows absent an explicit bounded read-ledger requirement;
-- mutating operations retain durable replay/idempotency protection;
-- retention/compaction must not reopen old mutation IDs as new effects;
-- PENDING/ambiguous mutation evidence must remain fail-closed;
-- health must expose ledger/storage degradation before route failure.
+Two inherited source blockers remain before machine acceptance:
+
+1. Wire-safe reads / Issue #14 capability frontier:
+   - `LocalExecutor.max_read_bytes` and stream `max_frame_bytes` both default to 1 MiB;
+   - JSON wrapping plus `ensure_ascii=True` can expand a locally valid file beyond the response-frame ceiling;
+   - response-side `write_frame()` failure is not converted into a correlated bounded application response;
+   - source needs an end-to-end response-size contract or ranged/chunked reads plus hostile boundary/escaping/overflow tests.
+
+2. Application-session lifecycle / Issue #19:
+   - session end currently does not reap exact-session lanes;
+   - lane TTL is not clamped to remaining authenticated session lifetime;
+   - admission-time expiry does not itself reconcile already-admitted operations;
+   - disconnect/expiry must drain under bounded deadlines and reap only the exact session namespace without touching other sessions.
 
 No live state-database cleanup or runtime mutation is implied by source work.
+
+### Protocol foundation lane
+
+PR #1 remains at exact head `20b2a9b68c702d5913404b21c5bbea048f495e33`.
+
+Task 2 normative closures remain accepted at that subject, but three executable cross-field negatives remain assigned for isolated Task 3 closure:
+- recipient receipt `signer.principal != recipient_principal`;
+- recipient receipt `signature.key_id != signer.key_id`;
+- outer message field, especially `recipient_principal`, mismatching the corresponding `aad_binding`.
+
+This work must remain isolated from the VeraPort/MCP successor line.
 
 ### VCP control-plane lane
 
@@ -42,6 +64,17 @@ VCP remains the control/governance owner for these independent subjects:
 
 VeraMesh source must consume these as governance/control constraints rather than duplicate or silently widen them.
 
+### Review / execution lanes
+
+Durable Bus coordination is active from `bus/veramesh-coordinator-v1`.
+
+Current assignments:
+- BT2 Coordinator: independently execute PR #12 exact head `9bffc579...` with full VeraPort suite, focused R4 admission/ledger tests, compile gate, and exact working-tree evidence.
+- VCP: independently hostile-review PR #12 R4 admission/backpressure/idempotency/ledger semantics at exact head `9bffc579...`.
+- Vera: implement the three PR #1 Task 3 cross-field negative closures on an isolated successor.
+
+No exact-head PASS is inferred until the assigned return is durably bound and the reviewed head still matches.
+
 ### Protected-effect gates
 
 Issue #15 remains blocked on controller private-key custody or separately authorized safe rotation. No key generation, enrollment, trust mutation, ACL change, restart, or predecessor retirement is authorized here.
@@ -50,7 +83,7 @@ Issue #16 remains a ChatGPT product/workspace gate. Local MCP server readiness, 
 
 ## Route-health lane
 
-PR #9 @ `34d581a9ba601c5f674f4d55e6e2557aa36c8b63` remains an independent route-health/convergence contract stacked on the foundation. It establishes that handshake success and last-known-good do not establish current data-plane health. It should remain logically separate from the PR #12 controller implementation until an explicit composition is reviewed.
+PR #9 @ `34d581a9ba601c5f674f4d55e6e2557aa36c8b63` remains an independent route-health/convergence contract stacked on the foundation. It establishes that handshake success and last-known-good do not establish current data-plane health. It remains logically separate from PR #12 until an explicit composition is reviewed.
 
 ## Historical/source custody
 
@@ -59,18 +92,23 @@ PR #9 @ `34d581a9ba601c5f674f4d55e6e2557aa36c8b63` remains an independent route-
 - PR #8 @ `17065d427577b909c6dc6c66e778a2bf25881b6f`: Relay Vera recovery/source custody.
 - PR #11 @ `76510806a6bd832b5d0f1cdd7bc9439e068c9d03`: persistent ChatGPT MCP controller predecessor.
 - PR #12 @ `9bffc57930587bf74a12657bbeaa913474ab5574`: current controller repair successor.
+- PR #18: this non-canonical coordination checkpoint.
+- Issue #19: application-session teardown/lane-lifecycle source blocker.
 
 Closed/unmerged predecessors remain provenance and are not reopened merely to make the graph cosmetically linear.
 
 ## Coordination decision
 
 NOW:
-1. Continue source-only engineering on Issue #17 from PR #12 exact head.
-2. Preserve PR #9 as a parallel routing contract.
-3. Consume VCP #91/#96/#99 as control constraints.
-4. Keep Issues #15/#16 behind their explicit protected-effect gates.
+1. Keep PR #12 at `CHANGES_REQUIRED` until wire-bound read semantics and Issue #19 session lifecycle are closed.
+2. Continue independent exact-head R4 execution and hostile review so accepted R4 ledger/admission work is preserved.
+3. Continue PR #1 Task 3 cross-field negative closure independently.
+4. Preserve PR #9 as a parallel routing contract.
+5. Consume VCP #91/#96/#99 as control constraints.
+6. Keep Issues #15/#16 behind explicit protected-effect gates.
 
 NOT NOW:
+- machine/live-auth acceptance from PR #12;
 - merge to `main`;
 - controller rotation or credential generation;
 - service restart/deployment;
