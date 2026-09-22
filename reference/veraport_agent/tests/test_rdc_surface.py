@@ -149,7 +149,7 @@ async def test_process_handle_is_bound_to_lane_and_fence(tmp_path):
         "process.control",
     })
     lane_a = process_lane(registry, tmp_path, lane_id="a")
-    other = tmp_path / "other"
+    other = tmp_path.parent / (tmp_path.name + "-other")
     other.mkdir()
     lane_b = process_lane(registry, other, lane_id="b")
     surface = surface_for(
