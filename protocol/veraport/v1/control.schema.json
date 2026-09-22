@@ -35,7 +35,11 @@
         "process.list",
         "process.status",
         "process.output",
-        "process.terminate"
+        "process.terminate",
+        "fs.append_text",
+        "fs.mkdir",
+        "fs.move",
+        "fs.replace_text"
       ]
     },
     "lane_id": {
@@ -188,6 +192,29 @@
       "type": "number",
       "minimum": 0,
       "maximum": 30
+    },
+    "parents": {
+      "type": "boolean"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "destination": {
+      "type": "string",
+      "minLength": 1
+    },
+    "old_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "new_string": {
+      "type": "string"
+    },
+    "expected_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
     }
   },
   "allOf": [
@@ -333,6 +360,74 @@
           "lane_id",
           "fencing_token",
           "process_handle"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.append_text"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "path",
+          "content"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.mkdir"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "path"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.move"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "source",
+          "destination"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.replace_text"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "path",
+          "old_string",
+          "new_string"
         ]
       }
     }
