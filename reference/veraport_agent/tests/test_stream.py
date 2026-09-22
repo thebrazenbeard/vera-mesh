@@ -161,3 +161,50 @@ async def test_oversized_response_returns_correlated_bounded_error():
         await client.close()
         server.close()
         await server.wait_closed()
+
+
+
+@pytest.mark.asyncio
+async def test_unserializable_response_returns_correlated_error():
+    async def handler(request):
+        return {
+            "request_id": request["request_id"],
+            "ok": True,
+            "result": {"bad": object()},
+        }
+
+    server = await asyncio.start_server(
+        lambda reader, writer: serve_multiplexed(
+            reader,
+            writer,
+            handler,
+            max_frame_bytes=512,
+        ),
+        "127.0.0.1",
+        0,
+    )
+    port = server.sockets[0].getsockname()[1]
+    reader, writer = await asyncio.open_connection(
+        "127.0.0.1", port
+    )
+    client = MultiplexClient(
+        reader,
+        writer,
+        max_frame_bytes=512,
+        request_timeout_s=1.0,
+    )
+    try:
+        response = await client.request({
+            "request_id": "bad-response",
+            "operation": "lane.list",
+        })
+        assert response["request_id"] == "bad-response"
+        assert response["ok"] is False
+        assert (
+            response["error"]["code"]
+            == "RESPONSE_SERIALIZATION_ERROR"
+        )
+    finally:
+        await client.close()
+        server.close()
+        await server.wait_closed()
