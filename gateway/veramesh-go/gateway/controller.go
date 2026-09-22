@@ -12,12 +12,22 @@ import (
 	"github.com/thebrazenbeard/vera-mesh/gateway/veramesh-go/veraport"
 )
 
+type veraportSession interface {
+	Binding() veraport.SessionBinding
+	Request(context.Context, map[string]any) (map[string]any, error)
+	Close() error
+}
+
+type veraportDial func(context.Context, veraport.ClientConfig) (veraportSession, error)
+
 type Controller struct {
 	cfg   *Config
 	creds *veraport.ClientCredentials
+	dial  veraportDial
+	now   func() time.Time
 
 	mu       sync.Mutex
-	client   *veraport.Client
+	client   veraportSession
 	endpoint *Endpoint
 }
 
@@ -29,21 +39,33 @@ func NewController(cfg *Config) (*Controller, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Controller{cfg: cfg, creds: creds}, nil
+	return &Controller{
+		cfg:   cfg,
+		creds: creds,
+		dial: func(ctx context.Context, cfg veraport.ClientConfig) (veraportSession, error) {
+			return veraport.Dial(ctx, cfg)
+		},
+		now: time.Now,
+	}, nil
 }
 
 func (c *Controller) Config() *Config { return c.cfg }
 
-func (c *Controller) ensureClient(ctx context.Context) (*veraport.Client, *Endpoint, error) {
+func (c *Controller) ensureClient(ctx context.Context) (veraportSession, *Endpoint, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.client != nil && c.endpoint != nil {
-		return c.client, c.endpoint, nil
+		if c.now().UnixMilli() < c.client.Binding().ExpiresAtMS {
+			return c.client, c.endpoint, nil
+		}
+		_ = c.client.Close()
+		c.client = nil
+		c.endpoint = nil
 	}
 	var failures []error
 	for i := range c.cfg.Endpoints {
 		ep := &c.cfg.Endpoints[i]
-		client, err := veraport.Dial(ctx, veraport.ClientConfig{
+		client, err := c.dial(ctx, veraport.ClientConfig{
 			Host:                  ep.Host,
 			Port:                  ep.Port,
 			ServerName:            ep.ServerHostname,
@@ -55,16 +77,45 @@ func (c *Controller) ensureClient(ctx context.Context) (*veraport.Client, *Endpo
 			RequestTimeout:        c.cfg.RequestTimeout(),
 		})
 		if err == nil {
-			c.client = client
-			c.endpoint = ep
-			return client, ep, nil
+			if err := qualifyDataPlane(ctx, client); err == nil {
+				c.client = client
+				c.endpoint = ep
+				return client, ep, nil
+			} else {
+				_ = client.Close()
+				failures = append(failures, fmt.Errorf("%s data-plane qualification: %w", ep.EndpointID, err))
+				continue
+			}
 		}
 		failures = append(failures, fmt.Errorf("%s: %w", ep.EndpointID, err))
 	}
 	return nil, nil, errors.Join(failures...)
 }
 
-func (c *Controller) invalidate(client *veraport.Client) {
+func qualifyDataPlane(ctx context.Context, client veraportSession) error {
+	response, err := client.Request(ctx, map[string]any{
+		"protocol_version": veraport.ProtocolVersion,
+		"request_id":       newID("probe"),
+		"operation":        "lane.list",
+	})
+	if err != nil {
+		return err
+	}
+	if ok, _ := response["ok"].(bool); !ok {
+		if remote, valid := response["error"].(map[string]any); valid {
+			code, _ := remote["code"].(string)
+			message, _ := remote["message"].(string)
+			return fmt.Errorf("lane.list rejected: %s: %s", code, message)
+		}
+		return errors.New("lane.list rejected")
+	}
+	if _, ok := response["result"].(map[string]any); !ok {
+		return errors.New("lane.list returned no result object")
+	}
+	return nil
+}
+
+func (c *Controller) invalidate(client veraportSession) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.client == client {
@@ -134,7 +185,7 @@ func (c *Controller) MachineInfo(ctx context.Context) map[string]any {
 	info["workstation_principal"] = binding.WorkstationPrincipal
 	info["controller_principal"] = binding.ControllerPrincipal
 	info["session_expires_at_ms"] = binding.ExpiresAtMS
-	info["observed_at_ms"] = time.Now().UnixMilli()
+	info["observed_at_ms"] = c.now().UnixMilli()
 	return info
 }
 
