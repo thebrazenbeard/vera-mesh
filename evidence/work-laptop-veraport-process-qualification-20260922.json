@@ -1,0 +1,55 @@
+{
+  "schema": "VERAPORT_WORK_LAPTOP_PROCESS_QUALIFICATION_V1",
+  "observed_at_date": "2026-09-22",
+  "evidence_origin": "live user-run qualification output from work laptop",
+  "qualified_source_sha": "494914f97ad8d6e261e246e641d45e25f3394787",
+  "bootstrap_source_commit": "3a0683d38cb8ea6cfc468b4d3d846b052e16589d",
+  "result": "PASS",
+  "scope": "ephemeral loopback VeraPort TLS/application-auth process.exec qualification; no service install",
+  "host_observation": {
+    "hostname": "MT-262029",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "portable_python": "3.11.9"
+  },
+  "identity": {
+    "controller_principal": "controller:b4ae95e6bd199c280d8dacf1dead6de7b3695db90f286947dbeaaca9e0f8b496",
+    "workstation_principal": "workstation:640e87b601077b5fd28ce2bcc98f01852be89a0c194493f61f2ae98ee9d0e1ee"
+  },
+  "path": {
+    "mode": "DIRECT_STREAM",
+    "selected_path_id": "local-qualification",
+    "authenticated": true,
+    "data_plane_verified": true,
+    "granted_capabilities": [
+      "process.exec"
+    ]
+  },
+  "process": {
+    "argv_vector": true,
+    "cwd_claim": "cwd:C:/Users/psims/AppData/Local/Temp/VeraMesh-VeraPort-Qualification-c_5uutds/allowed",
+    "lane_opened": true,
+    "lane_closed": true,
+    "returncode": 0,
+    "shell_flag": false,
+    "stdout_token_match": true,
+    "stdout_truncated": false,
+    "stderr_truncated": false
+  },
+  "effects": {
+    "firewall_changed": false,
+    "persistent_identity_created": false,
+    "process_execution_enabled": true,
+    "programdata_written": false,
+    "windows_service_installed": false
+  },
+  "elapsed_ms": 393.574,
+  "claim_ceiling": [
+    "Qualifies only the exact source SHA named above.",
+    "Qualifies ephemeral loopback TLS/application-auth process.exec behavior on the observed work laptop.",
+    "Qualifies argv-vector execution, process output capture, explicit cwd claim, and clean lane closure.",
+    "Does not qualify managed long-running process start/input/output lifecycle.",
+    "Does not qualify Windows service installation or restart persistence.",
+    "Does not qualify non-loopback or remote connectivity.",
+    "Does not qualify Synology gateway, Go gateway, VeraRelay execution, public plugin routing, or phone end-to-end behavior."
+  ]
+}
