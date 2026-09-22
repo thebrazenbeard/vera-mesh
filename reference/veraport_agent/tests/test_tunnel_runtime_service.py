@@ -21,6 +21,7 @@ def config(tmp_path: Path) -> trs.TunnelRuntimeServiceConfig:
     mcp = tmp_path / "veraport-mcp-stdio.exe"
     key = tmp_path / "runtime.key"
     controller = tmp_path / "controller.json"
+    mcp = tmp_path / "veraport-mcp-stdio.exe"
     profiles = tmp_path / "profiles"
     state = tmp_path / "state"
     tunnel.write_text("binary-placeholder", encoding="utf-8")
