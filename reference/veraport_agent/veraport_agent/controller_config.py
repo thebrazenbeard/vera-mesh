@@ -96,6 +96,7 @@ class ControllerConfig:
 
         required_caps = {
             "fs.read_text": "fs.read",
+            "fs.read_bytes": "fs.read",
             "fs.write_text": "fs.write",
             "process.exec": "process.exec",
         }
