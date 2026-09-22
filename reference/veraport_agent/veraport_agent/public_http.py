@@ -3,7 +3,6 @@ from __future__ import annotations
 import ipaddress
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -82,6 +81,34 @@ class PublicGatewayHTTPConfig:
             )
         if not self.resource_name.strip():
             raise PublicGatewayConfigError("resource_name is required")
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "PublicGatewayHTTPConfig":
+        if not isinstance(value, dict):
+            raise PublicGatewayConfigError("config must be an object")
+        if value.get("schema") != "VERAMESH_PUBLIC_GATEWAY_HTTP_V1":
+            raise PublicGatewayConfigError("wrong public gateway config schema")
+        allowed_hosts = value.get("allowed_hosts")
+        if not isinstance(allowed_hosts, list) or not allowed_hosts:
+            raise PublicGatewayConfigError(
+                "allowed_hosts must be a non-empty list"
+            )
+        allowed_origins = value.get("allowed_origins", [])
+        if not isinstance(allowed_origins, list):
+            raise PublicGatewayConfigError(
+                "allowed_origins must be a list"
+            )
+        return cls(
+            public_mcp_url=str(value.get("public_mcp_url", "")),
+            issuer_url=str(value.get("issuer_url", "")),
+            allowed_hosts=tuple(str(item) for item in allowed_hosts),
+            allowed_origins=tuple(str(item) for item in allowed_origins),
+            bind_host=str(value.get("bind_host", "127.0.0.1")),
+            bind_port=int(value.get("bind_port", 17446)),
+            resource_name=str(
+                value.get("resource_name", "VeraMesh Workstation")
+            ),
+        )
 
     @staticmethod
     def _https_url(value: str, name: str):
