@@ -183,6 +183,18 @@ class ControllerRuntime:
             return await self._read_router.read_text(**kwargs)
         return await self.gateway.read_text(**kwargs)
 
+    async def read_bytes(self, **kwargs: Any) -> dict[str, Any]:
+        await self.ensure_started()
+        lane_id = kwargs.get("lane_id")
+        fencing_token = kwargs.get("fencing_token")
+        if (
+            isinstance(lane_id, str)
+            and type(fencing_token) is int
+            and self._read_router.owns(lane_id, fencing_token)
+        ):
+            return await self._read_router.read_bytes(**kwargs)
+        return await self.gateway.read_bytes(**kwargs)
+
     async def write_text(self, **kwargs: Any) -> dict[str, Any]:
         await self.ensure_started()
         return await self.gateway.write_text(**kwargs)
