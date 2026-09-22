@@ -7,7 +7,10 @@ Status: SOURCE WORKING / NOT INSTALLED / NOT CURRENT CHATGPT ROUTE
 Replace the practical Remote Desktop Commander workflow with a zero-new-spend,
 source-controlled VeraMesh path while preserving a stricter authority model:
 
-`ChatGPT/App -> remote MCP surface -> VeraPort controller -> DIRECT_STREAM or VeraMesh Python SPK EDGE_STREAM -> Lappy VeraPort service`
+`ChatGPT phone/web -> public OAuth MCP on Synology -> VeraPort controller -> private VeraPort stream -> Lappy service`
+
+The Synology Python SPK remains the always-on execution substrate and can also provide
+an alternate `EDGE_STREAM` proxy. VeraRelay Node.js remains a separate durable fallback.
 
 The chat being open on Lappy is intentionally irrelevant. The workstation bridge is a
 persistent Windows service.
@@ -95,10 +98,13 @@ fencing, process ownership, or local workstation policy.
 
 ## ChatGPT route constraint
 
-ChatGPT cannot directly consume a local MCP listener. The source MCP adapter remains
-loopback-only by default. A supported remote MCP route or Secure MCP Tunnel is a separate
-installation/runtime effect. Source presence does not imply plugin registration or a
-current ChatGPT route.
+The primary Plus/phone route is a published plugin backed by a stable public HTTPS MCP
+resource server on Synology. The source listener remains loopback-only and must sit
+behind a reviewed HTTPS reverse proxy. OAuth authorization, endpoint publication,
+plugin submission, and live ChatGPT routing are separate effects.
+
+Secure MCP Tunnel remains an optional source-supported route for products/plans where
+full custom MCP access is available; it is not the primary Plus cutover.
 
 ## Exact current qualification ceiling
 
