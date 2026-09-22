@@ -50,7 +50,8 @@ func main() {
 	listen := flag.String("listen", "127.0.0.1:17446", "loopback HTTP listen address behind the reviewed HTTPS reverse proxy")
 	controllerConfig := flag.String("controller-config", "", "path to VeraPort controller config")
 	oauthConfig := flag.String("oauth-config", "", "path to OAuth introspection config")
-	checkConfig := flag.Bool("check-config", false, "validate configuration and exit without listening or dialing VeraPort")
+	workbridgeConfig := flag.String("workbridge-config", "", "optional path to VERAMESH_WORKBRIDGE_UPSTREAM_V1 config")
+	checkConfig := flag.Bool("check-config", false, "validate configuration and exit without listening or dialing VeraPort/WorkBridge")
 	flag.Parse()
 
 	if *version {
@@ -89,13 +90,45 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	public, err := mesh.NewPublicHTTPServer(controller, oauthCfg, verifier.Verify)
+
+	var wbCfg *mesh.WorkBridgeUpstreamConfig
+	if *workbridgeConfig != "" {
+		loaded, err := mesh.LoadWorkBridgeUpstreamConfig(*workbridgeConfig)
+		if err != nil {
+			log.Fatal(err)
+		}
+		wbCfg = &loaded
+	}
+
+	if *checkConfig {
+		public, err := mesh.NewPublicHTTPServer(controller, oauthCfg, verifier.Verify)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if wbCfg != nil {
+			fmt.Printf("VeraMesh gateway configuration valid: resource=%s listen=%s workbridge=%s (not dialed)\n", public.Resource, *listen, wbCfg.Endpoint)
+		} else {
+			fmt.Printf("VeraMesh gateway configuration valid: resource=%s listen=%s\n", public.Resource, *listen)
+		}
+		return
+	}
+
+	var workbridge *mesh.WorkBridgeClient
+	if wbCfg != nil {
+		startupTimeout := time.Duration(wbCfg.TimeoutSeconds*float64(time.Second)) + 5*time.Second
+		startupCtx, cancel := context.WithTimeout(context.Background(), startupTimeout)
+		workbridge, err = mesh.NewWorkBridgeClient(startupCtx, *wbCfg)
+		cancel()
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer workbridge.Close()
+		log.Printf("WorkBridge upstream qualified at %s", wbCfg.Endpoint)
+	}
+
+	public, err := mesh.NewPublicHTTPServerWithWorkBridge(controller, oauthCfg, verifier.Verify, workbridge)
 	if err != nil {
 		log.Fatal(err)
-	}
-	if *checkConfig {
-		fmt.Printf("VeraMesh gateway configuration valid: resource=%s listen=%s\n", public.Resource, *listen)
-		return
 	}
 
 	httpServer := &http.Server{
