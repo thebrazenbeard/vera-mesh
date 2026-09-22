@@ -36,6 +36,7 @@ MUTATING_OPERATIONS = frozenset({
     "fs.replace_text",
     "process.exec",
     "process.start",
+    "process.input",
     "process.terminate",
 })
 ALL_OPERATIONS = READ_OPERATIONS | MUTATING_OPERATIONS
@@ -68,6 +69,7 @@ TOOL_DESCRIPTORS = (
     ToolDescriptor("list_processes", "process.list", False),
     ToolDescriptor("process_status", "process.status", False),
     ToolDescriptor("process_output", "process.output", False),
+    ToolDescriptor("process_input", "process.input", True),
     ToolDescriptor("terminate_process", "process.terminate", True),
 )
 
