@@ -54,8 +54,9 @@ Response fields:
 - `size_bytes`
 - `file_version`
 
-The reference workstation default `max_read_chunk_bytes` is 262,144 bytes. Base64 is
-used so arbitrary file bytes do not depend on text encoding boundaries.
+The reference workstation default `max_read_chunk_bytes` is the smaller of 262,144 bytes
+and the configured `max_read_bytes` ceiling. Base64 is used so arbitrary file bytes do
+not depend on text encoding boundaries.
 
 Every chunk request re-runs canonical root resolution, lane/fencing authorization, and
 the `fs.read` resource claim check.
