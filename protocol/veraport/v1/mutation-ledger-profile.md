@@ -21,6 +21,10 @@ Only mutation-class operations use the durable request/idempotency ledger:
 - `lane.renew`
 - `lane.close`
 - `fs.write_text`
+- `fs.append_text`
+- `fs.mkdir`
+- `fs.move`
+- `fs.replace_text`
 - `process.exec`
 - `process.start`
 - `process.terminate`
