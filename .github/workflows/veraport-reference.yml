@@ -97,6 +97,17 @@ jobs:
         run: |
           node --version
           node -e 'const p=require(process.env.RUNNER_TEMP+"/verarelay-snapshot/package.json"); console.log(JSON.stringify({name:p.name,version:p.version,engines:p.engines,scripts:p.scripts,dependencies:p.dependencies,devDependencies:p.devDependencies},null,2))'
+      - name: Record preserved VeraRelay SPK runtime binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/verarelay-snapshot"
+          for file in spk/INFO spk/scripts/start-stop-status; do
+            if [ -f "$root/$file" ]; then
+              echo "===== $file ====="
+              cat "$root/$file"
+            fi
+          done
       - name: Run preserved VeraRelay tests
         shell: bash
         working-directory: ${{ runner.temp }}/verarelay-snapshot
