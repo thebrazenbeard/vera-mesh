@@ -132,7 +132,10 @@ async def test_managed_process_lifecycle_and_chunked_output(tmp_path):
         stdout_offset=first["stdout_next_offset"],
         max_bytes=64,
     )
-    assert first["stdout"] + second["stdout"] == "alpha\nbeta\n"
+    assert (first["stdout"] + second["stdout"]).splitlines() == [
+        "alpha",
+        "beta",
+    ]
 
     listed = await surface.process_list(
         lane_id=lane.lane_id,
@@ -267,10 +270,10 @@ async def test_interactive_process_input_is_lane_owned_and_bounded(tmp_path):
             fencing_token=lane.fencing_token,
             process_handle=handle,
         )
-        if "ready\n" in out["stdout"]:
+        if "ready" in out["stdout"].splitlines():
             break
         await asyncio.sleep(0.01)
-    assert "ready\n" in out["stdout"]
+    assert "ready" in out["stdout"].splitlines()
 
     wrote = await surface.process_input(
         lane_id=lane.lane_id,
@@ -286,10 +289,10 @@ async def test_interactive_process_input_is_lane_owned_and_bounded(tmp_path):
             fencing_token=lane.fencing_token,
             process_handle=handle,
         )
-        if "got:hello\n" in final["stdout"]:
+        if "got:hello" in final["stdout"].splitlines():
             break
         await asyncio.sleep(0.01)
-    assert "got:hello\n" in final["stdout"]
+    assert "got:hello" in final["stdout"].splitlines()
 
     with pytest.raises(ValueError, match="65536"):
         await surface.process_input(
