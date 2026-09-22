@@ -14,6 +14,8 @@ VeraPort is direct-first:
 
 See `synchrony-profile.md` and `path.schema.json`.
 
+Wire-safe ranged file reads and oversized-response behavior are defined in `wire-safe-read-profile.md`.
+
 VeraRelay is not required to remain a separately named mandatory hop. Its durable mechanisms may become a VeraMesh edge/relay capability set. Hot interactive traffic should not be queued merely because durable relay storage exists.
 
 ## Hot-session authentication
@@ -34,6 +36,7 @@ Initial operations:
 - `lane.close`
 - `lane.list`
 - `fs.read_text`
+- `fs.read_bytes`
 - `fs.write_text`
 - `process.exec`
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 from contextlib import asynccontextmanager
@@ -209,6 +210,31 @@ class VeraPortAgent:
                     ),
                 )
                 return {"content": content}
+
+        if operation == "fs.read_bytes":
+            lane_id = str(request["lane_id"])
+            async with self._lane_operation(lane_id):
+                chunk = await self.executor.read_bytes_range(
+                    lane_id=lane_id,
+                    fencing_token=int(request["fencing_token"]),
+                    path=str(request["path"]),
+                    offset=request.get("offset", 0),
+                    max_bytes=request.get("max_bytes"),
+                    expected_file_version=request.get(
+                        "expected_file_version"
+                    ),
+                )
+                return {
+                    "content_base64": base64.b64encode(
+                        chunk.content
+                    ).decode("ascii"),
+                    "offset": chunk.offset,
+                    "bytes_read": chunk.bytes_read,
+                    "next_offset": chunk.next_offset,
+                    "eof": chunk.eof,
+                    "size_bytes": chunk.size_bytes,
+                    "file_version": chunk.file_version,
+                }
 
         if operation == "fs.write_text":
             lane_id = str(request["lane_id"])

@@ -80,6 +80,24 @@ class VeraPortMCPFacade:
             encoding=encoding,
         )
 
+    async def fs_read_bytes(
+        self,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        offset: int = 0,
+        max_bytes: int | None = None,
+        expected_file_version: str | None = None,
+    ) -> dict[str, Any]:
+        return await self.runtime.read_bytes(
+            lane_id=lane_id,
+            fencing_token=fencing_token,
+            path=path,
+            offset=offset,
+            max_bytes=max_bytes,
+            expected_file_version=expected_file_version,
+        )
+
     async def fs_write_text(
         self,
         lane_id: str,
@@ -181,6 +199,27 @@ def build_mcp_server(runtime: ControllerRuntime):
             path,
             encoding,
         )
+
+    if "fs.read_bytes" in runtime.config.gateway_operations:
+
+        @mcp.tool()
+        async def fs_read_bytes(
+            lane_id: str,
+            fencing_token: int,
+            path: str,
+            offset: int = 0,
+            max_bytes: int | None = None,
+            expected_file_version: str | None = None,
+        ) -> dict[str, Any]:
+            """Read a bounded byte range under existing fs.read authority."""
+            return await facade.fs_read_bytes(
+                lane_id,
+                fencing_token,
+                path,
+                offset,
+                max_bytes,
+                expected_file_version,
+            )
 
     if "fs.write_text" in runtime.config.gateway_operations:
 
