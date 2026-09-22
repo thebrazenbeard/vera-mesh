@@ -31,6 +31,7 @@ Only mutation-class operations use the durable request/idempotency ledger:
 - `fs.replace_text`
 - `process.exec`
 - `process.start`
+- `process.input`
 - `process.terminate`
 
 Ordinary `lane.list` probes and `fs.read_text` operations do not create durable request
