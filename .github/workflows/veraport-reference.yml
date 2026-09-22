@@ -1,0 +1,33 @@
+name: VeraPort reference tests
+
+on:
+  push:
+    branches:
+      - "work/veramesh-rdc-replacement-v1-20260922"
+  pull_request:
+    paths:
+      - "reference/veraport_agent/**"
+      - ".github/workflows/veraport-reference.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install reference agent
+        run: python -m pip install -e "./reference/veraport_agent[test]"
+      - name: Compile
+        run: python -m compileall -q reference/veraport_agent/veraport_agent
+      - name: Test
+        run: python -m pytest -q reference/veraport_agent/tests
