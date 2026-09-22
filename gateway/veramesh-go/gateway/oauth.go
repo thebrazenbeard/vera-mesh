@@ -27,6 +27,27 @@ type IntrospectionConfig struct {
 	TimeoutS          float64 `json:"timeout_s"`
 }
 
+func LoadIntrospectionConfig(filename string) (IntrospectionConfig, error) {
+	raw, err := os.ReadFile(filename)
+	if err != nil {
+		return IntrospectionConfig{}, fmt.Errorf("read OAuth introspection config: %w", err)
+	}
+	var cfg IntrospectionConfig
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cfg); err != nil {
+		return IntrospectionConfig{}, fmt.Errorf("decode OAuth introspection config: %w", err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		return IntrospectionConfig{}, errors.New("OAuth introspection config contains trailing JSON")
+	}
+	if err := cfg.Validate(); err != nil {
+		return IntrospectionConfig{}, err
+	}
+	return cfg, nil
+}
+
 func (c *IntrospectionConfig) Validate() error {
 	if c.Schema != "VERAMESH_OAUTH_INTROSPECTION_V1" {
 		return errors.New("wrong introspection config schema")

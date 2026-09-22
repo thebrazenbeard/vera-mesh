@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"sync"
@@ -208,7 +209,8 @@ func decodeArguments(raw json.RawMessage) (map[string]any, error) {
 	if value == nil {
 		return map[string]any{}, nil
 	}
-	if dec.More() {
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
 		return nil, errors.New("arguments contain trailing JSON")
 	}
 	return value, nil
