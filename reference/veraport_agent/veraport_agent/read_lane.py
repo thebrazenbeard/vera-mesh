@@ -285,6 +285,49 @@ class MirroredReadLaneRouter:
                 raise last_transport_error
             raise LogicalReadLaneError("no current endpoint for read")
 
+    async def read_bytes_chunk(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        offset: int = 0,
+        max_bytes: int = 65_536,
+    ) -> dict[str, Any]:
+        lane = self._require(lane_id, fencing_token)
+        async with lane.lock:
+            lane = self._require(lane_id, fencing_token)
+            last_transport_error = None
+            for endpoint in self._ordered_current_endpoints():
+                try:
+                    mirror_fence = await self._ensure_mirror(
+                        lane, endpoint
+                    )
+                    response = await self._request(
+                        endpoint,
+                        {
+                            "protocol_version": "veraport-v1",
+                            "request_id":
+                                "logical-read-chunk-"
+                                + self.request_id_factory(),
+                            "operation": "fs.read_bytes_chunk",
+                            "lane_id": lane.lane_id,
+                            "fencing_token": mirror_fence,
+                            "path": path,
+                            "offset": offset,
+                            "max_bytes": max_bytes,
+                        },
+                    )
+                except StreamClosed as exc:
+                    last_transport_error = exc
+                    continue
+                return response
+            if last_transport_error is not None:
+                raise last_transport_error
+            raise LogicalReadLaneError(
+                "no current endpoint for ranged read"
+            )
+
     def _require(self, lane_id: str, fencing_token: int) -> LogicalReadLane:
         lane = self._lanes.get(lane_id)
         if lane is None:
