@@ -74,7 +74,11 @@ def prepare_host(
     try:
         capabilities = {"fs.read", "fs.write"}
         if config.allow_process_exec:
-            capabilities.add("process.exec")
+            capabilities.update({
+                "process.exec",
+                "process.inspect",
+                "process.control",
+            })
         registry = deps.lane_registry_cls(
             capabilities,
             max_lanes=config.max_lanes,
