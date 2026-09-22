@@ -222,6 +222,18 @@ async def serve_multiplexed(
                         ),
                     },
                 }
+            except StreamProtocolError:
+                response = {
+                    "protocol_version": "veraport-v1",
+                    "request_id": request.get("request_id"),
+                    "ok": False,
+                    "error": {
+                        "code": "RESPONSE_SERIALIZATION_ERROR",
+                        "message": (
+                            "handler response is not JSON-serializable"
+                        ),
+                    },
+                }
 
             try:
                 async with write_lock:
