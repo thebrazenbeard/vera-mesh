@@ -71,6 +71,17 @@ class SessionBoundHandler:
         response = await self.agent.handle(internal)
         return self._externalize(response, external_request_id)
 
+    async def close_session(self) -> dict[str, Any]:
+        close = getattr(self.agent, "close_session", None)
+        if close is None:
+            return {
+                "session_id": self.binding.session_id,
+                "closed_lanes": [],
+                "unresolved_lanes": [],
+                "drained": True,
+            }
+        return await close(self.binding.session_id)
+
     def _externalize(self, response: dict[str, Any], external_request_id: str) -> dict[str, Any]:
         result = dict(response)
         result["request_id"] = external_request_id
