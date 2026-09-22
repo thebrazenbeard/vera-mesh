@@ -1,0 +1,13 @@
+{
+  "schema": "VERAMESH_TUNNEL_RUNTIME_SERVICE_V1",
+  "tunnel_client": "C:\\Program Files\\VeraMesh\\tunnel-client.exe",
+  "alias": "veramesh-lappy",
+  "tunnel_id": "tunnel_REPLACE_WITH_EXISTING_ID",
+  "runtime_api_key_file": "C:\\ProgramData\\VeraMesh\\secrets\\tunnel-runtime.key",
+  "controller_config": "C:\\ProgramData\\VeraMesh\\controller.json",
+  "mcp_command": "\"C:\\Program Files\\Python311\\Scripts\\veraport-mcp-stdio.exe\"",
+  "profile_dir": "C:\\ProgramData\\VeraMesh\\tunnel-profiles",
+  "state_dir": "C:\\ProgramData\\VeraMesh\\tunnel-state",
+  "status_interval_s": 5,
+  "command_timeout_s": 60
+}
