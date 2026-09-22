@@ -25,6 +25,15 @@ func NewPublicHTTPServer(
 	oauthConfig IntrospectionConfig,
 	verifier auth.TokenVerifier,
 ) (*PublicHTTPServer, error) {
+	return NewPublicHTTPServerWithWorkBridge(controller, oauthConfig, verifier, nil)
+}
+
+func NewPublicHTTPServerWithWorkBridge(
+	controller *Controller,
+	oauthConfig IntrospectionConfig,
+	verifier auth.TokenVerifier,
+	workbridge *WorkBridgeClient,
+) (*PublicHTTPServer, error) {
 	if controller == nil {
 		return nil, errors.New("controller is required")
 	}
@@ -53,14 +62,14 @@ func NewPublicHTTPServer(
 	}
 
 	metadataURL := resourceURL.Scheme + "://" + resourceURL.Host + "/.well-known/oauth-protected-resource"
-	gateway, err := NewMCPGateway(controller, oauthConfig.ExpectedIssuer, metadataURL)
+	gateway, err := NewMCPGatewayWithWorkBridge(controller, oauthConfig.ExpectedIssuer, metadataURL, workbridge)
 	if err != nil {
 		return nil, err
 	}
 	metadata := &oauthex.ProtectedResourceMetadata{
 		Resource:             oauthConfig.ExpectedResource,
 		AuthorizationServers: []string{oauthConfig.ExpectedIssuer},
-		ScopesSupported:      supportedPublicScopes(controller.Config()),
+		ScopesSupported:      gateway.SupportedScopes(),
 		BearerMethodsSupported: []string{"header"},
 		ResourceName:         "VeraMesh Public Workstation Gateway",
 	}

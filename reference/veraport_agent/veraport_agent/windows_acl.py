@@ -203,3 +203,40 @@ def validate_service_materials(config_path: str | Path, config) -> None:
         validate_private_directory(directory)
     for path in files:
         validate_private_file(path)
+
+
+def harden_controller_materials(config_path: str | Path, config) -> None:
+    """Protect LocalSystem controller/MCP identity and trust material."""
+    config_path = Path(config_path)
+    files = (
+        config_path,
+        config.controller_key,
+        config.tls_ca,
+        config.workstation_public_key,
+    )
+    private_dirs = {
+        config_path.parent,
+        *(Path(path).parent for path in files),
+    }
+    for directory in sorted(private_dirs, key=lambda p: len(str(p))):
+        harden_private_directory(directory)
+    for path in files:
+        harden_private_file(path)
+
+
+def validate_controller_materials(config_path: str | Path, config) -> None:
+    config_path = Path(config_path)
+    files = (
+        config_path,
+        config.controller_key,
+        config.tls_ca,
+        config.workstation_public_key,
+    )
+    private_dirs = {
+        config_path.parent,
+        *(Path(path).parent for path in files),
+    }
+    for directory in private_dirs:
+        validate_private_directory(directory)
+    for path in files:
+        validate_private_file(path)
