@@ -6,6 +6,7 @@ from veraport_agent.stream import (
     FrameTooLarge,
     MultiplexClient,
     StreamProtocolError,
+    encode_frame_payload,
     serve_multiplexed,
     write_frame,
 )
@@ -97,3 +98,66 @@ async def test_frame_limit_rejects_large_write():
 
     with pytest.raises(FrameTooLarge):
         await write_frame(DummyWriter(), {"x": "a" * 100}, max_frame_bytes=20)
+
+
+
+def test_encoded_frame_limit_counts_json_expansion_exactly():
+    value = {"content": "\u2603\"\\\n"}
+    raw = encode_frame_payload(value, max_frame_bytes=10_000)
+    assert len(raw) > len(value["content"].encode("utf-8"))
+
+    with pytest.raises(FrameTooLarge):
+        encode_frame_payload(value, max_frame_bytes=len(raw) - 1)
+
+    assert (
+        encode_frame_payload(value, max_frame_bytes=len(raw))
+        == raw
+    )
+
+
+@pytest.mark.asyncio
+async def test_oversized_response_returns_correlated_bounded_error():
+    async def handler(request):
+        return {
+            "protocol_version": "veraport-v1",
+            "request_id": request["request_id"],
+            "ok": True,
+            "result": {"content": "x" * 4096},
+        }
+
+    max_frame_bytes = 256
+    server = await asyncio.start_server(
+        lambda reader, writer: serve_multiplexed(
+            reader,
+            writer,
+            handler,
+            max_frame_bytes=max_frame_bytes,
+        ),
+        "127.0.0.1",
+        0,
+    )
+    port = server.sockets[0].getsockname()[1]
+    reader, writer = await asyncio.open_connection(
+        "127.0.0.1", port
+    )
+    client = MultiplexClient(
+        reader,
+        writer,
+        max_frame_bytes=max_frame_bytes,
+        request_timeout_s=1.0,
+    )
+    try:
+        response = await client.request({
+            "request_id": "oversized-response",
+            "operation": "fs.read_text",
+        })
+        assert response["request_id"] == "oversized-response"
+        assert response["ok"] is False
+        assert (
+            response["error"]["code"]
+            == "RESPONSE_FRAME_TOO_LARGE"
+        )
+    finally:
+        await client.close()
+        server.close()
+        await server.wait_closed()
