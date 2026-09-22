@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from types import SimpleNamespace
 
 import pytest
@@ -24,7 +25,7 @@ class DirectBreaksOnRead:
 
     async def request(self, request):
         self.calls.append(dict(request))
-        if request["operation"] == "fs.read_text":
+        if request["operation"] in {"fs.read_text", "fs.read_bytes"}:
             raise StreamClosed("direct transport lost before read response")
         return await self.handler(request)
 
@@ -106,6 +107,79 @@ async def test_read_failover_materializes_session_local_lane_and_fence(tmp_path)
     )
     assert any(call["operation"] == "fs.read_text" for call in direct.calls)
     assert any(call["operation"] == "fs.read_text" for call in edge.calls)
+
+
+@pytest.mark.asyncio
+async def test_ranged_read_failover_uses_session_local_mirror(tmp_path):
+    target = tmp_path / "hello.bin"
+    target.write_bytes(b"edge-range-ok")
+
+    registry = LaneRegistry({"fs.read"})
+    agent = VeraPortAgent(
+        registry,
+        LocalExecutor(
+            registry,
+            allowed_roots=(tmp_path,),
+            max_read_chunk_bytes=64,
+        ),
+    )
+    factory = WorkstationHandlerFactory(agent, now_ms=lambda: 1001)
+    direct_binding = SessionBinding(
+        "session-direct",
+        "controller:c",
+        "workstation:w",
+        frozenset({"fs.read"}),
+        999999,
+    )
+    edge_binding = SessionBinding(
+        "session-edge",
+        "controller:c",
+        "workstation:w",
+        frozenset({"fs.read"}),
+        999999,
+    )
+    direct = DirectBreaksOnRead(factory(direct_binding))
+    edge = Channel(factory(edge_binding))
+    endpoints = (
+        endpoint("direct", PathMode.DIRECT_STREAM, direct_binding, direct, 2),
+        endpoint("edge", PathMode.EDGE_STREAM, edge_binding, edge, 8),
+    )
+    ids = iter(str(i) for i in range(20))
+    router = MirroredReadLaneRouter(
+        live_endpoints=lambda: endpoints,
+        now_ms=lambda: 1001,
+        request_id_factory=lambda: next(ids),
+        max_path_age_ms=5000,
+    )
+    opened = await router.open(
+        lane_id="read-lane",
+        task_id="read-task",
+        capabilities=["fs.read"],
+        claims=[{"key": f"fs:{tmp_path.as_posix()}", "mode": "read"}],
+        ttl_s=300,
+    )
+
+    result = await router.read_bytes(
+        lane_id="read-lane",
+        fencing_token=opened["result"]["fencing_token"],
+        path=str(target),
+        offset=0,
+        max_bytes=64,
+    )
+
+    assert result["ok"] is True
+    assert base64.b64decode(
+        result["result"]["content_base64"]
+    ) == b"edge-range-ok"
+    lanes = {lane.lane_id: lane for lane in registry.snapshot()}
+    assert "session-direct::read-lane" in lanes
+    assert "session-edge::read-lane" in lanes
+    assert (
+        lanes["session-direct::read-lane"].fencing_token
+        != lanes["session-edge::read-lane"].fencing_token
+    )
+    assert any(call["operation"] == "fs.read_bytes" for call in direct.calls)
+    assert any(call["operation"] == "fs.read_bytes" for call in edge.calls)
 
 
 class ScriptedChannel:
