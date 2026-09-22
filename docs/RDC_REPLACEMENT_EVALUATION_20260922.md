@@ -62,9 +62,10 @@ Implemented and CI-covered:
 - file metadata;
 - bounded directory listing;
 - bounded path search;
-- atomic text writes;
+- atomic text writes plus append;
+- native directory creation, move/rename, and expected-count text replacement;
 - bounded one-shot argv process execution;
-- managed process start/list/status/output/terminate;
+- managed process start/list/status/output/input/terminate;
 - automatic managed-process reap on lane close or application-session disconnect;
 - direct TLS hot path;
 - transparent VeraRelay/VeraMesh live edge carrying the same end-to-end TLS session;
@@ -80,11 +81,7 @@ Not required for the first useful replacement cut:
 
 Useful parity still missing:
 
-- directory creation;
-- move/rename;
-- bounded patch/edit primitive;
 - multi-file reads;
-- interactive stdin/REPL sessions;
 - host-wide process inventory/kill separate from VeraPort-managed children;
 - optional recursive directory-tree convenience surface.
 
