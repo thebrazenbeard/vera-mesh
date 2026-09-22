@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import subprocess
 import tempfile
@@ -22,6 +23,21 @@ class FileReadLimitExceeded(PermissionError):
     code = "FILE_READ_LIMIT_EXCEEDED"
 
 
+class FileVersionChanged(RuntimeError):
+    code = "FILE_VERSION_CHANGED"
+
+
+@dataclass(frozen=True)
+class FileByteRange:
+    content: bytes
+    offset: int
+    bytes_read: int
+    next_offset: int
+    eof: bool
+    size_bytes: int
+    file_version: str
+
+
 @dataclass(frozen=True)
 class ProcessResult:
     returncode: int
@@ -39,6 +55,7 @@ class LocalExecutor:
         allowed_roots: tuple[Path, ...],
         max_output_bytes: int = 1_048_576,
         max_read_bytes: int = 1_048_576,
+        max_read_chunk_bytes: int = 262_144,
         allow_process_exec: bool = False,
     ) -> None:
         if not allowed_roots:
@@ -47,10 +64,19 @@ class LocalExecutor:
             raise ValueError("max_output_bytes must be positive")
         if max_read_bytes < 1:
             raise ValueError("max_read_bytes must be positive")
+        if (
+            type(max_read_chunk_bytes) is not int
+            or max_read_chunk_bytes < 1
+            or max_read_chunk_bytes > max_read_bytes
+        ):
+            raise ValueError(
+                "max_read_chunk_bytes must be an integer in 1..max_read_bytes"
+            )
         self.registry = registry
         self.allowed_roots = tuple(root.expanduser().resolve() for root in allowed_roots)
         self.max_output_bytes = max_output_bytes
         self.max_read_bytes = max_read_bytes
+        self.max_read_chunk_bytes = max_read_chunk_bytes
         self.allow_process_exec = allow_process_exec
 
     def _resolve_allowed(self, value: str | Path) -> Path:
@@ -90,6 +116,94 @@ class LocalExecutor:
                 f"file exceeds max_read_bytes={self.max_read_bytes}"
             )
         return payload.decode(encoding)
+
+    async def read_bytes_range(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        offset: int = 0,
+        max_bytes: int | None = None,
+        expected_file_version: str | None = None,
+    ) -> FileByteRange:
+        if type(offset) is not int or offset < 0:
+            raise ValueError("offset must be a non-negative integer")
+        limit = self.max_read_chunk_bytes if max_bytes is None else max_bytes
+        if (
+            type(limit) is not int
+            or limit < 1
+            or limit > self.max_read_chunk_bytes
+        ):
+            raise ValueError(
+                "max_bytes exceeds workstation chunk-read policy"
+            )
+        if expected_file_version is not None and (
+            not isinstance(expected_file_version, str)
+            or not expected_file_version
+        ):
+            raise ValueError("expected_file_version must be a non-empty string")
+
+        resolved = self._resolve_allowed(path)
+        self.registry.authorize(
+            lane_id,
+            fencing_token,
+            "fs.read",
+            resource_key=self._fs_resource(resolved),
+            resource_mode=ClaimMode.READ,
+        )
+        return await asyncio.to_thread(
+            self._read_bytes_range,
+            resolved,
+            offset,
+            limit,
+            expected_file_version,
+        )
+
+    @staticmethod
+    def _file_version(stat_result: os.stat_result) -> str:
+        identity = (
+            f"{stat_result.st_dev}:{stat_result.st_ino}:"
+            f"{stat_result.st_size}:{stat_result.st_mtime_ns}"
+        ).encode("ascii")
+        return hashlib.sha256(identity).hexdigest()
+
+    def _read_bytes_range(
+        self,
+        path: Path,
+        offset: int,
+        max_bytes: int,
+        expected_file_version: str | None,
+    ) -> FileByteRange:
+        with path.open("rb") as handle:
+            before = os.fstat(handle.fileno())
+            file_version = self._file_version(before)
+            if (
+                expected_file_version is not None
+                and expected_file_version != file_version
+            ):
+                raise FileVersionChanged(
+                    "file version differs from prior chunk"
+                )
+            if offset > before.st_size:
+                raise ValueError("offset exceeds file size")
+            handle.seek(offset)
+            payload = handle.read(max_bytes)
+            after = os.fstat(handle.fileno())
+
+        if self._file_version(after) != file_version:
+            raise FileVersionChanged("file changed during ranged read")
+
+        next_offset = offset + len(payload)
+        return FileByteRange(
+            content=payload,
+            offset=offset,
+            bytes_read=len(payload),
+            next_offset=next_offset,
+            eof=next_offset >= before.st_size,
+            size_bytes=before.st_size,
+            file_version=file_version,
+        )
 
     async def write_text(
         self,
