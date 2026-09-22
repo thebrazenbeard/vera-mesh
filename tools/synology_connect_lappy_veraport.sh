@@ -2,6 +2,8 @@
 # Establish a fresh authenticated VeraPort application session from TheSimsVault
 # to Lappy through the existing VeraMesh edge. Does not use RDC and performs no
 # configuration, identity, service, firewall, Tailscale, or process-policy mutation.
+#
+# Runtime dependencies: Synology Python 3.11 standard library + OpenSSL CLI.
 set -eu
 
 PY=/var/packages/python311/target/bin/python3.11
@@ -22,25 +24,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import ssl
 import struct
+import subprocess
 import sys
+import tempfile
 import time
 import uuid
-
-try:
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import ec
-    from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature, encode_dss_signature
-except Exception as exc:
-    print(json.dumps({
-        "schema":"VERAPORT_NAS_LAPPY_CONNECT_V1",
-        "status":"BLOCKED",
-        "code":"CRYPTOGRAPHY_NOT_AVAILABLE",
-        "message":str(exc),
-        "effects":{"writes":False,"services_changed":False,"rdc_used":False},
-    }, sort_keys=True))
-    raise SystemExit(3)
 
 EDGE_HOST=sys.argv[1]
 EDGE_PORT=int(sys.argv[2])
@@ -64,22 +55,28 @@ KEY_NAMES={
     "controller-key.pem",
     "controller.pem",
 }
-PUB_PATTERNS=("workstation", "public", ".pub.")
+
+def blocked(code: str, **extra) -> None:
+    payload={
+        "schema":"VERAPORT_NAS_LAPPY_CONNECT_V2",
+        "status":"BLOCKED",
+        "code":code,
+        "effects":{
+            "writes":False,
+            "services_changed":False,
+            "identity_changed":False,
+            "process_execution_changed":False,
+            "rdc_used":False,
+        },
+    }
+    payload.update(extra)
+    print(json.dumps(payload,sort_keys=True))
 
 def b64u(v: bytes) -> str:
     return base64.urlsafe_b64encode(v).rstrip(b"=").decode("ascii")
 
 def b64ud(s: str) -> bytes:
     return base64.urlsafe_b64decode((s+"="*((4-len(s)%4)%4)).encode("ascii"))
-
-def spki(public) -> bytes:
-    return public.public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
-
-def key_id(public) -> str:
-    return hashlib.sha256(spki(public)).hexdigest()
-
-def principal_id(public, prefix: str) -> str:
-    return f"{prefix}:{key_id(public)}"
 
 def field(name: str, value: str) -> bytes:
     raw=value.encode("utf-8")
@@ -88,17 +85,153 @@ def field(name: str, value: str) -> bytes:
 def caps(values) -> str:
     return ",".join(sorted(set(values)))
 
-def sign_p1363(private, payload: bytes) -> str:
-    der=private.sign(payload, ec.ECDSA(hashes.SHA256()))
-    r,s=decode_dss_signature(der)
-    return b64u(r.to_bytes(32,"big")+s.to_bytes(32,"big"))
+def find_openssl() -> str | None:
+    candidates=[
+        shutil.which("openssl"),
+        "/usr/bin/openssl",
+        "/bin/openssl",
+        "/usr/syno/bin/openssl",
+        "/usr/local/bin/openssl",
+    ]
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate) and os.access(candidate,os.X_OK):
+            return candidate
+    return None
 
-def verify_p1363(public, sig: str, payload: bytes) -> None:
-    raw=b64ud(sig)
+OPENSSL=find_openssl()
+if OPENSSL is None:
+    blocked("OPENSSL_NOT_AVAILABLE")
+    raise SystemExit(3)
+
+def run_openssl(args, *, input_bytes: bytes | None=None) -> bytes:
+    proc=subprocess.run(
+        [OPENSSL,*args],
+        input=input_bytes,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if proc.returncode!=0:
+        msg=proc.stderr.decode("utf-8","replace").strip()
+        raise RuntimeError("openssl "+" ".join(args[:3])+f" failed: {msg}")
+    return proc.stdout
+
+def public_der_from_pem(path: Path) -> bytes | None:
+    for prefix in (["pkey","-pubin"],["pkey"]):
+        proc=subprocess.run(
+            [OPENSSL,*prefix,"-in",str(path),"-pubout","-outform","DER"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if proc.returncode==0 and proc.stdout:
+            return proc.stdout
+    return None
+
+def public_pem_from_pem(path: Path) -> bytes | None:
+    for prefix in (["pkey","-pubin"],["pkey"]):
+        proc=subprocess.run(
+            [OPENSSL,*prefix,"-in",str(path),"-pubout","-outform","PEM"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if proc.returncode==0 and proc.stdout:
+            return proc.stdout
+    return None
+
+def key_id_from_der(der: bytes) -> str:
+    return hashlib.sha256(der).hexdigest()
+
+def principal_id_from_der(der: bytes, prefix: str) -> str:
+    return f"{prefix}:{key_id_from_der(der)}"
+
+def read_der_length(data: bytes, offset: int) -> tuple[int,int]:
+    if offset>=len(data):
+        raise ValueError("truncated DER length")
+    first=data[offset]
+    offset+=1
+    if first<0x80:
+        return first,offset
+    count=first&0x7f
+    if count==0 or count>4 or offset+count>len(data):
+        raise ValueError("invalid DER length")
+    value=int.from_bytes(data[offset:offset+count],"big")
+    return value,offset+count
+
+def der_to_p1363(der: bytes) -> bytes:
+    off=0
+    if len(der)<2 or der[off]!=0x30:
+        raise ValueError("ECDSA signature is not DER sequence")
+    off+=1
+    seq_len,off=read_der_length(der,off)
+    if off+seq_len!=len(der):
+        raise ValueError("invalid ECDSA DER sequence length")
+    values=[]
+    for _ in range(2):
+        if off>=len(der) or der[off]!=0x02:
+            raise ValueError("ECDSA DER missing INTEGER")
+        off+=1
+        ilen,off=read_der_length(der,off)
+        if ilen<1 or off+ilen>len(der):
+            raise ValueError("invalid ECDSA DER INTEGER")
+        raw=der[off:off+ilen]
+        off+=ilen
+        if raw[0]&0x80:
+            raise ValueError("negative ECDSA DER INTEGER")
+        raw=raw.lstrip(b"\x00") or b"\x00"
+        if len(raw)>32:
+            raise ValueError("ECDSA value exceeds P-256 width")
+        values.append(raw.rjust(32,b"\x00"))
+    if off!=len(der):
+        raise ValueError("trailing ECDSA DER data")
+    return b"".join(values)
+
+def der_len(n: int) -> bytes:
+    if n<0x80:
+        return bytes([n])
+    raw=n.to_bytes((n.bit_length()+7)//8,"big")
+    return bytes([0x80|len(raw)])+raw
+
+def der_int(raw: bytes) -> bytes:
+    raw=raw.lstrip(b"\x00") or b"\x00"
+    if raw[0]&0x80:
+        raw=b"\x00"+raw
+    return b"\x02"+der_len(len(raw))+raw
+
+def p1363_to_der(raw: bytes) -> bytes:
     if len(raw)!=64:
-        raise ValueError("signature length")
-    r=int.from_bytes(raw[:32],"big"); s=int.from_bytes(raw[32:],"big")
-    public.verify(encode_dss_signature(r,s), payload, ec.ECDSA(hashes.SHA256()))
+        raise ValueError("P-256 signature must be 64 bytes")
+    body=der_int(raw[:32])+der_int(raw[32:])
+    return b"\x30"+der_len(len(body))+body
+
+def sign_p1363(private_path: Path, payload: bytes) -> str:
+    with tempfile.TemporaryDirectory(prefix="veraport-sign-") as td:
+        payload_path=Path(td)/"payload.bin"
+        sig_path=Path(td)/"sig.der"
+        payload_path.write_bytes(payload)
+        run_openssl(["dgst","-sha256","-sign",str(private_path),"-out",str(sig_path),str(payload_path)])
+        raw=der_to_p1363(sig_path.read_bytes())
+        return b64u(raw)
+
+def verify_p1363(public_pem: bytes, sig: str, payload: bytes) -> None:
+    raw=b64ud(sig)
+    der=p1363_to_der(raw)
+    with tempfile.TemporaryDirectory(prefix="veraport-verify-") as td:
+        pub_path=Path(td)/"public.pem"
+        payload_path=Path(td)/"payload.bin"
+        sig_path=Path(td)/"sig.der"
+        pub_path.write_bytes(public_pem)
+        payload_path.write_bytes(payload)
+        sig_path.write_bytes(der)
+        proc=subprocess.run(
+            [OPENSSL,"dgst","-sha256","-verify",str(pub_path),"-signature",str(sig_path),str(payload_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if proc.returncode!=0:
+            raise ValueError("workstation application signature verification failed")
 
 def candidate_files():
     seen=set()
@@ -106,14 +239,13 @@ def candidate_files():
         if not root.exists():
             continue
         try:
-            for base, dirs, files in os.walk(root):
-                # Bound traversal to VeraMesh/controller/identity-looking paths.
+            for base,dirs,files in os.walk(root):
                 rel=Path(base)
                 depth=len(rel.parts)-len(root.parts)
                 if depth>7:
-                    dirs[:] = []
+                    dirs[:]=[]
                     continue
-                dirs[:] = [d for d in dirs if not d.startswith(".snapshot")]
+                dirs[:]=[d for d in dirs if not d.startswith(".snapshot")]
                 for name in files:
                     low=name.lower()
                     if not (low.endswith(".pem") or low.endswith(".json")):
@@ -136,7 +268,8 @@ def candidate_files():
 def find_controller_key(paths):
     matches=[]
     for p in paths:
-        if p.name.lower() not in KEY_NAMES and "controller" not in p.name.lower():
+        low=p.name.lower()
+        if low not in KEY_NAMES and "controller" not in low:
             continue
         try:
             data=p.read_bytes()
@@ -144,46 +277,28 @@ def find_controller_key(paths):
             continue
         if hashlib.sha256(data).hexdigest().lower()!=EXPECTED_CONTROLLER_KEY_SHA256:
             continue
-        try:
-            key=serialization.load_pem_private_key(data,password=None)
-        except Exception:
+        der=public_der_from_pem(p)
+        pem=public_pem_from_pem(p)
+        if not der or not pem:
             continue
-        if not isinstance(key, ec.EllipticCurvePrivateKey) or not isinstance(key.curve, ec.SECP256R1):
-            continue
-        matches.append((p,key))
+        matches.append((p,der,pem))
     return matches
 
 def load_candidate_publics(paths):
     out=[]
     seen=set()
     for p in paths:
-        low=p.name.lower()
-        if not low.endswith(".pem"):
+        if not p.name.lower().endswith(".pem"):
             continue
-        if not any(mark in low for mark in PUB_PATTERNS):
+        der=public_der_from_pem(p)
+        pem=public_pem_from_pem(p)
+        if not der or not pem:
             continue
-        try:
-            data=p.read_bytes()
-        except OSError:
+        kid=key_id_from_der(der)
+        if kid in seen:
             continue
-        candidates=[]
-        try:
-            pub=serialization.load_pem_public_key(data)
-            candidates.append(pub)
-        except Exception:
-            try:
-                priv=serialization.load_pem_private_key(data,password=None)
-                candidates.append(priv.public_key())
-            except Exception:
-                pass
-        for pub in candidates:
-            if not isinstance(pub, ec.EllipticCurvePublicKey) or not isinstance(pub.curve, ec.SECP256R1):
-                continue
-            kid=key_id(pub)
-            if kid in seen:
-                continue
-            seen.add(kid)
-            out.append((p,pub))
+        seen.add(kid)
+        out.append((p,der,pem))
     return out
 
 async def read_frame(reader):
@@ -207,27 +322,23 @@ async def write_frame(writer,value):
 paths=list(candidate_files())
 controllers=find_controller_key(paths)
 if not controllers:
-    print(json.dumps({
-        "schema":"VERAPORT_NAS_LAPPY_CONNECT_V1",
-        "status":"BLOCKED",
-        "code":"ENROLLED_CONTROLLER_KEY_NOT_FOUND_ON_NAS",
-        "expected_controller_key_sha256":EXPECTED_CONTROLLER_KEY_SHA256,
-        "searched_roots":[str(x) for x in SEARCH_ROOTS],
-        "pem_json_candidates_examined":len(paths),
-        "effects":{"writes":False,"services_changed":False,"rdc_used":False},
-    }, sort_keys=True))
+    blocked(
+        "ENROLLED_CONTROLLER_KEY_NOT_FOUND_ON_NAS",
+        expected_controller_key_sha256=EXPECTED_CONTROLLER_KEY_SHA256,
+        searched_roots=[str(x) for x in SEARCH_ROOTS],
+        pem_json_candidates_examined=len(paths),
+        openssl=OPENSSL,
+    )
     raise SystemExit(4)
 if len(controllers)!=1:
-    print(json.dumps({
-        "schema":"VERAPORT_NAS_LAPPY_CONNECT_V1",
-        "status":"BLOCKED",
-        "code":"CONTROLLER_KEY_AMBIGUOUS",
-        "matching_paths":[str(p) for p,_ in controllers],
-        "effects":{"writes":False,"services_changed":False,"rdc_used":False},
-    }, sort_keys=True))
+    blocked(
+        "CONTROLLER_KEY_AMBIGUOUS",
+        matching_paths=[str(p) for p,_,_ in controllers],
+        openssl=OPENSSL,
+    )
     raise SystemExit(5)
 
-controller_path,controller_key=controllers[0]
+controller_path,controller_der,controller_public_pem=controllers[0]
 public_candidates=load_candidate_publics(paths)
 
 async def connect():
@@ -260,30 +371,30 @@ async def connect():
         if challenge.get("protocol_version")!="veraport-v1":
             raise RuntimeError("unexpected protocol version")
 
-        workstation=None
+        workstation_pem=None
         workstation_path=None
-        for p,pub in public_candidates:
-            if key_id(pub)==challenge.get("workstation_key_id") and principal_id(pub,"workstation")==challenge.get("workstation_principal"):
-                workstation=pub
+        for p,der,pem in public_candidates:
+            if (
+                key_id_from_der(der)==challenge.get("workstation_key_id")
+                and principal_id_from_der(der,"workstation")==challenge.get("workstation_principal")
+            ):
+                workstation_pem=pem
                 workstation_path=p
                 break
-        if workstation is None:
-            print(json.dumps({
-                "schema":"VERAPORT_NAS_LAPPY_CONNECT_V1",
-                "status":"BLOCKED",
-                "code":"PINNED_WORKSTATION_PUBLIC_KEY_NOT_FOUND_ON_NAS",
-                "workstation_principal_from_challenge":challenge.get("workstation_principal"),
-                "workstation_key_id_from_challenge":challenge.get("workstation_key_id"),
-                "public_key_candidates_examined":len(public_candidates),
-                "controller_key_path":str(controller_path),
-                "effects":{"writes":False,"services_changed":False,"rdc_used":False},
-            }, sort_keys=True))
+        if workstation_pem is None:
+            blocked(
+                "PINNED_WORKSTATION_PUBLIC_KEY_NOT_FOUND_ON_NAS",
+                workstation_principal_from_challenge=challenge.get("workstation_principal"),
+                workstation_key_id_from_challenge=challenge.get("workstation_key_id"),
+                public_key_candidates_examined=len(public_candidates),
+                controller_key_path=str(controller_path),
+                openssl=OPENSSL,
+            )
             return 6
 
-        controller_pub=controller_key.public_key()
         nonce=b64u(os.urandom(32))
-        controller_principal=principal_id(controller_pub,"controller")
-        controller_kid=key_id(controller_pub)
+        controller_principal=principal_id_from_der(controller_der,"controller")
+        controller_kid=key_id_from_der(controller_der)
         unsigned={
             "protocol_version":"veraport-v1",
             "controller_principal":controller_principal,
@@ -303,7 +414,11 @@ async def connect():
             field("client_nonce",unsigned["client_nonce"]),
             field("requested_capabilities",caps(unsigned["requested_capabilities"])),
         ))
-        auth={"frame_type":"client_auth",**unsigned,"signature":sign_p1363(controller_key,sigbase)}
+        auth={
+            "frame_type":"client_auth",
+            **unsigned,
+            "signature":sign_p1363(controller_path,sigbase),
+        }
         await asyncio.wait_for(write_frame(writer,auth),timeout=5.0)
 
         accept=await asyncio.wait_for(read_frame(reader),timeout=5.0)
@@ -322,6 +437,7 @@ async def connect():
             raise RuntimeError("server granted unrequested capabilities")
         if int(accept.get("expires_at_ms",0))<=int(time.time()*1000):
             raise RuntimeError("server accept already expired")
+
         server_sigbase=b"".join((
             b"veramesh-veraport-v1/session-server-accept\n",
             field("protocol_version",accept["protocol_version"]),
@@ -334,7 +450,7 @@ async def connect():
             field("granted_capabilities",caps(granted)),
             field("expires_at_ms",str(accept["expires_at_ms"])),
         ))
-        verify_p1363(workstation,accept["signature"],server_sigbase)
+        verify_p1363(workstation_pem,accept["signature"],server_sigbase)
 
         request_id="nas-lane-list-"+uuid.uuid4().hex
         await asyncio.wait_for(write_frame(writer,{
@@ -349,7 +465,7 @@ async def connect():
             raise RuntimeError(f"lane.list failed: {response.get('error')}")
 
         print(json.dumps({
-            "schema":"VERAPORT_NAS_LAPPY_CONNECT_V1",
+            "schema":"VERAPORT_NAS_LAPPY_CONNECT_V2",
             "status":"CONNECTED",
             "observed_at_utc":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),
             "transport":{
@@ -372,6 +488,10 @@ async def connect():
                 "workstation_public_key_path":str(workstation_path),
             },
             "lane_list":response.get("result"),
+            "runtime_dependency":{
+                "python":sys.executable,
+                "openssl":OPENSSL,
+            },
             "effects":{
                 "writes":False,
                 "services_changed":False,
@@ -379,7 +499,7 @@ async def connect():
                 "process_execution_changed":False,
                 "rdc_used":False,
             },
-        }, sort_keys=True))
+        },sort_keys=True))
         return 0
     finally:
         writer.close()
@@ -392,13 +512,20 @@ try:
     rc=asyncio.run(connect())
 except Exception as exc:
     print(json.dumps({
-        "schema":"VERAPORT_NAS_LAPPY_CONNECT_V1",
+        "schema":"VERAPORT_NAS_LAPPY_CONNECT_V2",
         "status":"FAILED",
         "code":type(exc).__name__,
         "message":str(exc),
         "controller_key_path":str(controller_path),
-        "effects":{"writes":False,"services_changed":False,"rdc_used":False},
-    }, sort_keys=True))
+        "runtime_dependency":{"python":sys.executable,"openssl":OPENSSL},
+        "effects":{
+            "writes":False,
+            "services_changed":False,
+            "identity_changed":False,
+            "process_execution_changed":False,
+            "rdc_used":False,
+        },
+    },sort_keys=True))
     raise SystemExit(7)
 raise SystemExit(rc)
 PY

@@ -32,6 +32,14 @@ jobs:
         run: |
           sh -n tools/synology_authorize_lappy_veramesh_connection.sh
           sh -n tools/synology_connect_lappy_veraport.sh
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("tools/synology_connect_lappy_veraport.sh").read_text(encoding="utf-8")
+          marker = "<<'PY'\n"
+          start = source.index(marker) + len(marker)
+          end = source.rindex("\nPY\n")
+          compile(source[start:end], "synology_connect_lappy_veraport.embedded.py", "exec")
+          PY
 
   test:
     runs-on: ubuntu-latest
