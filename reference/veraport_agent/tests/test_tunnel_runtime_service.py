@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import threading
 from pathlib import Path
@@ -175,3 +176,57 @@ def test_non_windows_service_mode_fails_explicitly():
         trs.VeraMeshTunnelRuntimeService()
     with pytest.raises(trs.TunnelRuntimeWindowsServiceUnavailable):
         trs.service_cli()
+
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows ACL integration test")
+def test_tunnel_service_materials_harden_and_validate_on_windows(tmp_path):
+    controller_key = tmp_path / "controller-key.pem"
+    tls_ca = tmp_path / "tls-ca.pem"
+    workstation_public = tmp_path / "workstation-public.pem"
+    for target in (controller_key, tls_ca, workstation_public):
+        target.write_text("test-material", encoding="utf-8")
+
+    controller_config = tmp_path / "controller-valid.json"
+    controller_config.write_text(json.dumps({
+        "schema": "VERAPORT_CONTROLLER_MCP_CONFIG_V1",
+        "controller_key": str(controller_key),
+        "tls_ca": str(tls_ca),
+        "workstation_public_key": str(workstation_public),
+        "requested_capabilities": ["fs.read"],
+        "gateway_operations": ["lane.list"],
+        "endpoints": [{
+            "endpoint_id": "direct",
+            "mode": "DIRECT_STREAM",
+            "host": "127.0.0.1",
+            "port": 17444,
+            "server_hostname": "localhost",
+            "durable_idempotency": True
+        }]
+    }), encoding="utf-8")
+
+    tunnel = tmp_path / "tunnel-client.exe"
+    tunnel.write_text("binary-placeholder", encoding="utf-8")
+    runtime_key = tmp_path / "runtime.key"
+    runtime_key.write_text("runtime-secret", encoding="utf-8")
+    profiles = tmp_path / "profiles"
+    state = tmp_path / "state"
+    profiles.mkdir()
+    state.mkdir()
+
+    service_config_path = tmp_path / "tunnel-runtime.json"
+    cfg = trs.TunnelRuntimeServiceConfig.from_dict({
+        "schema": "VERAMESH_TUNNEL_RUNTIME_SERVICE_V1",
+        "tunnel_client": str(tunnel),
+        "alias": "veramesh-lappy",
+        "tunnel_id": "tunnel_0123456789abcdef0123456789abcdef",
+        "runtime_api_key_file": str(runtime_key),
+        "controller_config": str(controller_config),
+        "mcp_command": r"C:\VeraMesh\veraport-mcp-stdio.exe",
+        "profile_dir": str(profiles),
+        "state_dir": str(state)
+    })
+    service_config_path.write_text("{}", encoding="utf-8")
+
+    trs.harden_service_materials(service_config_path, cfg)
+    trs.validate_service_materials(service_config_path, cfg)
