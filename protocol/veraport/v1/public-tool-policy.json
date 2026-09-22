@@ -1,0 +1,328 @@
+{
+  "schema": "VERAMESH_PUBLIC_TOOL_POLICY_V1",
+  "principle": "public_tools_are_ergonomic_facades_over_veraport_authority",
+  "oauth_scopes": {
+    "computer.profile": "Read authenticated workstation identity and path health.",
+    "computer.read": "Read/search filesystem content inside workstation-allowed roots.",
+    "computer.write": "Modify filesystem content inside workstation-allowed roots.",
+    "computer.process": "Start, inspect, interact with, and terminate VeraPort-managed processes."
+  },
+  "tools": [
+    {
+      "name": "computer_info",
+      "operation": "machine.info",
+      "scopes": [
+        "computer.profile"
+      ],
+      "capabilities": [],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "read_file",
+      "operation": "fs.read_text",
+      "scopes": [
+        "computer.read"
+      ],
+      "capabilities": [
+        "fs.read"
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "read_bytes",
+      "operation": "fs.read_bytes",
+      "scopes": [
+        "computer.read"
+      ],
+      "capabilities": [
+        "fs.read"
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "stat_path",
+      "operation": "fs.stat",
+      "scopes": [
+        "computer.read"
+      ],
+      "capabilities": [
+        "fs.read"
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_directory",
+      "operation": "fs.list_dir",
+      "scopes": [
+        "computer.read"
+      ],
+      "capabilities": [
+        "fs.read"
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_files",
+      "operation": "fs.search",
+      "scopes": [
+        "computer.read"
+      ],
+      "capabilities": [
+        "fs.read"
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_content",
+      "operation": "fs.search_content",
+      "scopes": [
+        "computer.read"
+      ],
+      "capabilities": [
+        "fs.read"
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "write_file",
+      "operation": "fs.write_text",
+      "scopes": [
+        "computer.write"
+      ],
+      "capabilities": [
+        "fs.write"
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "append_file",
+      "operation": "fs.append_text",
+      "scopes": [
+        "computer.write"
+      ],
+      "capabilities": [
+        "fs.write"
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "make_directory",
+      "operation": "fs.mkdir",
+      "scopes": [
+        "computer.write"
+      ],
+      "capabilities": [
+        "fs.write"
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "move_path",
+      "operation": "fs.move",
+      "scopes": [
+        "computer.write"
+      ],
+      "capabilities": [
+        "fs.write"
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "replace_text",
+      "operation": "fs.replace_text",
+      "scopes": [
+        "computer.read",
+        "computer.write"
+      ],
+      "capabilities": [
+        "fs.read",
+        "fs.write"
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "run_process",
+      "operation": "process.exec",
+      "scopes": [
+        "computer.process"
+      ],
+      "capabilities": [
+        "process.exec"
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "start_process",
+      "operation": "process.start",
+      "scopes": [
+        "computer.process"
+      ],
+      "capabilities": [
+        "process.exec",
+        "process.inspect",
+        "process.interact",
+        "process.control"
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "list_processes",
+      "operation": "process.list",
+      "scopes": [
+        "computer.process"
+      ],
+      "capabilities": [
+        "process.inspect"
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "process_status",
+      "operation": "process.status",
+      "scopes": [
+        "computer.process"
+      ],
+      "capabilities": [
+        "process.inspect"
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "process_output",
+      "operation": "process.output",
+      "scopes": [
+        "computer.process"
+      ],
+      "capabilities": [
+        "process.inspect"
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "process_input",
+      "operation": "process.input",
+      "scopes": [
+        "computer.process"
+      ],
+      "capabilities": [
+        "process.interact"
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "terminate_process",
+      "operation": "process.terminate",
+      "scopes": [
+        "computer.process"
+      ],
+      "capabilities": [
+        "process.control",
+        "process.inspect"
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    }
+  ],
+  "invariants": [
+    "lane_id and fencing_token are internal gateway state and are not public tool parameters",
+    "OAuth scope checks narrow but never replace VeraPort controller/session/lane/workstation policy",
+    "a public filesystem call claims only the requested path or search root",
+    "a public managed-process handle is mapped to one hidden VeraPort lane/fence owned by one authenticated actor",
+    "successful mutations remain successful even if later lane cleanup fails; cleanup evidence is reported separately",
+    "public tool metadata must be generated from this catalog rather than maintained independently"
+  ]
+}
