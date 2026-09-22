@@ -223,7 +223,7 @@ try {
     }
 
     Write-Host "Preparing temporary installer runtime..."
-    $stagePythonExe = Initialize-PortableRuntime $StagePython $packagePath $constraintsPath $false
+    $stagePythonExe = Initialize-PortableRuntime $StagePython $packagePath $constraintsPath $true
 
     $prepareArgs = @(
         "-m", "veraport_agent.prepare_workstation",
