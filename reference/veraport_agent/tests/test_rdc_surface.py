@@ -302,3 +302,39 @@ async def test_interactive_process_input_is_lane_owned_and_bounded(tmp_path):
             input_text="x" * 65537,
             append_newline=False,
         )
+
+
+
+@pytest.mark.asyncio
+async def test_service_shutdown_reaps_all_managed_processes(tmp_path):
+    registry = LaneRegistry({
+        "process.exec",
+        "process.inspect",
+        "process.control",
+    })
+    lane = process_lane(registry, tmp_path)
+    surface = surface_for(
+        LocalExecutor(
+            registry,
+            allowed_roots=(tmp_path,),
+            allow_process_exec=True,
+        )
+    )
+    started = await surface.process_start(
+        lane_id=lane.lane_id,
+        fencing_token=lane.fencing_token,
+        argv=[sys.executable, "-c", "import time; time.sleep(30)"],
+        cwd=str(tmp_path),
+        max_runtime_s=30,
+    )
+    handle = started["process_handle"]
+
+    terminated = await surface.close_all_processes()
+    assert handle in terminated
+
+    status = await surface.process_status(
+        lane_id=lane.lane_id,
+        fencing_token=lane.fencing_token,
+        process_handle=handle,
+    )
+    assert status["running"] is False
