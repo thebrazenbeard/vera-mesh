@@ -109,6 +109,8 @@ jobs:
           go build -trimpath -ldflags "-buildid= -X main.buildVersion=$VERSION -X main.buildCommit=$GITHUB_SHA" -o dist/veramesh-gateway-linux-armv7 ./cmd/veramesh-gateway
           file dist/veramesh-gateway-linux-armv7
           sha256sum dist/veramesh-gateway-linux-armv7
+          go version -m dist/veramesh-gateway-linux-armv7 | tee dist/go-build-metadata.txt
+          grep -F "vcs.revision=$GITHUB_SHA" dist/go-build-metadata.txt
       - name: Build and verify source-bound Synology gateway staging bundle
         working-directory: .
         run: |
