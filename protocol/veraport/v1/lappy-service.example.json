@@ -1,0 +1,17 @@
+{
+  "bind_host": "127.0.0.1",
+  "bind_port": 17444,
+  "allowed_roots": [
+    "C:\\Users\\REPLACE_ME"
+  ],
+  "state_db": "C:\\ProgramData\\VeraMesh\\state\\veraport.sqlite3",
+  "tls_cert": "C:\\ProgramData\\VeraMesh\\identity\\tls-cert.pem",
+  "tls_key": "C:\\ProgramData\\VeraMesh\\identity\\tls-key.pem",
+  "workstation_key": "C:\\ProgramData\\VeraMesh\\identity\\workstation-key.pem",
+  "controller_trust": "C:\\ProgramData\\VeraMesh\\identity\\controller-trust.json",
+  "allow_process_exec": false,
+  "allow_non_loopback_listener": false,
+  "max_lanes": 32,
+  "max_inflight": 64,
+  "max_read_bytes": 1048576
+}
