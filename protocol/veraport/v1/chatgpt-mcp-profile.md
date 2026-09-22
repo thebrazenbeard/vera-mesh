@@ -44,6 +44,7 @@ Always registered:
 - `lane_renew`
 - `lane_close`
 - `fs_read_text`
+- `fs_read_bytes`
 
 Conditionally registered only when controller policy explicitly includes the operation:
 - `fs_write_text`
@@ -68,8 +69,13 @@ or live VeraPort operation.
 
 ## R2 hostile repairs
 
-- Workstation text reads are bounded by local max_read_bytes; oversized files fail
-  closed before their complete contents are loaded or returned.
+- Workstation text reads are bounded by local max_read_bytes. If JSON serialization
+  still pushes a successful response beyond the stream frame ceiling, the stream layer
+  returns a correlated FRAME_TOO_LARGE error when that error fits, otherwise it closes
+  the stream so pending callers fail rather than hang.
+- Wire-safe ranged reads use fs.read_bytes with byte offsets, bounded chunks,
+  base64 transport, EOF/size metadata, and a file-version token. Every chunk remains
+  subject to the same lane, fencing, root, and fs.read authorization.
 - The initial MCP listener is source-enforced loopback-only. Remote ChatGPT exposure must
   use a separately reviewed secure tunnel or HTTPS adapter that forwards to loopback.
 - Read-only filesystem lanes are controller-logical lanes. Each VeraPort application
