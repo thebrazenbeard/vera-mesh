@@ -43,6 +43,12 @@
     "ui.control": {
       "class": "mutation",
       "reference_agent": "planned"
+    },
+    "process.interact": {
+      "class": "mutation",
+      "reference_agent": "implemented_local_gate_required",
+      "resource_namespace": "cwd",
+      "notes": "bounded stdin writes only to opaque managed process handles owned by the same lane/fence"
     }
   },
   "invariants": [
@@ -50,7 +56,7 @@
     "A child or parallel lane MUST NOT synthesize authority absent from its session ceiling.",
     "Filesystem operations MUST be constrained by local workstation policy in addition to remote capability claims.",
     "A cwd resource claim is collision/accounting metadata and MUST NOT be represented as sandboxing arbitrary process side effects.",
-    "process.exec, process.inspect, and process.control MUST remain unavailable unless local workstation process policy is explicitly enabled.",
+    "process.exec, process.inspect, process.interact, and process.control MUST remain unavailable unless local workstation process policy is explicitly enabled.",
     "Managed process handles MUST remain bound to their owning lane and fencing token.",
     "Network or transport membership MUST NOT itself grant any VeraPort capability."
   ]
