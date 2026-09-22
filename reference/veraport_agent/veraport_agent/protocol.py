@@ -25,6 +25,7 @@ DURABLE_MUTATING_OPERATIONS = frozenset({
     "fs.replace_text",
     "process.exec",
     "process.start",
+    "process.input",
     "process.terminate",
 })
 
@@ -359,6 +360,7 @@ class VeraPortAgent:
             "process.list",
             "process.status",
             "process.output",
+            "process.input",
             "process.terminate",
         }:
             lane_id = str(request["lane_id"])
@@ -394,6 +396,14 @@ class VeraPortAgent:
                         stdout_offset=request.get("stdout_offset", 0),
                         stderr_offset=request.get("stderr_offset", 0),
                         max_bytes=request.get("max_bytes", 16_384),
+                    )
+                if operation == "process.input":
+                    return await self.rdc.process_input(
+                        lane_id=lane_id,
+                        fencing_token=fencing_token,
+                        process_handle=str(request["process_handle"]),
+                        input_text=str(request["input_text"]),
+                        append_newline=request.get("append_newline", True),
                     )
                 return await self.rdc.process_terminate(
                     lane_id=lane_id,
