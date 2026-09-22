@@ -379,7 +379,13 @@ class VeraPortMCPFacade:
         )
 
 
-def build_mcp_server(runtime: ControllerRuntime):
+def build_mcp_server(
+    runtime: ControllerRuntime,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 17446,
+    stateless_http: bool = False,
+):
     try:
         from mcp.server.fastmcp import FastMCP
     except ImportError as exc:
@@ -387,9 +393,18 @@ def build_mcp_server(runtime: ControllerRuntime):
             "MCP runtime is not installed; install the project with the mcp extra"
         ) from exc
 
+    host = require_loopback_mcp_host(host)
+    if type(port) is not int or not 1 <= port <= 65_535:
+        raise ValueError("MCP port must be in 1..65535")
+    if type(stateless_http) is not bool:
+        raise ValueError("stateless_http must be bool")
+
     facade = VeraPortMCPFacade(runtime)
     mcp = FastMCP(
         "VeraMesh VeraPort",
+        host=host,
+        port=port,
+        stateless_http=stateless_http,
         instructions=(
             "Authenticated VeraMesh workstation bridge with VeraRelay-capable "
             "edge routing. Tool discovery does not grant authority: controller "
@@ -714,18 +729,17 @@ def main() -> None:
 
     config = ControllerConfig.load(config_path)
     runtime = ControllerRuntime(config)
-    mcp = build_mcp_server(runtime)
-
     host = require_loopback_mcp_host(
         os.environ.get("VERAPORT_MCP_HOST", "127.0.0.1")
     )
     port = int(os.environ.get("VERAPORT_MCP_PORT", "17446"))
-    mcp.run(
-        transport="streamable-http",
+    mcp = build_mcp_server(
+        runtime,
         host=host,
         port=port,
         stateless_http=False,
     )
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":
