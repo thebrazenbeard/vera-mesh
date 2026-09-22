@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 )
@@ -99,8 +100,11 @@ func injectOpenAISecuritySchemes(body []byte) ([]byte, bool, error) {
 		return nil, false, err
 	}
 	var extra any
-	if err := dec.Decode(&extra); err == nil {
-		return nil, false, errors.New("multiple JSON values in MCP response")
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, false, errors.New("multiple JSON values in MCP response")
+		}
+		return nil, false, fmt.Errorf("trailing invalid JSON: %w", err)
 	}
 	result, ok := envelope["result"].(map[string]any)
 	if !ok {
