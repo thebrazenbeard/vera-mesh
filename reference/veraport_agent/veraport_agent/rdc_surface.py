@@ -674,6 +674,15 @@ class RdcSurface:
         await asyncio.to_thread(self._terminate_sync, item, grace_s)
         return self._status_json(item)
 
+    async def close_all_processes(self) -> list[str]:
+        with self._process_lock:
+            items = tuple(self._processes.values())
+        terminated = []
+        for item in items:
+            await asyncio.to_thread(self._terminate_sync, item, 0.5)
+            terminated.append(item.handle)
+        return terminated
+
     async def close_lane_processes(
         self,
         lane_id: str,
