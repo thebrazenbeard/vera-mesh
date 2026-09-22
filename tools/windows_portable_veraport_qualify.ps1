@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$SourceSha = "b0eada91aeef7029ca007f6954d07f97e1e3e193"
+$SourceSha = "13a16019f3ec45acd576eb22f75138e6820d6262"
 $PythonVersion = "3.11.9"
 $Root = Join-Path $env:TEMP "VeraMesh-Portable-Qualification"
 $PythonDir = Join-Path $Root "python"
