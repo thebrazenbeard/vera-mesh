@@ -249,7 +249,7 @@ class VeraPortAgent:
                     "file_version": chunk.file_version,
                 }
 
-        if operation in {"fs.stat", "fs.list_dir", "fs.search"}:
+        if operation in {"fs.stat", "fs.list_dir", "fs.search", "fs.search_content"}:
             lane_id = str(request["lane_id"])
             fencing_token = int(request["fencing_token"])
             async with self._lane_operation(lane_id):
@@ -267,15 +267,31 @@ class VeraPortAgent:
                         offset=request.get("offset", 0),
                         max_entries=request.get("max_entries", 200),
                     )
-                return await self.rdc.search(
+                if operation == "fs.search":
+                    return await self.rdc.search(
+                        lane_id=lane_id,
+                        fencing_token=fencing_token,
+                        root=str(request["root"]),
+                        query=str(request["query"]),
+                        offset=request.get("offset", 0),
+                        max_results=request.get("max_results", 100),
+                        max_entries=request.get("max_entries", 10_000),
+                        max_depth=request.get("max_depth", 12),
+                        case_sensitive=request.get("case_sensitive", False),
+                    )
+                return await self.rdc.search_content(
                     lane_id=lane_id,
                     fencing_token=fencing_token,
                     root=str(request["root"]),
                     query=str(request["query"]),
+                    file_pattern=str(request.get("file_pattern", "*")),
                     offset=request.get("offset", 0),
                     max_results=request.get("max_results", 100),
                     max_entries=request.get("max_entries", 10_000),
                     max_depth=request.get("max_depth", 12),
+                    max_total_bytes=request.get(
+                        "max_total_bytes", 8 * 1024 * 1024
+                    ),
                     case_sensitive=request.get("case_sensitive", False),
                 )
 
