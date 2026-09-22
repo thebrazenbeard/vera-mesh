@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from veraport_agent.controller_recovery import (
     ControllerRecoveryError,
@@ -139,8 +141,13 @@ def test_recovery_is_idempotent_after_new_controller_enrollment(tmp_path):
 def test_unowned_generated_key_is_not_silently_enrolled(tmp_path):
     fx = fixture(tmp_path)
     fx["preferred"].unlink()
+    rogue = ec.generate_private_key(ec.SECP256R1())
     fx["generated"].write_bytes(
-        (fx["identity"] / "controller-key.pem").read_bytes()
+        rogue.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
     )
     with pytest.raises(
         ControllerRecoveryError,
