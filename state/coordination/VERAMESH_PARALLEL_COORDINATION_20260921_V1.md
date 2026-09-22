@@ -184,3 +184,36 @@ This bounded cut closes the immediate uncorrelated response-overflow defect with
 An isolated transport-logic sanity execution reproduced both correlated error paths successfully. That is not an exact repository checkout/test qualification and does not raise the evidence ceiling beyond source/static semantics.
 
 Issue #21 remains PARTIAL rather than closed: ranged/chunked read semantics are still a separate capability increment. Issue #19 remains owned by BT2 and must not be mixed into PR #22 before independent review.
+
+
+## Issue #21 reconciliation — PR #23 current stacked frontier
+
+Concurrent source work has now converged onto one retained Issue #21 stack.
+
+Current exact graph at readback:
+- PR #12: `9bffc57930587bf74a12657bbeaa913474ab5574`
+- PR #22 response-wire hardening: `55c690bd77655ca8a6d0f5f34acb0c5c34c5aada`
+- PR #23 ranged/wire-safe read successor: `cb662c9d5215bb7ea871adbf3ee0b8173c67eeae`
+- PR #23 base is now PR #22; compare is ahead 27 / behind 0.
+
+PR #23 now carries:
+- byte-oriented `fs.read_bytes` under existing `fs.read` authority;
+- bounded chunk policy and exact offset/EOF/size metadata;
+- base64 transport with no text-codepoint boundary ambiguity;
+- file-version continuity checks across chunks;
+- per-chunk lane/fence/root/claim reauthorization;
+- direct/edge mirrored-read failover;
+- controller and conditional MCP exposure;
+- correlated encoded-frame overflow;
+- correlated response serialization failure;
+- explicit stream teardown on response write failure;
+- hostile source regressions for reconstruction, version drift, stale lane, encoding expansion, frame limits, and mirrored failover.
+
+Static coordinator disposition at exact head `cb662c9...`:
+`ACCEPT_SOURCE_DESIGN / EXECUTABLE_QUALIFICATION_PENDING`.
+
+PR #24 @ `a486a85735d62015cc9c4bc1e7076dfa8172b049` is stale concurrent provenance only. It was created against an earlier PR #23 head while PR #23 was moving and is not a current integration/review target. It remains open/draft; no destructive cleanup was performed.
+
+The abandoned local branch `work/veraport-ranged-byte-read-v1-20260921` has no PR and is not a current frontier.
+
+Issue #19 remains a separate BT2-owned source lane. No Issue #19 changes are part of PR #23.
