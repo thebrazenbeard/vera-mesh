@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "veramesh": {
+      "type": "http",
+      "url": "${VERAMESH_PUBLIC_MCP_URL}"
+    }
+  }
+}
