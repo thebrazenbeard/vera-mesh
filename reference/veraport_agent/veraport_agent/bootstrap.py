@@ -92,7 +92,7 @@ def prepare_local_bootstrap(
     tunnel_client: str | Path,
     tunnel_id: str,
     runtime_api_key_file: str | Path,
-    mcp_command: str,
+    mcp_executable: str | Path,
     enable_process: bool = False,
     bind_port: int = 17444,
     alias: str = "veramesh-lappy",
@@ -110,15 +110,18 @@ def prepare_local_bootstrap(
         )
 
     tunnel_client = Path(tunnel_client).expanduser().resolve()
+    mcp_executable = Path(mcp_executable).expanduser().resolve()
     runtime_api_key_file = Path(runtime_api_key_file).expanduser().resolve()
     if not tunnel_client.is_file():
         raise BootstrapError(f"tunnel-client executable missing: {tunnel_client}")
+    if not mcp_executable.is_file():
+        raise BootstrapError(
+            f"VeraMesh stdio MCP executable missing: {mcp_executable}"
+        )
     if not runtime_api_key_file.is_file():
         raise BootstrapError(
             f"runtime API key file missing: {runtime_api_key_file}"
         )
-    if not mcp_command.strip():
-        raise BootstrapError("mcp_command is required")
 
     identity_dir = root / "identity"
     state_dir = root / "state"
@@ -179,11 +182,13 @@ def prepare_local_bootstrap(
     tunnel = {
         "schema": "VERAMESH_TUNNEL_RUNTIME_SERVICE_V1",
         "tunnel_client": str(tunnel_client),
+        "tunnel_client_sha256": _sha256(tunnel_client),
         "alias": alias,
         "tunnel_id": tunnel_id,
         "runtime_api_key_file": str(runtime_api_key_file),
         "controller_config": str(controller_path),
-        "mcp_command": mcp_command,
+        "mcp_executable": str(mcp_executable),
+        "mcp_executable_sha256": _sha256(mcp_executable),
         "profile_dir": str(tunnel_profiles),
         "state_dir": str(tunnel_state),
         "status_interval_s": 5.0,
@@ -270,7 +275,7 @@ def main() -> None:
     parser.add_argument("--tunnel-client", required=True)
     parser.add_argument("--tunnel-id", required=True)
     parser.add_argument("--runtime-api-key-file", required=True)
-    parser.add_argument("--mcp-command", required=True)
+    parser.add_argument("--mcp-executable", required=True)
     parser.add_argument("--enable-process", action="store_true")
     parser.add_argument("--bind-port", type=int, default=17444)
     parser.add_argument("--alias", default="veramesh-lappy")
@@ -282,7 +287,7 @@ def main() -> None:
         tunnel_client=args.tunnel_client,
         tunnel_id=args.tunnel_id,
         runtime_api_key_file=args.runtime_api_key_file,
-        mcp_command=args.mcp_command,
+        mcp_executable=args.mcp_executable,
         enable_process=args.enable_process,
         bind_port=args.bind_port,
         alias=args.alias,
