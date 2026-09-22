@@ -19,11 +19,13 @@ def make_inputs(tmp_path: Path):
     tunnel.write_text("placeholder", encoding="utf-8")
     key = tmp_path / "runtime.key"
     key.write_text("runtime-secret", encoding="utf-8")
-    return allowed, tunnel, key
+    mcp = tmp_path / "veraport-mcp-stdio.exe"
+    mcp.write_text("mcp-placeholder", encoding="utf-8")
+    return allowed, tunnel, key, mcp
 
 
 def test_bootstrap_defaults_to_filesystem_only_and_no_effect_claims(tmp_path):
-    allowed, tunnel, key = make_inputs(tmp_path)
+    allowed, tunnel, key, mcp = make_inputs(tmp_path)
     root = tmp_path / "VeraMesh"
     manifest = prepare_local_bootstrap(
         root,
@@ -31,7 +33,7 @@ def test_bootstrap_defaults_to_filesystem_only_and_no_effect_claims(tmp_path):
         tunnel_client=tunnel,
         tunnel_id="tunnel_0123456789abcdef",
         runtime_api_key_file=key,
-        mcp_command="veraport-mcp-stdio",
+        mcp_executable=mcp,
         harden_windows_acl=False,
     )
 
@@ -59,10 +61,13 @@ def test_bootstrap_defaults_to_filesystem_only_and_no_effect_claims(tmp_path):
         {"fs.read", "fs.write"}
     )
     assert tunnel_cfg.tunnel_id == "tunnel_0123456789abcdef"
+    assert tunnel_cfg.tunnel_client_sha256
+    assert tunnel_cfg.mcp_executable == mcp.resolve()
+    assert tunnel_cfg.mcp_executable_sha256
 
 
 def test_bootstrap_process_authority_requires_explicit_choice(tmp_path):
-    allowed, tunnel, key = make_inputs(tmp_path)
+    allowed, tunnel, key, mcp = make_inputs(tmp_path)
     root = tmp_path / "VeraMesh"
     manifest = prepare_local_bootstrap(
         root,
@@ -70,7 +75,7 @@ def test_bootstrap_process_authority_requires_explicit_choice(tmp_path):
         tunnel_client=tunnel,
         tunnel_id="tunnel_process",
         runtime_api_key_file=key,
-        mcp_command="veraport-mcp-stdio",
+        mcp_executable=mcp,
         enable_process=True,
         harden_windows_acl=False,
     )
@@ -87,7 +92,7 @@ def test_bootstrap_process_authority_requires_explicit_choice(tmp_path):
 
 
 def test_bootstrap_refuses_missing_root_secret_or_tunnel_binary(tmp_path):
-    allowed, tunnel, key = make_inputs(tmp_path)
+    allowed, tunnel, key, mcp = make_inputs(tmp_path)
     with pytest.raises(BootstrapError, match="allowed roots"):
         prepare_local_bootstrap(
             tmp_path / "a",
@@ -95,7 +100,7 @@ def test_bootstrap_refuses_missing_root_secret_or_tunnel_binary(tmp_path):
             tunnel_client=tunnel,
             tunnel_id="tunnel_x",
             runtime_api_key_file=key,
-            mcp_command="veraport-mcp-stdio",
+            mcp_executable=mcp,
             harden_windows_acl=False,
         )
     with pytest.raises(BootstrapError, match="tunnel-client"):
@@ -105,7 +110,7 @@ def test_bootstrap_refuses_missing_root_secret_or_tunnel_binary(tmp_path):
             tunnel_client=tmp_path / "missing.exe",
             tunnel_id="tunnel_x",
             runtime_api_key_file=key,
-            mcp_command="veraport-mcp-stdio",
+            mcp_executable=mcp,
             harden_windows_acl=False,
         )
     with pytest.raises(BootstrapError, match="runtime API key"):
@@ -115,13 +120,13 @@ def test_bootstrap_refuses_missing_root_secret_or_tunnel_binary(tmp_path):
             tunnel_client=tunnel,
             tunnel_id="tunnel_x",
             runtime_api_key_file=tmp_path / "missing.key",
-            mcp_command="veraport-mcp-stdio",
+            mcp_executable=mcp,
             harden_windows_acl=False,
         )
 
 
 def test_bootstrap_refuses_overwrite_and_preserves_first_subject(tmp_path):
-    allowed, tunnel, key = make_inputs(tmp_path)
+    allowed, tunnel, key, mcp = make_inputs(tmp_path)
     root = tmp_path / "VeraMesh"
     first = prepare_local_bootstrap(
         root,
@@ -129,7 +134,7 @@ def test_bootstrap_refuses_overwrite_and_preserves_first_subject(tmp_path):
         tunnel_client=tunnel,
         tunnel_id="tunnel_first",
         runtime_api_key_file=key,
-        mcp_command="veraport-mcp-stdio",
+        mcp_executable=mcp,
         harden_windows_acl=False,
     )
     original = (root / "controller.json").read_bytes()
@@ -140,7 +145,7 @@ def test_bootstrap_refuses_overwrite_and_preserves_first_subject(tmp_path):
             tunnel_client=tunnel,
             tunnel_id="tunnel_second",
             runtime_api_key_file=key,
-            mcp_command="veraport-mcp-stdio",
+            mcp_executable=mcp,
             harden_windows_acl=False,
         )
     assert (root / "controller.json").read_bytes() == original
@@ -154,7 +159,7 @@ def test_bootstrap_hardens_generated_windows_material(tmp_path):
         validate_private_file,
     )
 
-    allowed, tunnel, key = make_inputs(tmp_path)
+    allowed, tunnel, key, mcp = make_inputs(tmp_path)
     root = tmp_path / "VeraMesh"
     # The external runtime-key file is part of the service material set, so put
     # it under the bootstrap root to let the expected ACL policy own it.
@@ -174,7 +179,7 @@ def test_bootstrap_hardens_generated_windows_material(tmp_path):
         tunnel_client=tunnel,
         tunnel_id="tunnel_windows",
         runtime_api_key_file=key,
-        mcp_command="veraport-mcp-stdio",
+        mcp_executable=mcp,
         harden_windows_acl=True,
     )
     validate_private_directory(root)
