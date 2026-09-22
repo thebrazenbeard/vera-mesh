@@ -29,7 +29,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate authorized Synology connector syntax
-        run: sh -n tools/synology_authorize_lappy_veramesh_connection.sh
+        run: |
+          sh -n tools/synology_authorize_lappy_veramesh_connection.sh
+          sh -n tools/synology_connect_lappy_veraport.sh
 
   test:
     runs-on: ubuntu-latest
