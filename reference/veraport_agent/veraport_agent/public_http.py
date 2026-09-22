@@ -220,7 +220,12 @@ def build_public_gateway_http_app(
             try:
                 await bundle.close()
             finally:
-                await runtime.close()
+                try:
+                    await runtime.close()
+                finally:
+                    close_verifier = getattr(token_verifier, "aclose", None)
+                    if close_verifier is not None:
+                        await close_verifier()
 
     app = Starlette(routes=routes, lifespan=lifespan)
     return PublicGatewayHTTPApp(
