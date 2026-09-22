@@ -20,6 +20,16 @@ def read_claim(path: Path) -> ResourceClaim:
     )
 
 
+def test_chunk_default_clamps_to_existing_read_ceiling(tmp_path: Path) -> None:
+    registry = LaneRegistry({"fs.read"})
+    executor = LocalExecutor(
+        registry,
+        allowed_roots=(tmp_path,),
+        max_read_bytes=32,
+    )
+    assert executor.max_read_chunk_bytes == 32
+
+
 @pytest.mark.asyncio
 async def test_ranged_byte_reads_reconstruct_exact_file(tmp_path: Path) -> None:
     payload = b"alpha\x00\xff" + "snowman-☃".encode("utf-8") + b"-omega"
