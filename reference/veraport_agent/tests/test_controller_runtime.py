@@ -193,6 +193,7 @@ async def test_mcp_reconnect_reuses_persistent_veraport_sessions(tmp_path: Path)
     assert opens == ["direct", "edge"]
     assert info1["selected_path_id"] == "direct"
     assert info2["selected_path_id"] == "direct"
+    assert {x["path_id"] for x in info2["paths"]} == {"direct", "edge"}
     assert {x["session_id"] for x in info2["paths"]} == {
         "session-direct",
         "session-edge",
@@ -237,6 +238,7 @@ async def test_tls_handshake_without_lane_list_does_not_make_path_current(
 
     assert info["selected_path_id"] == "edge"
     assert [x["endpoint_id"] for x in info["paths"]] == ["edge"]
+    assert [x["path_id"] for x in info["paths"]] == ["edge"]
 
 
 @pytest.mark.asyncio
@@ -406,6 +408,7 @@ async def test_startup_blackhole_is_bounded_and_later_endpoint_is_tried(
     assert opens == ["direct", "edge"]
     assert info["selected_path_id"] == "edge"
     assert [item["endpoint_id"] for item in info["paths"]] == ["edge"]
+    assert [item["path_id"] for item in info["paths"]] == ["edge"]
 
 
 @pytest.mark.asyncio
