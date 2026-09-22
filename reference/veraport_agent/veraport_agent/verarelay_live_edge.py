@@ -39,10 +39,14 @@ class LiveEdgeConfig:
             raise ValueError("io_chunk_bytes must be in 1024..1048576")
 
 
-class VeraRelayLiveEdge:
-    """Transparent live VeraPort carrier for VeraRelay/VeraMesh Edge.
+class VeraMeshReferenceLiveEdge:
+    """Independent reference carrier for VeraMesh live EDGE_STREAM semantics.
 
-    The edge never terminates VeraPort TLS and never parses VeraPort frames.
+    This is not the production VeraRelay runtime. VeraRelay 0.4 is the separate
+    Node.js 22 + SQLite durable courier. Production Synology EDGE_STREAM is the
+    VeraMesh Python 3.11 SPK edge.
+
+    The reference edge never terminates VeraPort TLS and never parses VeraPort frames.
     Controller <-> workstation confidentiality, application authentication,
     session capabilities, lane claims, fencing, and mutation idempotency remain
     end-to-end properties of VeraPort.
@@ -175,8 +179,13 @@ class VeraRelayLiveEdge:
             await writer.drain()
 
 
+# Compatibility alias for earlier source consumers. The name is historical and
+# MUST NOT be used to identify the Node.js VeraRelay durable runtime.
+VeraRelayLiveEdge = VeraMeshReferenceLiveEdge
+
+
 async def run(config: LiveEdgeConfig) -> None:
-    edge = VeraRelayLiveEdge(config)
+    edge = VeraMeshReferenceLiveEdge(config)
     server = await edge.start()
     try:
         async with server:
@@ -188,7 +197,7 @@ async def run(config: LiveEdgeConfig) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Transparent VeraRelay/VeraMesh live edge for end-to-end VeraPort TLS"
+            "VeraMesh reference live edge for end-to-end VeraPort TLS"
         )
     )
     parser.add_argument("--listen-host", default="127.0.0.1")
