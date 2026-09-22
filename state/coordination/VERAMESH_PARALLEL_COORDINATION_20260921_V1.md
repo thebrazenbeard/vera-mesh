@@ -118,3 +118,20 @@ NOT NOW:
 - branch deletion/history rewrite.
 
 This checkpoint is an execution-coordination artifact, not a qualification receipt or authorization expansion.
+
+
+## Execution update — Issue #17 successor
+
+Source-only repair is now staged as VeraMesh Draft PR #20:
+
+- base: PR #12 exact head `9bffc57930587bf74a12657bbeaa913474ab5574`
+- head: `5f1ed8d61fd0faf05bc5833d70b8a98ac9875691`
+- branch: `work/veraport-request-ledger-health-v2-20260921`
+- compare: ahead 3 / behind 0
+- changed files: exactly mutation-ledger profile, request-ledger hostile tests, and state-store implementation
+- PR state: OPEN / DRAFT / MERGEABLE at readback
+- hosted workflow evidence: none observed for exact head
+
+The existing PR #12 head already removed read-only requests from durable mutation journaling and introduced bounded fail-closed mutation capacity. PR #20 adds the remaining health/degradation visibility: storage bytes, pending/oldest ages, write-admission state, degraded reason, and read-only survival when ledger-health inspection is unavailable.
+
+Claim ceiling remains source/static-readback only until executable qualification occurs.
