@@ -299,3 +299,60 @@ async def test_read_probe_ignores_mutation_ledger_write_failure(
         response["result"]["request_ledger"]["status"]
         == "DEGRADED_NEAR_CAPACITY"
     )
+
+
+def test_request_ledger_health_exposes_storage_pending_and_age(tmp_path):
+    store = AgentStateStore(
+        tmp_path / "state.sqlite3",
+        max_mutation_requests=4,
+        warn_at_records=3,
+    )
+    try:
+        assert store.begin_request(
+            "pending-health",
+            hashlib.sha256(b"pending-health").hexdigest(),
+            now_ms=1_000,
+        ).disposition == "NEW"
+
+        health = store.request_ledger_health(now_ms=1_250)
+        assert health["status"] == "HEALTHY"
+        assert health["mutation_records"] == 1
+        assert health["detail_records"] == 1
+        assert health["tombstone_records"] == 0
+        assert health["pending_records"] == 1
+        assert health["oldest_mutation_started_at_ms"] == 1_000
+        assert health["oldest_mutation_age_ms"] == 250
+        assert health["oldest_pending_started_at_ms"] == 1_000
+        assert health["oldest_pending_age_ms"] == 250
+        assert health["write_admission"] == "ALLOWED_BY_LEDGER_CAPACITY"
+        assert health["degraded_reason"] is None
+        assert health["state_db_bytes"] > 0
+        assert health["wal_bytes"] >= 0
+        assert health["shm_bytes"] >= 0
+        assert health["journal_mode"] == "WAL"
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_read_probe_survives_ledger_health_inspection_failure(tmp_path):
+    store = AgentStateStore(tmp_path / "state.sqlite3")
+    store.close()
+    registry = LaneRegistry({"fs.read"})
+    agent = VeraPortAgent(
+        registry,
+        LocalExecutor(registry, allowed_roots=(tmp_path,)),
+        store,
+    )
+
+    response = await agent.handle({
+        "protocol_version": "veraport-v1",
+        "request_id": "health-unavailable",
+        "operation": "lane.list",
+    })
+
+    assert response["ok"] is True
+    health = response["result"]["request_ledger"]
+    assert health["status"] == "DEGRADED_STORE_UNAVAILABLE"
+    assert health["write_admission"] == "UNKNOWN_FAIL_CLOSED"
+    assert health["degraded_reason"] == "STATE_STORE_UNAVAILABLE"
