@@ -48,9 +48,20 @@ do
   fi
 done
 
+echo "--- package-metadata ---"
+if [ -r /var/packages/VeraMesh/INFO ]; then
+  grep -E '^(package|version|arch|os_min_ver|description|dsmappname|dsmuidir)=' /var/packages/VeraMesh/INFO 2>/dev/null || true
+else
+  echo "package_info=UNREADABLE"
+fi
+
 echo "--- package-unit ---"
 if [ -x /usr/syno/bin/synosystemctl ]; then
-  /usr/syno/bin/synosystemctl status pkguser-veramesh.service 2>&1 | head -n 40
+  for verb in get-load-status get-active-status get-enable-status; do
+    printf '%s=' "$verb"
+    /usr/syno/bin/synosystemctl "$verb" pkguser-veramesh.service 2>&1 | one_line
+    echo
+  done
 else
   echo "synosystemctl=UNAVAILABLE"
 fi
@@ -68,7 +79,7 @@ fi
 
 echo "--- control-socket ---"
 if [ -S "$RUN/control.sock" ]; then
-  echo "control_socket=SOCKET_PRESENT"
+  echo "control_socket_observation=SOCKET_PRESENT"
   if [ -x "$PY" ]; then
     "$PY" - "$RUN/control.sock" <<'PY'
 import json, socket, sys
@@ -93,7 +104,15 @@ except Exception as exc:
 PY
   fi
 else
-  echo "control_socket=ABSENT"
+  socket_ls=$(ls -ld "$RUN/control.sock" 2>&1)
+  socket_ls_rc=$?
+  if [ "$socket_ls_rc" -eq 0 ]; then
+    echo "control_socket_observation=PATH_PRESENT_NOT_SOCKET"
+    printf 'control_socket_stat=%s\n' "$socket_ls"
+  else
+    echo "control_socket_observation=UNRESOLVED_NONROOT"
+    printf 'control_socket_lookup=%s\n' "$socket_ls"
+  fi
 fi
 
 echo "--- edge-config-nonsecret ---"
@@ -112,7 +131,7 @@ except Exception as exc:
     print("edge_config_error="+type(exc).__name__+":"+str(exc))
 PY
 else
-  echo "edge_config=UNAVAILABLE"
+  echo "edge_config=UNREADABLE_OR_INACCESSIBLE"
 fi
 
 echo "--- lifecycle-state-nonsecret ---"
@@ -131,7 +150,7 @@ except Exception as exc:
     print("lifecycle_state_error="+type(exc).__name__+":"+str(exc))
 PY
 else
-  echo "lifecycle_state=UNAVAILABLE"
+  echo "lifecycle_state=UNREADABLE_OR_INACCESSIBLE"
 fi
 
 echo "--- processes ---"
@@ -141,6 +160,16 @@ elif ps w >/dev/null 2>&1; then
   ps w 2>/dev/null | grep -E '[v]eramesh|[v]eraport|[v]erarelay|[t]ailscale' || true
 else
   ps 2>/dev/null | grep -E '[v]eramesh|[v]eraport|[v]erarelay|[t]ailscale' || true
+fi
+
+echo "--- process-unit-binding ---"
+edge_pid=$(ps -ef 2>/dev/null | awk '/[v]eramesh_edge[.]py serve/ {print $2; exit}')
+if [ -n "${edge_pid:-}" ] && [ -x /usr/syno/bin/synosystemctl ]; then
+  printf 'edge_pid=%s unit=' "$edge_pid"
+  /usr/syno/bin/synosystemctl get-unit-by-pid "$edge_pid" 2>&1 | one_line
+  echo
+else
+  echo "edge_process_unit=UNRESOLVED"
 fi
 
 echo "--- listeners-with-owner-if-permitted ---"
