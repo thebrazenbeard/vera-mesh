@@ -213,3 +213,27 @@ def fetch_and_qualify(
         expected_issuer=issuer,
         metadata_url=metadata_url,
     )
+
+
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Read-only qualification of OAuth authorization-server metadata "
+            "for the VeraMesh public plugin."
+        )
+    )
+    parser.add_argument("--issuer", required=True)
+    parser.add_argument("--timeout-s", type=float, default=10.0)
+    args = parser.parse_args()
+    result = fetch_and_qualify(
+        args.issuer,
+        timeout_s=args.timeout_s,
+    )
+    print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()
