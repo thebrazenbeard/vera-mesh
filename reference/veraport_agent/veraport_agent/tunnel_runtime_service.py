@@ -11,6 +11,8 @@ from typing import Any, Callable
 
 from .controller_config import ControllerConfig
 from .windows_acl import (
+    harden_private_directory,
+    harden_private_file,
     validate_private_directory,
     validate_private_file,
 )
@@ -280,6 +282,33 @@ def stop_runtime(
     runner: Runner = subprocess.run,
 ) -> None:
     _run(config, stop_args(config), runner=runner)
+
+
+def harden_service_materials(
+    config_path: str | Path,
+    config: TunnelRuntimeServiceConfig,
+) -> None:
+    """Apply the qualified LocalSystem ACL profile to tunnel runtime material."""
+    config_path = Path(config_path)
+    controller = ControllerConfig.load(config.controller_config)
+    protected_files = {
+        config_path,
+        config.runtime_api_key_file,
+        config.controller_config,
+        controller.controller_key,
+        controller.tls_ca,
+        controller.workstation_public_key,
+    }
+    protected_dirs = {
+        config_path.parent,
+        config.profile_dir,
+        config.state_dir,
+        *(path.parent for path in protected_files),
+    }
+    for directory in sorted(protected_dirs, key=lambda p: len(str(p))):
+        harden_private_directory(directory)
+    for path in protected_files:
+        harden_private_file(path)
 
 
 def validate_service_materials(
