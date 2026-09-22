@@ -29,7 +29,11 @@ async def test_fastmcp_constructor_receives_http_bind_settings():
     assert server.settings.port == 18446
     assert server.settings.stateless_http is False
 
-    names = {tool.name for tool in await server.list_tools()}
+    tools = {tool.name: tool for tool in await server.list_tools()}
+    names = set(tools)
+    assert tools["machine_info"].annotations.readOnlyHint is True
+    assert tools["lane_list"].annotations.readOnlyHint is True
+    assert tools["fs_read_text"].annotations.readOnlyHint is True
     assert {
         "machine_info",
         "lane_list",
@@ -61,7 +65,18 @@ async def test_mcp_surface_registers_replacement_tools_from_policy():
         "process.terminate",
     }
     server = build_mcp_server(RuntimeStub(operations))
-    names = {tool.name for tool in await server.list_tools()}
+    tools = {tool.name: tool for tool in await server.list_tools()}
+    names = set(tools)
+    for name in {
+        "fs_read_bytes",
+        "fs_stat",
+        "fs_list_dir",
+        "fs_search",
+        "process_list",
+        "process_status",
+        "process_output",
+    }:
+        assert tools[name].annotations.readOnlyHint is True
     assert {
         "fs_read_bytes",
         "fs_stat",
