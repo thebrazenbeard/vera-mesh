@@ -35,6 +35,17 @@ class Channel:
                 "result": {"lanes": []},
                 "via": self.label,
             }
+        if request["operation"] == "lane.open":
+            return {
+                "request_id": request["request_id"],
+                "ok": True,
+                "result": {
+                    "lane_id": request["lane_id"],
+                    "fencing_token": 17,
+                    "via": self.label,
+                },
+                "via": self.label,
+            }
         return {
             "request_id": request["request_id"],
             "ok": True,
