@@ -55,7 +55,7 @@ class LocalExecutor:
         allowed_roots: tuple[Path, ...],
         max_output_bytes: int = 1_048_576,
         max_read_bytes: int = 1_048_576,
-        max_read_chunk_bytes: int = 262_144,
+        max_read_chunk_bytes: int | None = None,
         allow_process_exec: bool = False,
     ) -> None:
         if not allowed_roots:
@@ -64,6 +64,8 @@ class LocalExecutor:
             raise ValueError("max_output_bytes must be positive")
         if max_read_bytes < 1:
             raise ValueError("max_read_bytes must be positive")
+        if max_read_chunk_bytes is None:
+            max_read_chunk_bytes = min(262_144, max_read_bytes)
         if (
             type(max_read_chunk_bytes) is not int
             or max_read_chunk_bytes < 1
