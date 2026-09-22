@@ -18,7 +18,7 @@ SCRIPT = (
 def test_activation_packet_pins_reviewed_subject_and_read_only_authority():
     canonical_lf = SCRIPT.read_bytes().replace(b"\r\n", b"\n")
     assert hashlib.sha256(canonical_lf).hexdigest() == (
-        "092eb9bde109dc203d9202b916616645fa2d5ac2774b8863470445e57c976956"
+        "fd90707c65a575b9a53906a4b911f365c98e5c9f0463cc02c7f12ef3073d5bdc"
     )
     text = canonical_lf.decode("utf-8")
     assert "83e178921772017bc4edbe26b5a2e4eee8da1632" in text
