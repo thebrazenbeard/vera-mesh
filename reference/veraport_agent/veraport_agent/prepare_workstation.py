@@ -315,3 +315,40 @@ def prepare_workstation_service(
     manifest_path = root / "workstation-preparation-manifest.json"
     _write_new_json(manifest_path, manifest)
     return manifest
+
+
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Prepare persistent VeraPort workstation identity/config and a "
+            "separate movable controller export. Does not install/start a service."
+        )
+    )
+    parser.add_argument("--service-root", required=True)
+    parser.add_argument("--controller-export-dir", required=True)
+    parser.add_argument("--allowed-root", action="append", required=True)
+    parser.add_argument("--bind-host", default="127.0.0.1")
+    parser.add_argument("--bind-port", type=int, default=17444)
+    parser.add_argument("--allow-non-loopback-listener", action="store_true")
+    parser.add_argument("--enable-process", action="store_true")
+    parser.add_argument("--endpoint-id", default="workstation-direct")
+    args = parser.parse_args()
+
+    result = prepare_workstation_service(
+        args.service_root,
+        args.controller_export_dir,
+        allowed_roots=args.allowed_root,
+        bind_host=args.bind_host,
+        bind_port=args.bind_port,
+        allow_non_loopback_listener=args.allow_non_loopback_listener,
+        enable_process=args.enable_process,
+        endpoint_id=args.endpoint_id,
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()
