@@ -67,8 +67,14 @@ def fixture(tmp_path: Path):
     }
 
 
-def test_reuses_exact_enrolled_controller_without_trust_write(tmp_path):
+def test_reuses_only_exact_readonly_enrolled_controller_without_trust_write(tmp_path):
     fx = fixture(tmp_path)
+    trust = json.loads(fx["controllers"].read_text(encoding="utf-8"))
+    trust["controllers"][0]["capabilities"] = ["fs.read"]
+    fx["controllers"].write_text(
+        json.dumps(trust, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     before = fx["controllers"].read_bytes()
     result = ensure_readonly_controller(
         service_config_path=fx["service"],
@@ -81,6 +87,29 @@ def test_reuses_exact_enrolled_controller_without_trust_write(tmp_path):
     assert result["controller_principal"] == fx["original_principal"]
     assert fx["controllers"].read_bytes() == before
     assert not fx["generated"].exists()
+
+
+def test_broader_enrolled_controller_is_not_reused_for_chatgpt_tunnel(tmp_path):
+    fx = fixture(tmp_path)
+    result = ensure_readonly_controller(
+        service_config_path=fx["service"],
+        preferred_controller_private_key_path=fx["preferred"],
+        generated_controller_private_key_path=fx["generated"],
+        harden_windows_acl=False,
+    )
+    assert result["mode"] == "ENROLLED_NEW_READONLY_CONTROLLER"
+    assert result["preferred_status"] == "enrolled_but_broader_than_fs_read"
+    assert result["controller_principal"] != fx["original_principal"]
+    assert result["capabilities"] == ["fs.read"]
+    trust = json.loads(fx["controllers"].read_text(encoding="utf-8"))
+    by_principal = {entry["principal"]: entry for entry in trust["controllers"]}
+    assert by_principal[fx["original_principal"]]["capabilities"] == [
+        "fs.read",
+        "fs.write",
+    ]
+    assert by_principal[result["controller_principal"]]["capabilities"] == [
+        "fs.read"
+    ]
 
 
 def test_missing_preferred_appends_new_readonly_controller_and_preserves_old(tmp_path):

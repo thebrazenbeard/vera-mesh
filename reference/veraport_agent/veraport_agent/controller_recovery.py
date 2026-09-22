@@ -224,7 +224,7 @@ def ensure_readonly_controller(
         preferred_ceiling = before_identity.capability_policy.get(
             preferred_principal
         )
-        if preferred_ceiling is not None and "fs.read" in preferred_ceiling:
+        if preferred_ceiling == READ_ONLY_CAPABILITIES:
             return {
                 "schema": "VERAPORT_CONTROLLER_RECOVERY_V1",
                 "mode": "REUSED_ENROLLED_CONTROLLER",
@@ -241,7 +241,12 @@ def ensure_readonly_controller(
                 "service_restart_required": False,
                 "private_key_value_recorded": False,
             }
-        preferred_status = "present_but_not_usable_for_fs_read"
+        if preferred_ceiling is None:
+            preferred_status = "present_but_not_enrolled"
+        elif "fs.read" not in preferred_ceiling:
+            preferred_status = "enrolled_without_fs_read"
+        else:
+            preferred_status = "enrolled_but_broader_than_fs_read"
 
     marker_path = generated.with_suffix(generated.suffix + ".recovery.json")
     generated_new = False

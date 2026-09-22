@@ -28,7 +28,7 @@ The attach packet preserves:
 - process policy;
 - every pre-existing controller trust entry.
 
-It first tries the historical controller-key candidate. The key is reused only if its derived EC P-256 controller principal is already present in the live trust and has `fs.read`.
+It first tries the historical controller-key candidate. The key is reused only if its derived EC P-256 controller principal is already present in the live trust with the **exact** capability ceiling `fs.read`. A recovered controller that also carries `fs.write` or any other capability is deliberately not reused for the ChatGPT tunnel.
 
 If that exact credential cannot be recovered, the packet uses `veraport_agent.controller_recovery` to create a distinct local EC P-256 controller at:
 
