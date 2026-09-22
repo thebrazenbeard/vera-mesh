@@ -83,7 +83,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.25.0"
-          cache-dependency-path: gateway/veramesh-go/go.sum
+          cache: false
       - name: Test Go VeraPort interoperability
         run: go test ./...
       - name: Cross-build DS216 ARMv7 gateway target without CGO
