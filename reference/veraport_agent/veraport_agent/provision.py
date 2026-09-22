@@ -107,6 +107,7 @@ def provision_local_pair(
     capabilities: Iterable[str] = FILESYSTEM_CAPABILITIES,
     valid_days: int = 825,
     now: dt.datetime | None = None,
+    harden_windows_acl: bool = True,
 ) -> dict:
     root = Path(output_dir).expanduser().resolve()
     requested = frozenset(str(item) for item in capabilities)
@@ -137,7 +138,7 @@ def provision_local_pair(
         )
 
     root.mkdir(parents=True, exist_ok=True)
-    if os.name == "nt":
+    if os.name == "nt" and harden_windows_acl:
         from .windows_acl import harden_private_directory
 
         # Establish the protected LocalSystem/Admin boundary before any private
@@ -190,7 +191,7 @@ def provision_local_pair(
     for name, payload in files.items():
         target = root / name
         _write_new(target, payload)
-        if os.name == "nt":
+        if os.name == "nt" and harden_windows_acl:
             from .windows_acl import harden_private_file
 
             harden_private_file(target)
@@ -223,7 +224,7 @@ def provision_local_pair(
         manifest_path,
         (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8"),
     )
-    if os.name == "nt":
+    if os.name == "nt" and harden_windows_acl:
         from .windows_acl import harden_private_file
 
         harden_private_file(manifest_path)
