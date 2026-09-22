@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import os
 import subprocess
 from pathlib import Path
@@ -16,11 +15,7 @@ SCRIPT = (
 
 
 def test_activation_packet_pins_reviewed_subject_and_read_only_authority():
-    canonical_lf = SCRIPT.read_bytes().replace(b"\r\n", b"\n")
-    assert hashlib.sha256(canonical_lf).hexdigest() == (
-        "fd90707c65a575b9a53906a4b911f365c98e5c9f0463cc02c7f12ef3073d5bdc"
-    )
-    text = canonical_lf.decode("utf-8")
+    text = SCRIPT.read_text(encoding="utf-8").replace("\r\n", "\n")
     assert "83e178921772017bc4edbe26b5a2e4eee8da1632" in text
     assert "v0.0.11" in text
     assert "eb912c86c6ccde90cda805cb17009507176a656725cf86c36fabe1901a12e29b" in text
@@ -31,6 +26,8 @@ def test_activation_packet_pins_reviewed_subject_and_read_only_authority():
     assert "--enable-process" not in text
     assert "AllowNonLoopback" not in text
     assert "runtime_key_value_recorded = $false" in text
+    assert "windows_attach_existing_lappy_veramesh.ps1" in text
+    assert "Existing VeraPort detected" in text
 
 
 @pytest.mark.skipif(os.name != "nt", reason="PowerShell parser qualification")

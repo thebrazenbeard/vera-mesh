@@ -1,16 +1,17 @@
 param(
     [string]$TunnelId = "",
-    [string[]]$AllowedRoot = @($env:USERPROFILE),
     [string]$Alias = "veramesh-lappy",
+    [string]$ControllerPrivateKey = "C:\\ProgramData\\VeraMesh\\controller\\vera-controller-bootstrap.pem",
     [switch]$Apply
 )
 
 $ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
 
-$VeraMeshSourceSha = "83e178921772017bc4edbe26b5a2e4eee8da1632"
-$TunnelClientVersion = "v0.0.11"
-$TunnelClientArchiveSha256 = "eb912c86c6ccde90cda805cb17009507176a656725cf86c36fabe1901a12e29b"
-$TunnelClientUrl = "https://github.com/openai/tunnel-client/releases/download/v0.0.11/tunnel-client-v0.0.11-windows-amd64.zip"
+$VeraMeshSourceSha = "09cd149a924c5d428df840d8b7be036fc2d070a8"
+$TunnelClientVersion = "v0.0.14"
+$TunnelClientArchiveSha256 = "784ab8da7b5a88f0109f1fd8aaf0a1c86067430b896dddf307ef7e3cc49fa1a5"
+$TunnelClientUrl = "https://github.com/openai/tunnel-client/releases/download/v0.0.14/tunnel-client-v0.0.14-windows-amd64.zip"
 
 $PythonVersion = "3.11.9"
 $PythonUrl = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embeddable-amd64.zip"
@@ -19,15 +20,16 @@ $GetPipCommit = "f6f644156f23dfe9acc06e7b9ca75eee311f2e37"
 $GetPipUrl = "https://raw.githubusercontent.com/pypa/get-pip/$GetPipCommit/public/get-pip.py"
 $SourceUrl = "https://github.com/thebrazenbeard/vera-mesh/archive/$VeraMeshSourceSha.zip"
 
-$Root = "C:\ProgramData\VeraMesh"
-$RuntimeDir = Join-Path $Root "runtime"
-$BinDir = Join-Path $Root "bin"
+$Root = "C:\\ProgramData\\VeraMesh"
+$ServiceConfig = Join-Path $Root "veraport.json"
+$RuntimeDir = Join-Path $Root "tunnel-runtime"
+$BinDir = Join-Path $Root "tunnel-bin"
 $SecretDir = Join-Path $Root "secrets"
 $RuntimeKeyPath = Join-Path $SecretDir "tunnel-runtime.key"
-$ReceiptPath = Join-Path $Root "activation-receipt.json"
-$FailureReceiptPath = Join-Path $Root "activation-failure-receipt.json"
+$ReceiptPath = Join-Path $Root "tunnel-attach-receipt.json"
+$FailureReceiptPath = Join-Path $Root "tunnel-attach-failure-receipt.json"
 
-$StageRoot = Join-Path $env:TEMP ("VeraMesh-Lappy-Activation-" + [guid]::NewGuid().ToString("N"))
+$StageRoot = Join-Path $env:TEMP ("VeraMesh-Existing-Attach-" + [guid]::NewGuid().ToString("N"))
 $StagePython = Join-Path $StageRoot "python"
 $StageSource = Join-Path $StageRoot "source"
 $StageTunnel = Join-Path $StageRoot "tunnel"
@@ -69,12 +71,17 @@ function Enable-EmbeddedSite([string]$PythonDir) {
 }
 
 function Initialize-PortableRuntime([string]$Destination, [string]$PackagePath, [string]$ConstraintsPath) {
+    if (Test-Path -LiteralPath $Destination) {
+        if (Get-ChildItem -LiteralPath $Destination -Force | Select-Object -First 1) {
+            throw "Existing tunnel runtime directory is non-empty: $Destination"
+        }
+    }
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
     Expand-Archive -Path $PythonZip -DestinationPath $Destination -Force
     Enable-EmbeddedSite $Destination
 
     $python = Join-Path $Destination "python.exe"
-    if (-not (Test-Path $python)) {
+    if (-not (Test-Path $python -PathType Leaf)) {
         throw "Portable Python executable missing from $Destination"
     }
 
@@ -86,9 +93,44 @@ function Initialize-PortableRuntime([string]$Destination, [string]$PackagePath, 
 
     $target = $PackagePath + "[windows-service,mcp]"
     & $python -m pip install --disable-pip-version-check --no-build-isolation --constraint $ConstraintsPath $target | Out-Host
-    Assert-ExitCode "VeraMesh runtime package installation"
-
+    Assert-ExitCode "VeraMesh tunnel runtime package installation"
     return $python
+}
+
+function Protect-SecretDirectory([string]$Path) {
+    New-Item -ItemType Directory -Path $Path -Force | Out-Null
+    & icacls.exe $Path /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" | Out-Null
+    Assert-ExitCode "secret directory ACL"
+}
+
+function Read-RuntimeKeyToFile([string]$Path) {
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        $existing = [IO.File]::ReadAllText($Path).Trim()
+        if ($existing.Length -lt 32 -or $existing -match '\\s') {
+            throw "Existing runtime API key file is invalid: $Path"
+        }
+        return
+    }
+    $secure = Read-Host "Paste the restricted tunnel runtime API key (input hidden)" -AsSecureString
+    $ptr = [IntPtr]::Zero
+    $plain = $null
+    try {
+        $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+        $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+        if ([string]::IsNullOrWhiteSpace($plain) -or $plain.Length -lt 32) {
+            throw "Runtime API key is empty or implausibly short."
+        }
+        if ($plain -match '\\s') {
+            throw "Runtime API key must not contain whitespace."
+        }
+        [IO.File]::WriteAllText($Path, $plain, [Text.UTF8Encoding]::new($false))
+    }
+    finally {
+        $plain = $null
+        if ($ptr -ne [IntPtr]::Zero) {
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+        }
+    }
 }
 
 function Wait-ServiceRunning([string]$Name, [int]$TimeoutSeconds = 45) {
@@ -101,35 +143,6 @@ function Wait-ServiceRunning([string]$Name, [int]$TimeoutSeconds = 45) {
         Start-Sleep -Milliseconds 500
     } while ((Get-Date) -lt $deadline)
     throw "Service $Name did not reach RUNNING within $TimeoutSeconds seconds"
-}
-
-function Protect-SecretDirectory([string]$Path) {
-    New-Item -ItemType Directory -Path $Path -Force | Out-Null
-    & icacls.exe $Path /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" | Out-Null
-    Assert-ExitCode "secret directory ACL"
-}
-
-function Read-RuntimeKeyToFile([string]$Path) {
-    $secure = Read-Host "Paste the restricted tunnel runtime API key (input hidden)" -AsSecureString
-    $ptr = [IntPtr]::Zero
-    $plain = $null
-    try {
-        $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-        $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
-        if ([string]::IsNullOrWhiteSpace($plain) -or $plain.Length -lt 32) {
-            throw "Runtime API key is empty or implausibly short."
-        }
-        if ($plain -match '\s') {
-            throw "Runtime API key must not contain whitespace."
-        }
-        [IO.File]::WriteAllText($Path, $plain, [Text.UTF8Encoding]::new($false))
-    }
-    finally {
-        $plain = $null
-        if ($ptr -ne [IntPtr]::Zero) {
-            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
-        }
-    }
 }
 
 function Invoke-DoctorUntilHealthy([string]$Doctor, [int]$Attempts = 18, [int]$SleepSeconds = 5) {
@@ -150,46 +163,37 @@ function Invoke-DoctorUntilHealthy([string]$Doctor, [int]$Attempts = 18, [int]$S
             Start-Sleep -Seconds $SleepSeconds
         }
     }
-    throw "VeraMesh doctor did not reach healthy live+tunnel state."
-}
-
-$existingVeraPortService = Get-Service -Name "VeraPortAgent" -ErrorAction SilentlyContinue
-$existingVeraPortConfig = Test-Path -LiteralPath (Join-Path $Root "veraport.json") -PathType Leaf
-if ($existingVeraPortService -or $existingVeraPortConfig) {
-    $attachScript = Join-Path $PSScriptRoot "windows_attach_existing_lappy_veramesh.ps1"
-    if (-not (Test-Path -LiteralPath $attachScript -PathType Leaf)) {
-        throw "Existing VeraPort detected but safe tunnel-attach packet is missing: $attachScript"
-    }
-    & $attachScript -TunnelId $TunnelId -Alias $Alias -Apply:$Apply
-    exit 0
+    throw "VeraMesh doctor did not reach authenticated VeraPort + healthy tunnel state."
 }
 
 $plan = [ordered]@{
-    schema = "VERAMESH_LAPPY_ACTIVATION_PLAN_V1"
+    schema = "VERAMESH_EXISTING_LAPPY_TUNNEL_ATTACH_PLAN_V1"
     veramesh_source_sha = $VeraMeshSourceSha
     tunnel_client = [ordered]@{
         version = $TunnelClientVersion
         archive_sha256 = $TunnelClientArchiveSha256
     }
-    root = $Root
-    allowed_roots = @($AllowedRoot)
-    alias = $Alias
-    authority = [ordered]@{
-        filesystem_read_write = $true
-        process_execution = $false
-        inbound_non_loopback_listener = $false
+    existing_veraport = [ordered]@{
+        config = $ServiceConfig
+        controller_private_key = $ControllerPrivateKey
+        preserved = $true
     }
-    intended_services = @("VeraPortAgent", "VeraMeshTunnelRuntime")
+    authority = [ordered]@{
+        requested_capabilities = @("fs.read")
+        process_execution = $false
+        existing_allowed_roots_preserved = $true
+    }
     effects_if_applied = [ordered]@{
-        writes_programdata = $true
-        creates_persistent_workstation_and_controller_identity = $true
+        replaces_veraport_service = $false
+        rotates_veraport_identity = $false
+        changes_veraport_roots = $false
+        changes_veraport_process_policy = $false
+        writes_tunnel_runtime_material = $true
         stores_tunnel_runtime_key_locally = $true
-        installs_windows_services = $true
-        starts_windows_services = $true
-        service_startup_automatic = $true
-        creates_or_modifies_firewall_rules = $false
-        opens_inbound_listener = $false
-        enables_process_execution = $false
+        installs_tunnel_windows_service = $true
+        starts_tunnel_windows_service = $true
+        changes_firewall = $false
+        changes_tailscale = $false
         merges_repository = $false
     }
 }
@@ -197,30 +201,40 @@ $plan = [ordered]@{
 if (-not $Apply) {
     $plan | ConvertTo-Json -Depth 12
     Write-Host ""
-    Write-Host "PLAN ONLY. Re-run with -Apply to perform the authorized Lappy connection effects."
+    Write-Host "PLAN ONLY. Existing VeraPort will be preserved; -Apply only adds the tunnel/controller sidecar."
     exit 0
 }
 
 if (-not (Test-Administrator)) {
     throw "Run this script from PowerShell as Administrator."
 }
-
-if (-not $AllowedRoot -or $AllowedRoot.Count -lt 1) {
-    throw "At least one allowed filesystem root is required."
+$veraPortService = Get-Service -Name "VeraPortAgent" -ErrorAction Stop
+if ($veraPortService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) {
+    throw "Existing VeraPortAgent must already be Running; this attach packet does not start or replace it."
 }
-foreach ($rootPath in $AllowedRoot) {
-    if (-not (Test-Path -LiteralPath $rootPath -PathType Container)) {
-        throw "Allowed root does not exist: $rootPath"
+if (-not (Test-Path -LiteralPath $ServiceConfig -PathType Leaf)) {
+    throw "Existing VeraPort config not found: $ServiceConfig"
+}
+if (-not (Test-Path -LiteralPath $ControllerPrivateKey -PathType Leaf)) {
+    throw "Existing controller private key not found: $ControllerPrivateKey"
+}
+if (Get-Service -Name "VeraMeshTunnelRuntime" -ErrorAction SilentlyContinue) {
+    throw "VeraMeshTunnelRuntime already exists. Refusing to overwrite; reconcile existing tunnel state first."
+}
+foreach ($path in @(
+    (Join-Path $Root "controller.json"),
+    (Join-Path $Root "tunnel-runtime.json"),
+    $ReceiptPath
+)) {
+    if (Test-Path -LiteralPath $path) {
+        throw "Existing tunnel-attach material found: $path. Refusing to overwrite."
     }
 }
-
-foreach ($serviceName in @("VeraPortAgent", "VeraMeshTunnelRuntime", "VeraPortMCP")) {
-    if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
-        throw "Existing service $serviceName found. Refusing to overwrite; reconcile existing state first."
-    }
+if ((Test-Path -LiteralPath $RuntimeDir) -and (Get-ChildItem -LiteralPath $RuntimeDir -Force | Select-Object -First 1)) {
+    throw "Existing tunnel runtime directory is non-empty: $RuntimeDir"
 }
-if ((Test-Path $Root) -and (Get-ChildItem -Force $Root | Select-Object -First 1)) {
-    throw "Existing VeraMesh state found under $Root. Refusing to overwrite; reconcile existing state first."
+if ((Test-Path -LiteralPath $BinDir) -and (Get-ChildItem -LiteralPath $BinDir -Force | Select-Object -First 1)) {
+    throw "Existing tunnel bin directory is non-empty: $BinDir"
 }
 
 if ([string]::IsNullOrWhiteSpace($TunnelId)) {
@@ -241,9 +255,7 @@ New-Item -ItemType Directory -Path $StagePython | Out-Null
 New-Item -ItemType Directory -Path $StageSource | Out-Null
 New-Item -ItemType Directory -Path $StageTunnel | Out-Null
 
-$veraportInstalled = $false
 $tunnelInstalled = $false
-
 try {
     Write-Host "Downloading pinned portable Python..."
     Download-VerifiedFile $PythonUrl $PythonZip $PythonSha256
@@ -264,26 +276,19 @@ try {
     if (-not $repo) {
         throw "Extracted VeraMesh source directory not found."
     }
-    $packagePath = Join-Path $repo.FullName "reference\veraport_agent"
-    $constraintsPath = Join-Path $repo.FullName "protocol\veraport\v1\windows-runtime-constraints.txt"
-    if (-not (Test-Path $packagePath)) {
-        throw "VeraPort package missing from exact source."
+    $packagePath = Join-Path $repo.FullName "reference\\veraport_agent"
+    $constraintsPath = Join-Path $repo.FullName "protocol\\veraport\\v1\\windows-runtime-constraints.txt"
+    if (-not (Test-Path (Join-Path $packagePath "veraport_agent\\existing_install_attach.py") -PathType Leaf)) {
+        throw "Exact VeraMesh source lacks existing-install attach support."
     }
-    if (-not (Test-Path $constraintsPath)) {
+    if (-not (Test-Path $constraintsPath -PathType Leaf)) {
         throw "Windows runtime constraints missing from exact source."
     }
 
-    $sourcePyproject = Join-Path $packagePath "pyproject.toml"
-    $sourcePyprojectText = Get-Content -Raw $sourcePyproject
-    if ($sourcePyprojectText -notmatch 'veramesh-tunnel-service' -or $sourcePyprojectText -notmatch 'veraport-doctor') {
-        throw "Exact VeraMesh source does not contain required activation entrypoints."
-    }
-
-    New-Item -ItemType Directory -Path $Root -Force | Out-Null
     New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
     Protect-SecretDirectory $SecretDir
 
-    Write-Host "Installing pinned portable VeraMesh runtime..."
+    Write-Host "Installing isolated tunnel-side VeraMesh runtime..."
     $runtimePython = Initialize-PortableRuntime $RuntimeDir $packagePath $constraintsPath
 
     $tunnelCandidate = Get-ChildItem $StageTunnel -Recurse -Filter "tunnel-client.exe" | Select-Object -First 1
@@ -291,46 +296,30 @@ try {
         throw "tunnel-client.exe missing from official OpenAI archive."
     }
     $tunnelExe = Join-Path $BinDir "tunnel-client.exe"
-    Copy-Item -LiteralPath $tunnelCandidate.FullName -Destination $tunnelExe -Force
+    Copy-Item -LiteralPath $tunnelCandidate.FullName -Destination $tunnelExe
 
-    $mcpExe = Join-Path $RuntimeDir "Scripts\veraport-mcp-stdio.exe"
-    $veraportService = Join-Path $RuntimeDir "Scripts\veraport-service.exe"
-    $tunnelService = Join-Path $RuntimeDir "Scripts\veramesh-tunnel-service.exe"
-    $bootstrap = Join-Path $RuntimeDir "Scripts\veramesh-bootstrap-local.exe"
-    $doctor = Join-Path $RuntimeDir "Scripts\veraport-doctor.exe"
-    foreach ($required in @($mcpExe, $veraportService, $tunnelService, $bootstrap, $doctor)) {
+    $mcpExe = Join-Path $RuntimeDir "Scripts\\veraport-mcp-stdio.exe"
+    $tunnelService = Join-Path $RuntimeDir "Scripts\\veramesh-tunnel-service.exe"
+    $doctor = Join-Path $RuntimeDir "Scripts\\veraport-doctor.exe"
+    foreach ($required in @($mcpExe, $tunnelService, $doctor)) {
         if (-not (Test-Path $required -PathType Leaf)) {
-            throw "Required VeraMesh runtime entrypoint missing: $required"
+            throw "Required VeraMesh tunnel entrypoint missing: $required"
         }
     }
 
-    Write-Host "Writing the tunnel runtime key to protected local storage..."
+    Write-Host "Writing/reusing the protected tunnel runtime key..."
     Read-RuntimeKeyToFile $RuntimeKeyPath
 
-    Write-Host "Creating persistent VeraPort identity, trust and tunnel configuration..."
-    $bootstrapArgs = @(
-        "--root", $Root,
-        "--tunnel-client", $tunnelExe,
-        "--tunnel-id", $TunnelId,
-        "--runtime-api-key-file", $RuntimeKeyPath,
-        "--mcp-executable", $mcpExe,
-        "--alias", $Alias
-    )
-    foreach ($rootPath in $AllowedRoot) {
-        $bootstrapArgs += @("--allowed-root", $rootPath)
-    }
-    & $bootstrap @bootstrapArgs | Out-Host
-    Assert-ExitCode "VeraMesh local bootstrap"
-
-    Write-Host "Registering VeraPortAgent Windows service..."
-    & $veraportService install | Out-Host
-    Assert-ExitCode "VeraPortAgent registration"
-    $veraportInstalled = $true
-    Set-Service -Name "VeraPortAgent" -StartupType Automatic
-
-    Write-Host "Starting VeraPortAgent..."
-    Start-Service -Name "VeraPortAgent"
-    Wait-ServiceRunning "VeraPortAgent"
+    Write-Host "Binding tunnel/controller material to the existing VeraPort identity..."
+    & $runtimePython -m veraport_agent.existing_install_attach `
+        --service-config $ServiceConfig `
+        --controller-private-key $ControllerPrivateKey `
+        --tunnel-client $tunnelExe `
+        --tunnel-id $TunnelId `
+        --runtime-api-key-file $RuntimeKeyPath `
+        --mcp-executable $mcpExe `
+        --alias $Alias | Out-Host
+    Assert-ExitCode "existing VeraPort tunnel attach"
 
     Write-Host "Registering VeraMeshTunnelRuntime Windows service..."
     & $tunnelService install | Out-Host
@@ -346,10 +335,18 @@ try {
     $doctorResult = Invoke-DoctorUntilHealthy $doctor
 
     $receipt = [ordered]@{
-        schema = "VERAMESH_LAPPY_ACTIVATION_RECEIPT_V1"
+        schema = "VERAMESH_EXISTING_LAPPY_TUNNEL_ATTACH_RECEIPT_V1"
         pass = $true
         observed_at = (Get-Date).ToString("o")
         veramesh_source_sha = $VeraMeshSourceSha
+        preserved_veraport_service = [ordered]@{
+            name = "VeraPortAgent"
+            status = (Get-Service -Name "VeraPortAgent").Status.ToString()
+            config = $ServiceConfig
+            identity_rotated = $false
+            roots_changed = $false
+            process_policy_changed = $false
+        }
         tunnel_client = [ordered]@{
             version = $TunnelClientVersion
             archive_sha256 = $TunnelClientArchiveSha256
@@ -361,62 +358,56 @@ try {
             runtime_key_path = $RuntimeKeyPath
             runtime_key_value_recorded = $false
         }
-        services = [ordered]@{
-            VeraPortAgent = (Get-Service -Name "VeraPortAgent").Status.ToString()
+        service = [ordered]@{
             VeraMeshTunnelRuntime = (Get-Service -Name "VeraMeshTunnelRuntime").Status.ToString()
             startup = "Automatic"
-        }
-        authority = [ordered]@{
-            allowed_roots = @($AllowedRoot)
-            process_execution = $false
-            non_loopback_listener = $false
         }
         doctor = $doctorResult
         effects = [ordered]@{
             firewall_changed = $false
-            inbound_port_opened = $false
+            tailscale_changed = $false
             repository_merged = $false
             chatgpt_connector_registered = $false
         }
-        next_gate = "REGISTER_TUNNEL_IN_CHATGPT_AND_RUN_READ_ONLY_E2E"
+        next_gate = "SELECT_TUNNEL_IN_CHATGPT_AND_RUN_READ_ONLY_LAPPY_CALL"
     }
-    [IO.File]::WriteAllText($ReceiptPath, ($receipt | ConvertTo-Json -Depth 20) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText(
+        $ReceiptPath,
+        ($receipt | ConvertTo-Json -Depth 20) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
 
     Write-Host ""
-    Write-Host "LOCAL VERAMESH RUNTIME HEALTHY."
+    Write-Host "EXISTING VERAPORT PRESERVED; SECURE TUNNEL RUNTIME HEALTHY."
     Write-Host "Tunnel ID: $TunnelId"
-    Write-Host "Activation receipt: $ReceiptPath"
+    Write-Host "Receipt: $ReceiptPath"
     Write-Host ""
     Write-Host "Opening ChatGPT connector settings."
-    Write-Host "Add/select a connector using Connection: Tunnel and choose this tunnel."
     Start-Process "https://chatgpt.com/#settings/Connectors"
 }
 catch {
-    if (Test-Path $Root) {
-        try {
-            $veraService = Get-Service -Name "VeraPortAgent" -ErrorAction SilentlyContinue
-            $tunnelServiceState = Get-Service -Name "VeraMeshTunnelRuntime" -ErrorAction SilentlyContinue
-            $failure = [ordered]@{
-                schema = "VERAMESH_LAPPY_ACTIVATION_FAILURE_V1"
-                pass = $false
-                observed_at = (Get-Date).ToString("o")
-                veramesh_source_sha = $VeraMeshSourceSha
-                tunnel_id = $TunnelId
-                alias = $Alias
-                error = $_.Exception.Message
-                services = [ordered]@{
-                    VeraPortAgent_registered = [bool]$veraportInstalled
-                    VeraMeshTunnelRuntime_registered = [bool]$tunnelInstalled
-                    VeraPortAgent_status = $(if ($veraService) { $veraService.Status.ToString() } else { "ABSENT" })
-                    VeraMeshTunnelRuntime_status = $(if ($tunnelServiceState) { $tunnelServiceState.Status.ToString() } else { "ABSENT" })
-                }
-                preserved_for_reconciliation = $true
-                runtime_key_value_recorded = $false
-            }
-            [IO.File]::WriteAllText($FailureReceiptPath, ($failure | ConvertTo-Json -Depth 12) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    try {
+        $vera = Get-Service -Name "VeraPortAgent" -ErrorAction SilentlyContinue
+        $failure = [ordered]@{
+            schema = "VERAMESH_EXISTING_LAPPY_TUNNEL_ATTACH_FAILURE_V1"
+            pass = $false
+            observed_at = (Get-Date).ToString("o")
+            veramesh_source_sha = $VeraMeshSourceSha
+            tunnel_id = $TunnelId
+            alias = $Alias
+            error = $_.Exception.Message
+            VeraPortAgent_status = $(if ($vera) { $vera.Status.ToString() } else { "ABSENT" })
+            VeraMeshTunnelRuntime_registered = [bool]$tunnelInstalled
+            preserved_existing_state_for_reconciliation = $true
+            runtime_key_value_recorded = $false
         }
-        catch {
-        }
+        [IO.File]::WriteAllText(
+            $FailureReceiptPath,
+            ($failure | ConvertTo-Json -Depth 12) + [Environment]::NewLine,
+            [Text.UTF8Encoding]::new($false)
+        )
+    }
+    catch {
     }
     throw
 }

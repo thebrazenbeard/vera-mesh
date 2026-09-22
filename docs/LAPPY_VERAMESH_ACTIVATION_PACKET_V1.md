@@ -1,64 +1,97 @@
 # Lappy VeraMesh Activation Packet V1
 
-Status: **AUTHORIZED DEPLOYMENT PREP / LOCAL EXECUTION REQUIRED**
+Status: **SOURCE QUALIFIED CANDIDATE / LAPPY APPLY AUTHORIZED / CHATGPT E2E NOT YET PROVEN**
 
-This packet is deliberately separate from frozen VeraMesh PR #29. It installs the exact qualified VeraMesh source head:
+## Current Lappy condition
 
-`83e178921772017bc4edbe26b5a2e4eee8da1632`
+The current Lappy is not a blank workstation. Live read-only inspection on 2026-09-22 established an existing automatic `VeraPortAgent` service using:
 
-It also pins the official OpenAI `tunnel-client v0.0.11` Windows amd64 release archive to SHA-256:
+- `C:\ProgramData\VeraMesh\veraport.json`;
+- loopback bind `127.0.0.1:17444`;
+- allowed roots `C:\Users\patri` and `C:\Temp`;
+- process execution disabled;
+- existing workstation/controller/TLS identity material;
+- a previously enrolled controller private-key candidate at `C:\ProgramData\VeraMesh\controller\vera-controller-bootstrap.pem`.
 
-`eb912c86c6ccde90cda805cb17009507176a656725cf86c36fabe1901a12e29b`
+The activation packet therefore has two modes.
 
-## Intended first connection
+### Existing-install mode — current Lappy
 
-`ChatGPT -> Secure MCP Tunnel -> tunnel-client -> veraport-mcp-stdio -> VeraPortAgent -> Lappy`
+`tools/windows_activate_lappy_veramesh.ps1` detects an existing VeraPort service/config and dispatches to:
 
-The packet installs two automatic Windows services:
+`tools/windows_attach_existing_lappy_veramesh.ps1`
 
-- `VeraPortAgent`
-- `VeraMeshTunnelRuntime`
+That path does **not** replace VeraPort. It preserves the current service, workstation key, controller trust list, TLS identity, state DB, allowed roots, and process policy.
 
-It does not install the optional `VeraPortMCP` HTTP service because that service is not required for the secure-tunnel path.
+It first proves that the selected existing P-256 controller private key is already enrolled in the workstation's current `controllers.json`. It then derives only the controller-side public pin and TLS CA required by the new stdio tunnel controller.
 
-## Authority ceiling
+The first Secure MCP Tunnel route requests only `fs.read` and exposes only read/lane operations. It does not silently promote the existing workstation's broader trust ceiling into the ChatGPT tunnel.
 
-The first activation is intentionally filesystem-only.
+### Fresh-install mode
 
-Process execution is not enabled.
+If neither an existing `VeraPortAgent` service nor `C:\ProgramData\VeraMesh\veraport.json` exists, the original fresh-install packet remains available. It creates a new filesystem-only VeraPort identity and installs both VeraPort and the tunnel runtime.
 
-VeraPort remains loopback-only; the packet creates no inbound firewall rule and no non-loopback listener.
+## Secure MCP Tunnel runtime
 
-The allowed filesystem root defaults to the interactive user's profile directory and can be narrowed or replaced with `-AllowedRoot`.
+Current existing-install packet source pin:
+
+`09cd149a924c5d428df840d8b7be036fc2d070a8`
+
+Current OpenAI `tunnel-client` pin for existing-install attach:
+
+- release: `v0.0.14`
+- Windows amd64 archive SHA-256: `784ab8da7b5a88f0109f1fd8aaf0a1c86067430b896dddf307ef7e3cc49fa1a5`
+
+Intended route:
+
+`ChatGPT -> OpenAI Secure MCP Tunnel -> tunnel-client -> veraport-mcp-stdio -> ControllerRuntime -> existing VeraPortAgent -> Lappy`
+
+RDC is not a dependency.
 
 ## Provider material
 
-The tunnel ID and runtime API key are not stored in GitHub.
+The tunnel ID and restricted runtime API key are not stored in GitHub.
 
-When run with `-Apply`, the script opens OpenAI's Tunnels and organization API-key settings if a tunnel ID was not supplied. The operator should:
+The operator supplies:
 
-1. create or select a tunnel scoped to the intended ChatGPT workspace;
-2. create a restricted runtime API key with **Tunnels: Read + Use**;
-3. paste the tunnel ID into the prompt;
-4. paste the runtime key into the hidden secure prompt.
+1. an existing or newly selected Secure MCP Tunnel ID;
+2. a runtime API key restricted to Tunnels **Read + Use**.
 
-The key is written only to protected local storage beneath `C:\ProgramData\VeraMesh\secrets`. Its value is not written to the activation receipt.
+The key is written only beneath protected local ProgramData storage. Its value is not written into receipts.
 
-## Safety behavior
+## Existing-install write/effect boundary
 
-The packet refuses to overwrite:
+The attach path may create:
 
-- an existing `VeraPortAgent` service;
-- an existing `VeraMeshTunnelRuntime` service;
-- an existing `VeraPortMCP` service;
-- non-empty existing VeraMesh ProgramData state.
+- an isolated tunnel-side portable Python runtime;
+- the pinned `tunnel-client` binary;
+- controller-side public pin / TLS CA copies;
+- `controller.json` and `tunnel-runtime.json`;
+- the protected runtime-key file;
+- the `VeraMeshTunnelRuntime` Windows service;
+- local activation/diagnostic receipts.
 
-If any of those exist, stop and reconcile them rather than replacing them.
+It does not:
 
-Failure preserves generated state and writes a local failure receipt so identity or service state is not silently destroyed.
+- stop, reinstall, replace, or reconfigure `VeraPortAgent`;
+- rotate workstation/controller trust or TLS identity;
+- change existing allowed roots;
+- enable process execution;
+- change firewall or Tailscale configuration;
+- merge a repository;
+- register/select the tunnel inside ChatGPT.
 
-## Success gate
+Any pre-existing tunnel/controller sidecar material causes fail-closed reconciliation rather than overwrite.
 
-Success requires `veraport-doctor --live --tunnel-status` to pass, which verifies both an authenticated VeraPort data plane and a running/healthy tunnel runtime.
+## Mandatory success order
 
-That still does not prove ChatGPT end-to-end access. The script then opens ChatGPT connector settings. The final gate is selecting the tunnel in ChatGPT and making a read-only tool call to Lappy.
+Local apply is not enough. Acceptance remains:
+
+1. `veraport-doctor --live --tunnel-status`;
+2. authenticated VeraPort data plane PASS;
+3. managed tunnel runtime running + healthy;
+4. select/associate the Secure MCP Tunnel in ChatGPT;
+5. perform a read-only Lappy tool call;
+6. only then call the ChatGPT/Lappy route current.
+
+Source/CI/install/service/tunnel/ChatGPT/effect remain separate states.
