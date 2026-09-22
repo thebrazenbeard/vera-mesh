@@ -388,12 +388,19 @@ def build_mcp_server(
 ):
     try:
         from mcp.server.fastmcp import FastMCP
+        from mcp.types import ToolAnnotations
     except ImportError as exc:
         raise RuntimeError(
             "MCP runtime is not installed; install the project with the mcp extra"
         ) from exc
 
     facade = VeraPortMCPFacade(runtime)
+    read_only = ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
     mcp = FastMCP(
         "VeraMesh VeraPort",
         host=host,
@@ -407,12 +414,12 @@ def build_mcp_server(
         ),
     )
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only)
     async def machine_info() -> dict[str, Any]:
         """Read authenticated machine/session/path information."""
         return await facade.machine_info()
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only)
     async def lane_list() -> dict[str, Any]:
         """List lanes visible to the authenticated VeraPort session."""
         return await facade.lane_list()
@@ -449,7 +456,7 @@ def build_mcp_server(
         """Close a fenced lane and reap its managed processes."""
         return await facade.lane_close(lane_id, fencing_token)
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only)
     async def fs_read_text(
         lane_id: str,
         fencing_token: int,
@@ -462,7 +469,7 @@ def build_mcp_server(
         )
 
     if "fs.read_bytes" in runtime.config.gateway_operations:
-        @mcp.tool()
+        @mcp.tool(annotations=read_only)
         async def fs_read_bytes(
             lane_id: str,
             fencing_token: int,
@@ -478,7 +485,7 @@ def build_mcp_server(
             )
 
     if "fs.stat" in runtime.config.gateway_operations:
-        @mcp.tool()
+        @mcp.tool(annotations=read_only)
         async def fs_stat(
             lane_id: str,
             fencing_token: int,
@@ -490,7 +497,7 @@ def build_mcp_server(
             )
 
     if "fs.list_dir" in runtime.config.gateway_operations:
-        @mcp.tool()
+        @mcp.tool(annotations=read_only)
         async def fs_list_dir(
             lane_id: str,
             fencing_token: int,
@@ -504,7 +511,7 @@ def build_mcp_server(
             )
 
     if "fs.search" in runtime.config.gateway_operations:
-        @mcp.tool()
+        @mcp.tool(annotations=read_only)
         async def fs_search(
             lane_id: str,
             fencing_token: int,
@@ -627,7 +634,7 @@ def build_mcp_server(
             )
 
     if "process.list" in runtime.config.gateway_operations:
-        @mcp.tool()
+        @mcp.tool(annotations=read_only)
         async def process_list(
             lane_id: str,
             fencing_token: int,
@@ -638,7 +645,7 @@ def build_mcp_server(
             )
 
     if "process.status" in runtime.config.gateway_operations:
-        @mcp.tool()
+        @mcp.tool(annotations=read_only)
         async def process_status(
             lane_id: str,
             fencing_token: int,
@@ -650,7 +657,7 @@ def build_mcp_server(
             )
 
     if "process.output" in runtime.config.gateway_operations:
-        @mcp.tool()
+        @mcp.tool(annotations=read_only)
         async def process_output(
             lane_id: str,
             fencing_token: int,
@@ -714,6 +721,11 @@ def require_loopback_mcp_host(host: str) -> str:
             "initial VeraPort MCP bind must remain loopback-only; use a separately reviewed secure tunnel for remote exposure"
         )
     return normalized
+
+
+def stdio_main() -> None:
+    os.environ["VERAPORT_MCP_TRANSPORT"] = "stdio"
+    main()
 
 
 def main() -> None:
