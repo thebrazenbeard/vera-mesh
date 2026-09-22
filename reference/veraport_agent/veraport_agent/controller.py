@@ -36,6 +36,7 @@ _MUTATING_OPERATIONS = frozenset({
     "fs.replace_text",
     "process.exec",
     "process.start",
+    "process.input",
     "process.terminate",
 })
 
