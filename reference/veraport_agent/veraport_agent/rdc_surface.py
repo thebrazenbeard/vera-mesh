@@ -422,7 +422,10 @@ class RdcSurface:
     def _drain_pipe(self, item: _ManagedProcess, pipe, stdout: bool) -> None:
         target = item.stdout if stdout else item.stderr
         while True:
-            chunk = pipe.read(4096)
+            try:
+                chunk = os.read(pipe.fileno(), 4096)
+            except OSError:
+                return
             if not chunk:
                 return
             with self._process_lock:
