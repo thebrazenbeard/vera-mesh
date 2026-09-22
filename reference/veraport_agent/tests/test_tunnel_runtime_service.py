@@ -118,9 +118,15 @@ def test_run_until_stop_connects_verifies_and_stops(tmp_path, monkeypatch):
 
     calls = []
 
+    status_calls = 0
+
     def runner(args, **kwargs):
+        nonlocal status_calls
         calls.append(list(args))
         if "status" in args:
+            status_calls += 1
+            if status_calls == 1:
+                return completed(args, stderr="alias absent", returncode=1)
             return completed(args, stdout=json.dumps({
                 "process_running": True,
                 "healthy": True,
@@ -137,8 +143,9 @@ def test_run_until_stop_connects_verifies_and_stops(tmp_path, monkeypatch):
         validate_acl=False,
     )
 
-    assert calls[0][1:3] == ["runtimes", "connect"]
-    assert calls[1][1:3] == ["runtimes", "status"]
+    assert calls[0][1:3] == ["runtimes", "status"]
+    assert calls[1][1:3] == ["runtimes", "connect"]
+    assert calls[2][1:3] == ["runtimes", "status"]
     assert calls[-1][1:3] == ["runtimes", "stop"]
 
 
@@ -157,7 +164,8 @@ def test_command_failure_is_bounded_and_explicit(tmp_path):
         match="rc=7",
     ) as caught:
         trs.connect_runtime(cfg, runner=runner)
-    assert len(str(caught.value)) < 9_000
+    assert str(caught.value) == "tunnel-client command failed rc=7"
+    assert "failure-" not in str(caught.value)
 
 
 def test_non_windows_service_mode_fails_explicitly():
