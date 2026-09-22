@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$VeraMeshSourceSha = "09cd149a924c5d428df840d8b7be036fc2d070a8"
+$VeraMeshSourceSha = "c45295dbd1b66f2ebf023b7bf13118dcac72e35b"
 $TunnelClientVersion = "v0.0.14"
 $TunnelClientArchiveSha256 = "784ab8da7b5a88f0109f1fd8aaf0a1c86067430b896dddf307ef7e3cc49fa1a5"
 $TunnelClientUrl = "https://github.com/openai/tunnel-client/releases/download/v0.0.14/tunnel-client-v0.0.14-windows-amd64.zip"
@@ -26,6 +26,7 @@ $RuntimeDir = Join-Path $Root "tunnel-runtime"
 $BinDir = Join-Path $Root "tunnel-bin"
 $SecretDir = Join-Path $Root "secrets"
 $RuntimeKeyPath = Join-Path $SecretDir "tunnel-runtime.key"
+$GeneratedControllerPrivateKey = Join-Path $Root "controller\\chatgpt-readonly-controller.pem"
 $ReceiptPath = Join-Path $Root "tunnel-attach-receipt.json"
 $FailureReceiptPath = Join-Path $Root "tunnel-attach-failure-receipt.json"
 
@@ -175,8 +176,10 @@ $plan = [ordered]@{
     }
     existing_veraport = [ordered]@{
         config = $ServiceConfig
-        controller_private_key = $ControllerPrivateKey
-        preserved = $true
+        preferred_controller_private_key = $ControllerPrivateKey
+        generated_readonly_controller_private_key = $GeneratedControllerPrivateKey
+        workstation_identity_preserved = $true
+        existing_controller_entries_preserved = $true
     }
     authority = [ordered]@{
         requested_capabilities = @("fs.read")
@@ -185,7 +188,9 @@ $plan = [ordered]@{
     }
     effects_if_applied = [ordered]@{
         replaces_veraport_service = $false
-        rotates_veraport_identity = $false
+        rotates_workstation_identity = $false
+        may_append_readonly_controller = $true
+        retires_existing_controller = $false
         changes_veraport_roots = $false
         changes_veraport_process_policy = $false
         writes_tunnel_runtime_material = $true
@@ -214,9 +219,6 @@ if ($veraPortService.Status -ne [System.ServiceProcess.ServiceControllerStatus]:
 }
 if (-not (Test-Path -LiteralPath $ServiceConfig -PathType Leaf)) {
     throw "Existing VeraPort config not found: $ServiceConfig"
-}
-if (-not (Test-Path -LiteralPath $ControllerPrivateKey -PathType Leaf)) {
-    throw "Existing controller private key not found: $ControllerPrivateKey"
 }
 if (Get-Service -Name "VeraMeshTunnelRuntime" -ErrorAction SilentlyContinue) {
     throw "VeraMeshTunnelRuntime already exists. Refusing to overwrite; reconcile existing tunnel state first."
@@ -281,6 +283,9 @@ try {
     if (-not (Test-Path (Join-Path $packagePath "veraport_agent\\existing_install_attach.py") -PathType Leaf)) {
         throw "Exact VeraMesh source lacks existing-install attach support."
     }
+    if (-not (Test-Path (Join-Path $packagePath "veraport_agent\\controller_recovery.py") -PathType Leaf)) {
+        throw "Exact VeraMesh source lacks controller recovery support."
+    }
     if (-not (Test-Path $constraintsPath -PathType Leaf)) {
         throw "Windows runtime constraints missing from exact source."
     }
@@ -307,13 +312,33 @@ try {
         }
     }
 
+    Write-Host "Recovering the enrolled VeraPort controller or appending a new read-only controller..."
+    $controllerRecoveryOutput = @(
+        & $runtimePython -m veraport_agent.controller_recovery `
+            --service-config $ServiceConfig `
+            --preferred-controller-private-key $ControllerPrivateKey `
+            --generated-controller-private-key $GeneratedControllerPrivateKey
+    )
+    Assert-ExitCode "VeraPort controller recovery"
+    $controllerRecovery = (($controllerRecoveryOutput | ForEach-Object { [string]$_ }) -join [Environment]::NewLine) | ConvertFrom-Json
+    $activeControllerPrivateKey = [string]$controllerRecovery.controller_private_key
+    if ([string]::IsNullOrWhiteSpace($activeControllerPrivateKey) -or -not (Test-Path -LiteralPath $activeControllerPrivateKey -PathType Leaf)) {
+        throw "Controller recovery did not return a usable private-key path."
+    }
+
+    if ($controllerRecovery.service_restart_required -eq $true) {
+        Write-Host "New fs.read-only controller was appended. Restarting VeraPortAgent to load the expanded trust set..."
+        Restart-Service -Name "VeraPortAgent" -Force
+        Wait-ServiceRunning "VeraPortAgent"
+    }
+
     Write-Host "Writing/reusing the protected tunnel runtime key..."
     Read-RuntimeKeyToFile $RuntimeKeyPath
 
     Write-Host "Binding tunnel/controller material to the existing VeraPort identity..."
     & $runtimePython -m veraport_agent.existing_install_attach `
         --service-config $ServiceConfig `
-        --controller-private-key $ControllerPrivateKey `
+        --controller-private-key $activeControllerPrivateKey `
         --tunnel-client $tunnelExe `
         --tunnel-id $TunnelId `
         --runtime-api-key-file $RuntimeKeyPath `
@@ -343,10 +368,13 @@ try {
             name = "VeraPortAgent"
             status = (Get-Service -Name "VeraPortAgent").Status.ToString()
             config = $ServiceConfig
-            identity_rotated = $false
+            workstation_identity_rotated = $false
+            existing_controller_entries_preserved = [bool]$controllerRecovery.old_controller_entries_preserved
+            controller_trust_changed = [bool]$controllerRecovery.service_restart_required
             roots_changed = $false
             process_policy_changed = $false
         }
+        controller_recovery = $controllerRecovery
         tunnel_client = [ordered]@{
             version = $TunnelClientVersion
             archive_sha256 = $TunnelClientArchiveSha256

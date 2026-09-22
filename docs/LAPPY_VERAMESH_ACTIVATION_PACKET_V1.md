@@ -1,43 +1,61 @@
 # Lappy VeraMesh Activation Packet V1
 
-Status: **SOURCE QUALIFIED CANDIDATE / LAPPY APPLY AUTHORIZED / CHATGPT E2E NOT YET PROVEN**
+Status: **SOURCE QUALIFICATION IN PROGRESS / LAPPY CONNECTION EFFECT AUTHORIZED / CHATGPT E2E NOT YET PROVEN**
 
 ## Current Lappy condition
 
-The current Lappy is not a blank workstation. Live read-only inspection on 2026-09-22 established an existing automatic `VeraPortAgent` service using:
+The current Lappy already runs `VeraPortAgent` from `C:\ProgramData\VeraMesh\veraport.json` on loopback `127.0.0.1:17444`, with its existing workstation/TLS identity, state DB, allowed roots, and process execution disabled.
 
-- `C:\ProgramData\VeraMesh\veraport.json`;
-- loopback bind `127.0.0.1:17444`;
-- allowed roots `C:\Users\patri` and `C:\Temp`;
-- process execution disabled;
-- existing workstation/controller/TLS identity material;
-- a previously enrolled controller private-key candidate at `C:\ProgramData\VeraMesh\controller\vera-controller-bootstrap.pem`.
+The currently enrolled controller principal previously observed on Lappy is:
 
-The activation packet therefore has two modes.
+`controller:ef3814b70f0883d2fbc4a8b7bd7b4eb982ac6cf74d9fd76734827d4561bc554b`
 
-### Existing-install mode — current Lappy
+A bounded custody scan did not recover a private key proven to match that principal. Therefore filename/path resemblance is not accepted as credential identity.
 
-`tools/windows_activate_lappy_veramesh.ps1` detects an existing VeraPort service/config and dispatches to:
+## Existing-install mode — current Lappy
+
+`tools/windows_activate_lappy_veramesh.ps1` detects the existing VeraPort installation and dispatches to:
 
 `tools/windows_attach_existing_lappy_veramesh.ps1`
 
-That path does **not** replace VeraPort. It preserves the current service, workstation key, controller trust list, TLS identity, state DB, allowed roots, and process policy.
+The attach packet preserves:
 
-It first proves that the selected existing P-256 controller private key is already enrolled in the workstation's current `controllers.json`. It then derives only the controller-side public pin and TLS CA required by the new stdio tunnel controller.
+- the current VeraPort service configuration;
+- workstation private identity;
+- TLS identity;
+- state DB;
+- allowed roots;
+- process policy;
+- every pre-existing controller trust entry.
 
-The first Secure MCP Tunnel route requests only `fs.read` and exposes only read/lane operations. It does not silently promote the existing workstation's broader trust ceiling into the ChatGPT tunnel.
+It first tries the historical controller-key candidate. The key is reused only if its derived EC P-256 controller principal is already present in the live trust and has `fs.read`.
 
-### Fresh-install mode
+If that exact credential cannot be recovered, the packet uses `veraport_agent.controller_recovery` to create a distinct local EC P-256 controller at:
 
-If neither an existing `VeraPortAgent` service nor `C:\ProgramData\VeraMesh\veraport.json` exists, the original fresh-install packet remains available. It creates a new filesystem-only VeraPort identity and installs both VeraPort and the tunnel runtime.
+`C:\ProgramData\VeraMesh\controller\chatgpt-readonly-controller.pem`
+
+The recovery operation is fail-closed:
+
+- the new controller receives exactly `fs.read`;
+- existing controller entries are appended-to, never replaced or retired;
+- a byte-for-byte backup of the pre-change trust JSON is written first;
+- trust is replaced atomically;
+- the old entries are verified still present after mutation;
+- an interrupted generated-key state is resumable only when its recovery marker matches;
+- an unrelated pre-existing generated-key file is never silently enrolled;
+- private-key material is never written to Git, Bus, or receipts.
+
+When a new read-only controller is enrolled, `VeraPortAgent` is deliberately restarted and must return to RUNNING before tunnel attachment continues.
+
+The Secure MCP Tunnel controller itself still requests only `fs.read` and exposes only read/lane operations. A broader historical workstation trust ceiling is not promoted into ChatGPT authority.
 
 ## Secure MCP Tunnel runtime
 
-Current existing-install packet source pin:
+Current existing-install Python source pin:
 
-`09cd149a924c5d428df840d8b7be036fc2d070a8`
+`c45295dbd1b66f2ebf023b7bf13118dcac72e35b`
 
-Current OpenAI `tunnel-client` pin for existing-install attach:
+OpenAI `tunnel-client` pin:
 
 - release: `v0.0.14`
 - Windows amd64 archive SHA-256: `784ab8da7b5a88f0109f1fd8aaf0a1c86067430b896dddf307ef7e3cc49fa1a5`
@@ -50,48 +68,40 @@ RDC is not a dependency.
 
 ## Provider material
 
-The tunnel ID and restricted runtime API key are not stored in GitHub.
+The tunnel ID and restricted runtime API key are not stored in GitHub. The runtime key remains local under protected ProgramData storage and its value is excluded from receipts.
 
-The operator supplies:
+## Existing-install effects
 
-1. an existing or newly selected Secure MCP Tunnel ID;
-2. a runtime API key restricted to Tunnels **Read + Use**.
+The authorized attach path may:
 
-The key is written only beneath protected local ProgramData storage. Its value is not written into receipts.
-
-## Existing-install write/effect boundary
-
-The attach path may create:
-
-- an isolated tunnel-side portable Python runtime;
-- the pinned `tunnel-client` binary;
-- controller-side public pin / TLS CA copies;
-- `controller.json` and `tunnel-runtime.json`;
-- the protected runtime-key file;
-- the `VeraMeshTunnelRuntime` Windows service;
-- local activation/diagnostic receipts.
+- recover an already-enrolled controller credential;
+- if recovery fails, append one new `fs.read` controller without deleting the predecessor;
+- restart `VeraPortAgent` only when the trust set changed;
+- create the isolated tunnel-side runtime and pinned `tunnel-client`;
+- write controller/tunnel configuration and protected runtime-key storage;
+- install/start `VeraMeshTunnelRuntime`;
+- write local diagnostic receipts.
 
 It does not:
 
-- stop, reinstall, replace, or reconfigure `VeraPortAgent`;
-- rotate workstation/controller trust or TLS identity;
+- rotate the workstation identity or TLS identity;
+- remove or downgrade existing controller trust;
 - change existing allowed roots;
 - enable process execution;
 - change firewall or Tailscale configuration;
 - merge a repository;
-- register/select the tunnel inside ChatGPT.
+- claim ChatGPT registration before it actually occurs.
 
-Any pre-existing tunnel/controller sidecar material causes fail-closed reconciliation rather than overwrite.
+## Mandatory acceptance order
 
-## Mandatory success order
+1. exact-head source/CI qualification;
+2. recover or narrowly enroll the Lappy controller;
+3. restart VeraPort only if trust changed and verify RUNNING;
+4. `veraport-doctor --live --tunnel-status`;
+5. authenticated VeraPort data-plane PASS;
+6. managed tunnel runtime healthy;
+7. select/associate the Secure MCP Tunnel in ChatGPT;
+8. perform a read-only Lappy tool call;
+9. only then call the ChatGPT/Lappy route current.
 
-Local apply is not enough. Acceptance remains:
-
-1. `veraport-doctor --live --tunnel-status`;
-2. authenticated VeraPort data plane PASS;
-3. managed tunnel runtime running + healthy;
-4. select/associate the Secure MCP Tunnel in ChatGPT;
-5. perform a read-only Lappy tool call;
-6. only then call the ChatGPT/Lappy route current.
-
-Source/CI/install/service/tunnel/ChatGPT/effect remain separate states.
+Source, CI, credential enrollment, service reload, tunnel health, ChatGPT registration, and successful tool effect remain distinct states.

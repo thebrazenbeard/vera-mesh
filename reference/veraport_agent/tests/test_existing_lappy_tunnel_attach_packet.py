@@ -16,13 +16,18 @@ SCRIPT = (
 
 def test_existing_attach_packet_is_identity_preserving_and_read_only():
     text = SCRIPT.read_text(encoding="utf-8").replace("\r\n", "\n")
-    assert "09cd149a924c5d428df840d8b7be036fc2d070a8" in text
+    assert "c45295dbd1b66f2ebf023b7bf13118dcac72e35b" in text
     assert "v0.0.14" in text
     assert "784ab8da7b5a88f0109f1fd8aaf0a1c86067430b896dddf307ef7e3cc49fa1a5" in text
     assert "vera-controller-bootstrap.pem" in text
+    assert "chatgpt-readonly-controller.pem" in text
+    assert "veraport_agent.controller_recovery" in text
+    assert "may_append_readonly_controller = $true" in text
+    assert "retires_existing_controller = $false" in text
+    assert 'Restart-Service -Name "VeraPortAgent" -Force' in text
     assert 'requested_capabilities = @("fs.read")' in text
     assert "replaces_veraport_service = $false" in text
-    assert "rotates_veraport_identity = $false" in text
+    assert "rotates_workstation_identity = $false" in text
     assert "changes_veraport_roots = $false" in text
     assert "changes_veraport_process_policy = $false" in text
     assert "changes_tailscale = $false" in text
