@@ -1,0 +1,94 @@
+name: VeraMesh CI
+
+on:
+  push:
+    branches:
+      - main
+      - "work/**"
+      - "deploy/**"
+      - "feature/**"
+      - "vera/**"
+    paths:
+      - "protocol/**"
+      - "conformance/**"
+      - "gateway/veramesh-go/**"
+      - "tools/*.py"
+      - ".github/workflows/veramesh-ci.yml"
+  pull_request:
+    paths:
+      - "protocol/**"
+      - "conformance/**"
+      - "gateway/veramesh-go/**"
+      - "tools/*.py"
+      - ".github/workflows/veramesh-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  protocol:
+    name: Protocol / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: protocol/v1/tests/requirements.txt
+      - name: Install protocol test dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r protocol/v1/tests/requirements.txt pytest
+      - name: Compile protocol and conformance Python
+        run: |
+          python -m compileall -q protocol/v1 conformance/v1
+      - name: Run protocol and conformance tests
+        run: |
+          python -m pytest -q protocol/v1/tests conformance/v1
+
+  gateway:
+    name: Go gateway / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: gateway/veramesh-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Go environment
+        run: go env
+      - name: Test
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Build gateway
+        run: go build ./cmd/veramesh-gateway
+
+  repository-tools:
+    name: Repository tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Test portable plugin renderer
+        run: python -m unittest -v tools/test_render_veramesh_plugin.py
+      - name: Compile repository Python tools
+        run: python -m compileall -q tools

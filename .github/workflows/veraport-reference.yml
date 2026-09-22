@@ -3,12 +3,17 @@ name: VeraPort reference tests
 on:
   push:
     branches:
-      - "work/veramesh-rdc-replacement-v1-20260922"
+      - main
+      - "work/**"
+      - "deploy/**"
+      - "feature/**"
+      - "vera/**"
   pull_request:
     paths:
       - "reference/veraport_agent/**"
       - "gateway/veramesh-go/**"
       - ".github/workflows/veraport-reference.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
