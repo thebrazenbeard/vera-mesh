@@ -97,3 +97,15 @@ def test_managed_process_tools_require_narrow_capabilities():
     assert cfg.gateway_operations == frozenset({
         "process.start", "process.status", "process.terminate"
     })
+
+
+def test_replace_text_requires_read_and_write_session_capabilities():
+    value = base()
+    value["gateway_operations"] = ["fs.replace_text"]
+    value["requested_capabilities"] = ["fs.write"]
+    with pytest.raises(ControllerConfigError, match="fs.read"):
+        ControllerConfig.from_dict(value)
+
+    value["requested_capabilities"] = ["fs.read", "fs.write"]
+    cfg = ControllerConfig.from_dict(value)
+    assert cfg.gateway_operations == frozenset({"fs.replace_text"})
