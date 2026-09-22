@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -29,11 +30,13 @@ class TunnelRuntimeServiceError(RuntimeError):
 @dataclass(frozen=True)
 class TunnelRuntimeServiceConfig:
     tunnel_client: Path
+    tunnel_client_sha256: str
     alias: str
     tunnel_id: str
     runtime_api_key_file: Path
     controller_config: Path
-    mcp_command: str
+    mcp_executable: Path
+    mcp_executable_sha256: str
     profile_dir: Path
     state_dir: Path
     status_interval_s: float = 5.0
@@ -59,11 +62,13 @@ class TunnelRuntimeServiceConfig:
 
         required = (
             "tunnel_client",
+            "tunnel_client_sha256",
             "alias",
             "tunnel_id",
             "runtime_api_key_file",
             "controller_config",
-            "mcp_command",
+            "mcp_executable",
+            "mcp_executable_sha256",
             "profile_dir",
             "state_dir",
         )
@@ -75,6 +80,9 @@ class TunnelRuntimeServiceConfig:
 
         cfg = cls(
             tunnel_client=Path(str(value["tunnel_client"])).expanduser().resolve(),
+            tunnel_client_sha256=str(
+                value["tunnel_client_sha256"]
+            ).strip().lower(),
             alias=str(value["alias"]).strip(),
             tunnel_id=str(value["tunnel_id"]).strip(),
             runtime_api_key_file=Path(
@@ -83,7 +91,12 @@ class TunnelRuntimeServiceConfig:
             controller_config=Path(
                 str(value["controller_config"])
             ).expanduser().resolve(),
-            mcp_command=str(value["mcp_command"]).strip(),
+            mcp_executable=Path(
+                str(value["mcp_executable"])
+            ).expanduser().resolve(),
+            mcp_executable_sha256=str(
+                value["mcp_executable_sha256"]
+            ).strip().lower(),
             profile_dir=Path(str(value["profile_dir"])).expanduser().resolve(),
             state_dir=Path(str(value["state_dir"])).expanduser().resolve(),
             status_interval_s=float(value.get("status_interval_s", 5.0)),
@@ -105,14 +118,18 @@ class TunnelRuntimeServiceConfig:
             raise TunnelRuntimeServiceError(
                 "tunnel_id must be a bounded non-whitespace identifier"
             )
-        if (
-            not self.mcp_command
-            or len(self.mcp_command) > 4096
-            or "\x00" in self.mcp_command
-            or "\r" in self.mcp_command
-            or "\n" in self.mcp_command
+        for name, digest in (
+            ("tunnel_client_sha256", self.tunnel_client_sha256),
+            ("mcp_executable_sha256", self.mcp_executable_sha256),
         ):
-            raise TunnelRuntimeServiceError("invalid mcp_command")
+            if not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise TunnelRuntimeServiceError(
+                    f"{name} must be 64 lowercase hex characters"
+                )
+        if "'" in str(self.mcp_executable):
+            raise TunnelRuntimeServiceError(
+                "mcp_executable path must not contain a single quote"
+            )
         if not 1.0 <= self.status_interval_s <= 300.0:
             raise TunnelRuntimeServiceError(
                 "status_interval_s must be in 1..300"
@@ -125,11 +142,28 @@ class TunnelRuntimeServiceConfig:
     def validate_runtime_files(self) -> None:
         for path, label in (
             (self.tunnel_client, "tunnel-client executable"),
+            (self.mcp_executable, "VeraMesh stdio MCP executable"),
             (self.runtime_api_key_file, "runtime API key file"),
             (self.controller_config, "VeraPort controller config"),
         ):
             if not path.is_file():
                 raise TunnelRuntimeServiceError(f"{label} missing: {path}")
+        for path, expected, label in (
+            (
+                self.tunnel_client,
+                self.tunnel_client_sha256,
+                "tunnel-client executable",
+            ),
+            (
+                self.mcp_executable,
+                self.mcp_executable_sha256,
+                "VeraMesh stdio MCP executable",
+            ),
+        ):
+            if _sha256_file(path) != expected:
+                raise TunnelRuntimeServiceError(
+                    f"{label} SHA-256 mismatch"
+                )
         for path, label in (
             (self.profile_dir, "tunnel profile directory"),
             (self.state_dir, "tunnel state directory"),
@@ -151,6 +185,28 @@ class RuntimeStatus:
 
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _tunnel_quote_executable(path: Path) -> str:
+    value = str(path)
+    if not value or any(ch in value for ch in "\x00\r\n'"):
+        raise TunnelRuntimeServiceError(
+            "MCP executable path cannot be represented safely"
+        )
+    # tunnel-client preserves Windows backslashes inside single quotes.
+    # Its double-quoted parser treats backslashes as escapes.
+    return "'" + value + "'"
 
 
 def runtime_environment(
@@ -186,7 +242,7 @@ def connect_args(config: TunnelRuntimeServiceConfig) -> list[str]:
         "--profile-dir",
         str(config.profile_dir),
         "--mcp-command",
-        config.mcp_command,
+        _tunnel_quote_executable(config.mcp_executable),
     ]
 
 
@@ -294,6 +350,8 @@ def harden_service_materials(
         config_path,
         config.runtime_api_key_file,
         config.controller_config,
+        config.tunnel_client,
+        config.mcp_executable,
         controller.controller_key,
         controller.tls_ca,
         controller.workstation_public_key,
@@ -320,6 +378,8 @@ def validate_service_materials(
         config_path,
         config.runtime_api_key_file,
         config.controller_config,
+        config.tunnel_client,
+        config.mcp_executable,
         controller.controller_key,
         controller.tls_ca,
         controller.workstation_public_key,
