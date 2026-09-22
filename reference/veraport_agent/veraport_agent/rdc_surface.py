@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 import os
 import subprocess
 import threading
@@ -57,6 +58,8 @@ class RdcSurface:
     MAX_SEARCH_RESULTS = 500
     MAX_SEARCH_ENTRIES = 50_000
     MAX_SEARCH_DEPTH = 32
+    MAX_CONTENT_SEARCH_BYTES = 16 * 1024 * 1024
+    MAX_CONTENT_LINE_CHARS = 2_000
     MAX_PROCESS_OUTPUT_READ_BYTES = 65_536
     MAX_PROCESS_RUNTIME_S = 3_600.0
 
@@ -312,6 +315,203 @@ class RdcSurface:
             "max_depth": max_depth,
             "scan_limit_hit": scan_limit_hit,
             "truncated": truncated,
+        }
+
+    async def search_content(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        root: str,
+        query: str,
+        file_pattern: str = "*",
+        offset: int = 0,
+        max_results: int = 100,
+        max_entries: int = 10_000,
+        max_depth: int = 12,
+        max_total_bytes: int = 8 * 1024 * 1024,
+        case_sensitive: bool = False,
+    ) -> dict[str, Any]:
+        if not isinstance(query, str) or not query:
+            raise ValueError("query must be a non-empty string")
+        if not isinstance(file_pattern, str) or not file_pattern:
+            raise ValueError("file_pattern must be a non-empty string")
+        if type(offset) is not int or offset < 0:
+            raise ValueError("offset must be a non-negative integer")
+        if type(max_results) is not int or not 1 <= max_results <= self.MAX_SEARCH_RESULTS:
+            raise ValueError(
+                f"max_results must be in 1..{self.MAX_SEARCH_RESULTS}"
+            )
+        if type(max_entries) is not int or not 1 <= max_entries <= self.MAX_SEARCH_ENTRIES:
+            raise ValueError(
+                f"max_entries must be in 1..{self.MAX_SEARCH_ENTRIES}"
+            )
+        if type(max_depth) is not int or not 0 <= max_depth <= self.MAX_SEARCH_DEPTH:
+            raise ValueError(f"max_depth must be in 0..{self.MAX_SEARCH_DEPTH}")
+        if (
+            type(max_total_bytes) is not int
+            or not 1 <= max_total_bytes <= self.MAX_CONTENT_SEARCH_BYTES
+        ):
+            raise ValueError(
+                f"max_total_bytes must be in 1..{self.MAX_CONTENT_SEARCH_BYTES}"
+            )
+        if type(case_sensitive) is not bool:
+            raise ValueError("case_sensitive must be bool")
+        return await asyncio.to_thread(
+            self._search_content_sync,
+            lane_id,
+            fencing_token,
+            root,
+            query,
+            file_pattern,
+            offset,
+            max_results,
+            max_entries,
+            max_depth,
+            max_total_bytes,
+            case_sensitive,
+        )
+
+    def _search_content_sync(
+        self,
+        lane_id: str,
+        fencing_token: int,
+        root_value: str,
+        query: str,
+        file_pattern: str,
+        offset: int,
+        max_results: int,
+        max_entries: int,
+        max_depth: int,
+        max_total_bytes: int,
+        case_sensitive: bool,
+    ) -> dict[str, Any]:
+        root = self.executor._resolve_allowed(root_value)
+        self._authorize_fs(lane_id, fencing_token, root)
+        if not root.is_dir():
+            raise NotADirectoryError(str(root))
+
+        needle = query if case_sensitive else query.casefold()
+        scanned_entries = 0
+        scanned_files = 0
+        bytes_scanned = 0
+        matched = 0
+        results: list[dict[str, Any]] = []
+        scan_limit_hit = False
+        byte_limit_hit = False
+        more_matches = False
+        stack: list[tuple[Path, int]] = [(root, 0)]
+
+        while stack:
+            directory, depth = stack.pop()
+            try:
+                with os.scandir(directory) as scan:
+                    entries = sorted(
+                        list(scan),
+                        key=lambda item: (item.name.casefold(), item.name),
+                        reverse=True,
+                    )
+            except OSError:
+                continue
+
+            for entry in reversed(entries):
+                if scanned_entries >= max_entries:
+                    scan_limit_hit = True
+                    stack.clear()
+                    break
+                scanned_entries += 1
+
+                child = Path(entry.path)
+                if (
+                    entry.is_dir(follow_symlinks=False)
+                    and not entry.is_symlink()
+                    and depth < max_depth
+                ):
+                    stack.append((child, depth + 1))
+                    continue
+                if (
+                    not entry.is_file(follow_symlinks=False)
+                    or entry.is_symlink()
+                    or not fnmatch.fnmatch(entry.name, file_pattern)
+                ):
+                    continue
+
+                try:
+                    size = entry.stat(follow_symlinks=False).st_size
+                except OSError:
+                    continue
+                remaining = max_total_bytes - bytes_scanned
+                if remaining <= 0:
+                    byte_limit_hit = True
+                    stack.clear()
+                    break
+
+                per_file_limit = min(
+                    self.executor.max_read_bytes,
+                    remaining,
+                )
+                try:
+                    with child.open("rb") as handle:
+                        payload = handle.read(per_file_limit + 1)
+                except OSError:
+                    continue
+                if len(payload) > per_file_limit:
+                    payload = payload[:per_file_limit]
+                bytes_scanned += len(payload)
+                scanned_files += 1
+                text = payload.decode("utf-8", errors="replace")
+
+                for line_number, line in enumerate(text.splitlines(), start=1):
+                    haystack = line if case_sensitive else line.casefold()
+                    column = haystack.find(needle)
+                    if column < 0:
+                        continue
+                    if matched >= offset:
+                        if len(results) >= max_results:
+                            more_matches = True
+                            stack.clear()
+                            break
+                        relative = child.relative_to(root).as_posix()
+                        snippet = line[: self.MAX_CONTENT_LINE_CHARS]
+                        results.append({
+                            "path": child.as_posix(),
+                            "relative_path": relative,
+                            "line": line_number,
+                            "column": column + 1,
+                            "snippet": snippet,
+                            "snippet_truncated": (
+                                len(line) > self.MAX_CONTENT_LINE_CHARS
+                            ),
+                        })
+                    matched += 1
+                if more_matches:
+                    break
+                if bytes_scanned >= max_total_bytes:
+                    byte_limit_hit = True
+                    stack.clear()
+                    break
+
+            if more_matches or scan_limit_hit or byte_limit_hit:
+                break
+
+        truncated = more_matches or scan_limit_hit or byte_limit_hit
+        return {
+            "root": root.as_posix(),
+            "query": query,
+            "file_pattern": file_pattern,
+            "matches": results,
+            "offset": offset,
+            "next_offset": (
+                offset + len(results) if truncated and results else None
+            ),
+            "scanned_entries": scanned_entries,
+            "scanned_files": scanned_files,
+            "bytes_scanned": bytes_scanned,
+            "max_total_bytes": max_total_bytes,
+            "scan_limit_hit": scan_limit_hit,
+            "byte_limit_hit": byte_limit_hit,
+            "truncated": truncated,
+            "literal_search": True,
         }
 
     def _require_process_policy(self) -> None:
