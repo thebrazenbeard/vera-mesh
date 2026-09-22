@@ -51,16 +51,22 @@ Conditionally registered only when controller policy explicitly includes the ope
 - `fs_list_dir`
 - `fs_search`
 - `fs_write_text`
+- `fs_append_text`
+- `fs_mkdir`
+- `fs_move`
+- `fs_replace_text`
 - `process_exec`
 - `process_start`
 - `process_list`
 - `process_status`
 - `process_output`
+- `process_input`
 - `process_terminate`
 
 Process capabilities remain additionally gated by Lappy local policy. Tool discovery does
-not enable them. Managed process handles are opaque and bound to the owning lane/fence;
-lane close and application-session disconnect reap owned children.
+not enable them. Managed process handles are opaque and bound to the owning lane/fence. Interactive input
+requires a distinct `process.interact` capability and is bounded to 65,536 bytes per call.
+Lane close and application-session disconnect reap owned children.
 
 The current source also includes a transparent VeraRelay/VeraMesh live edge carrier.
 The edge forwards opaque bytes and does not terminate VeraPort TLS, parse VeraPort frames,
