@@ -230,3 +230,14 @@ def test_tunnel_service_materials_harden_and_validate_on_windows(tmp_path):
 
     trs.harden_service_materials(service_config_path, cfg)
     trs.validate_service_materials(service_config_path, cfg)
+
+
+
+@pytest.mark.skipif(
+    trs.win32serviceutil is None,
+    reason="pywin32 service class unavailable",
+)
+def test_tunnel_windows_service_depends_on_veraport_agent():
+    assert trs.VeraMeshTunnelRuntimeService._svc_deps_ == [
+        "VeraPortAgent"
+    ]
