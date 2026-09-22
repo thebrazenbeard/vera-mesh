@@ -5,8 +5,9 @@
 set -u
 
 json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/	/\\t/g; s//\\r/g; s/
-/\\n/g'
+  # Every collected field is normalized to a single line before it reaches
+  # this function. Keep escaping deliberately POSIX/BusyBox-safe.
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
 emit_string() {
