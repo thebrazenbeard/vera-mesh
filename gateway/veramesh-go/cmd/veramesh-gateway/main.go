@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -17,8 +19,34 @@ import (
 	"github.com/thebrazenbeard/vera-mesh/gateway/veramesh-go/veraport"
 )
 
+var (
+	buildVersion = "dev"
+	buildCommit  = "unknown"
+)
+
+type buildInfo struct {
+	Schema          string `json:"schema"`
+	Version         string `json:"version"`
+	Commit          string `json:"commit"`
+	ProtocolVersion string `json:"protocol_version"`
+	GOOS            string `json:"goos"`
+	GOARCH          string `json:"goarch"`
+}
+
+func currentBuildInfo() buildInfo {
+	return buildInfo{
+		Schema:          "VERAMESH_GATEWAY_BUILD_V1",
+		Version:         buildVersion,
+		Commit:          buildCommit,
+		ProtocolVersion: veraport.ProtocolVersion,
+		GOOS:            runtime.GOOS,
+		GOARCH:          runtime.GOARCH,
+	}
+}
+
 func main() {
 	version := flag.Bool("version", false, "print VeraPort protocol target")
+	buildInfoFlag := flag.Bool("build-info", false, "print machine-readable VeraMesh gateway build identity")
 	listen := flag.String("listen", "127.0.0.1:17446", "loopback HTTP listen address behind the reviewed HTTPS reverse proxy")
 	controllerConfig := flag.String("controller-config", "", "path to VeraPort controller config")
 	oauthConfig := flag.String("oauth-config", "", "path to OAuth introspection config")
@@ -27,6 +55,12 @@ func main() {
 
 	if *version {
 		fmt.Println(veraport.ProtocolVersion)
+		return
+	}
+	if *buildInfoFlag {
+		if err := json.NewEncoder(os.Stdout).Encode(currentBuildInfo()); err != nil {
+			log.Fatal(err)
+		}
 		return
 	}
 	if *controllerConfig == "" || *oauthConfig == "" {
