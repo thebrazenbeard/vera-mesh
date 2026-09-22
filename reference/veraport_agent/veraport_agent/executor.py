@@ -27,6 +27,10 @@ class FileVersionChanged(RuntimeError):
     code = "FILE_VERSION_CHANGED"
 
 
+class ReplaceCountMismatch(RuntimeError):
+    code = "REPLACE_COUNT_MISMATCH"
+
+
 @dataclass(frozen=True)
 class FileByteRange:
     content: bytes
@@ -242,6 +246,160 @@ class LocalExecutor:
             except FileNotFoundError:
                 pass
             raise
+
+    async def append_text(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        content: str,
+        encoding: str = "utf-8",
+    ) -> None:
+        resolved = self._resolve_allowed(path)
+        self.registry.authorize(
+            lane_id,
+            fencing_token,
+            "fs.write",
+            resource_key=self._fs_resource(resolved),
+            resource_mode=ClaimMode.WRITE,
+        )
+        await asyncio.to_thread(
+            self._append_text_sync,
+            resolved,
+            content,
+            encoding,
+        )
+
+    @staticmethod
+    def _append_text_sync(path: Path, content: str, encoding: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding=encoding, newline="") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    async def make_directory(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        parents: bool = True,
+    ) -> None:
+        if type(parents) is not bool:
+            raise ValueError("parents must be bool")
+        resolved = self._resolve_allowed(path)
+        self.registry.authorize(
+            lane_id,
+            fencing_token,
+            "fs.write",
+            resource_key=self._fs_resource(resolved),
+            resource_mode=ClaimMode.WRITE,
+        )
+        await asyncio.to_thread(
+            resolved.mkdir,
+            parents=parents,
+            exist_ok=True,
+        )
+
+    async def move_path(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        source: str,
+        destination: str,
+    ) -> None:
+        source_raw = Path(source).expanduser()
+        if source_raw.is_symlink():
+            raise ValueError("moving symlinks is not supported")
+        resolved_source = self._resolve_allowed(source_raw)
+        resolved_destination = self._resolve_allowed(destination)
+        self.registry.authorize(
+            lane_id,
+            fencing_token,
+            "fs.write",
+            resource_key=self._fs_resource(resolved_source),
+            resource_mode=ClaimMode.WRITE,
+        )
+        self.registry.authorize(
+            lane_id,
+            fencing_token,
+            "fs.write",
+            resource_key=self._fs_resource(resolved_destination),
+            resource_mode=ClaimMode.WRITE,
+        )
+        if not resolved_destination.parent.is_dir():
+            raise FileNotFoundError(
+                f"destination parent does not exist: {resolved_destination.parent}"
+            )
+        await asyncio.to_thread(
+            os.replace,
+            resolved_source,
+            resolved_destination,
+        )
+
+    async def replace_text(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        old_string: str,
+        new_string: str,
+        expected_count: int = 1,
+        encoding: str = "utf-8",
+    ) -> int:
+        if not old_string:
+            raise ValueError("old_string must be non-empty")
+        if type(expected_count) is not int or not 1 <= expected_count <= 1000:
+            raise ValueError("expected_count must be in 1..1000")
+        resolved = self._resolve_allowed(path)
+        resource = self._fs_resource(resolved)
+        self.registry.authorize(
+            lane_id,
+            fencing_token,
+            "fs.read",
+            resource_key=resource,
+            resource_mode=ClaimMode.READ,
+        )
+        self.registry.authorize(
+            lane_id,
+            fencing_token,
+            "fs.write",
+            resource_key=resource,
+            resource_mode=ClaimMode.WRITE,
+        )
+        return await asyncio.to_thread(
+            self._replace_text_sync,
+            resolved,
+            old_string,
+            new_string,
+            expected_count,
+            encoding,
+        )
+
+    def _replace_text_sync(
+        self,
+        path: Path,
+        old_string: str,
+        new_string: str,
+        expected_count: int,
+        encoding: str,
+    ) -> int:
+        content = self._read_text_bounded(path, encoding)
+        count = content.count(old_string)
+        if count != expected_count:
+            raise ReplaceCountMismatch(
+                f"expected {expected_count} matches, found {count}"
+            )
+        self._atomic_write(
+            path,
+            content.replace(old_string, new_string),
+            encoding,
+        )
+        return count
 
     async def run_process(
         self,
