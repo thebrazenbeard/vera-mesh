@@ -160,3 +160,27 @@ Parallel source split:
 Durable Bus supersession is on `bus/veramesh-coordinator-v1`; the current PR #20 qualification subject is `16bf262...`, not `5f1ed8d...`.
 
 Protected-effect gates remain unchanged.
+
+
+## Execution update — Issue #21 wire-safety successor
+
+VeraMesh Coordinator source lane now has Draft PR #22:
+
+- base: PR #12 exact head `9bffc57930587bf74a12657bbeaa913474ab5574`
+- head: `55c690bd77655ca8a6d0f5f34acb0c5c34c5aada`
+- branch: `work/veraport-wire-safe-response-v1-20260921`
+- compare at readback: ahead 5 / behind 0
+- changed files: exactly `response-wire-size-profile.md`, `test_stream.py`, and `stream.py`
+- PR state at readback: OPEN / DRAFT / MERGEABLE
+- hosted exact-head workflow evidence: none observed
+
+This bounded cut closes the immediate uncorrelated response-overflow defect without widening filesystem authority:
+- exact JSON serialization is preflighted with the same policy used for wire writes;
+- oversized handler output becomes correlated `RESPONSE_FRAME_TOO_LARGE`;
+- non-JSON handler output becomes correlated `RESPONSE_SERIALIZATION_ERROR`;
+- if even the bounded error or transport write fails, the stream is closed so pending clients fail through stream closure / bounded request deadlines;
+- local `max_read_bytes` is explicitly no longer treated as a wire-size guarantee.
+
+An isolated transport-logic sanity execution reproduced both correlated error paths successfully. That is not an exact repository checkout/test qualification and does not raise the evidence ceiling beyond source/static semantics.
+
+Issue #21 remains PARTIAL rather than closed: ranged/chunked read semantics are still a separate capability increment. Issue #19 remains owned by BT2 and must not be mixed into PR #22 before independent review.
