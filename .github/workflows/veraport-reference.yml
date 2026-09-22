@@ -32,6 +32,7 @@ jobs:
         run: |
           sh -n tools/synology_authorize_lappy_veramesh_connection.sh
           sh -n tools/synology_connect_lappy_veraport.sh
+          sh -n tools/synology_probe_lappy_non_rdc_paths.sh
           python - <<'PY'
           from pathlib import Path
           source = Path("tools/synology_connect_lappy_veraport.sh").read_text(encoding="utf-8")
