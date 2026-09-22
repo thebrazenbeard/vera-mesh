@@ -4,7 +4,6 @@ import hashlib
 import ipaddress
 import json
 import os
-import shutil
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -130,6 +129,10 @@ def prepare_workstation_service(
         raise WorkstationPreparationError(
             "bind_host must be a literal IP address"
         ) from exc
+    if address.is_unspecified or address.is_multicast:
+        raise WorkstationPreparationError(
+            "bind_host must be a concrete unicast address"
+        )
     if not address.is_loopback and not allow_non_loopback_listener:
         raise WorkstationPreparationError(
             "non-loopback bind requires explicit allow_non_loopback_listener"
@@ -211,11 +214,9 @@ def prepare_workstation_service(
     controller_config_path = export / "controller.json"
     controller_config_value = {
         "schema": "VERAPORT_CONTROLLER_MCP_CONFIG_V1",
-        "controller_key": str(export / "controller-key.pem"),
-        "tls_ca": str(export / "tls-ca.pem"),
-        "workstation_public_key": str(
-            export / "workstation-public.pem"
-        ),
+        "controller_key": "controller-key.pem",
+        "tls_ca": "tls-ca.pem",
+        "workstation_public_key": "workstation-public.pem",
         "requested_capabilities": sorted(capabilities),
         "gateway_operations": operations,
         "endpoints": [{
