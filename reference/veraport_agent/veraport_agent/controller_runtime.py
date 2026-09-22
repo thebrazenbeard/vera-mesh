@@ -197,6 +197,39 @@ class ControllerRuntime:
             return await self._read_router.read_bytes(**kwargs)
         return await self.gateway.read_bytes(**kwargs)
 
+    async def read_operation(
+        self,
+        operation: str,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        await self.ensure_started()
+        if operation not in {
+            "fs.stat",
+            "fs.list_dir",
+            "fs.search",
+            "fs.search_content",
+        }:
+            raise GatewayOperationDenied(operation)
+        if operation not in self.config.gateway_operations:
+            raise GatewayOperationDenied(operation)
+        lane_id = kwargs.get("lane_id")
+        fencing_token = kwargs.get("fencing_token")
+        if (
+            isinstance(lane_id, str)
+            and type(fencing_token) is int
+            and self._read_router.owns(lane_id, fencing_token)
+        ):
+            body = dict(kwargs)
+            body.pop("lane_id", None)
+            body.pop("fencing_token", None)
+            return await self._read_router.call_read_operation(
+                operation=operation,
+                lane_id=lane_id,
+                fencing_token=fencing_token,
+                body=body,
+            )
+        return await self.gateway.call_operation(operation, **kwargs)
+
     async def write_text(self, **kwargs: Any) -> dict[str, Any]:
         await self.ensure_started()
         return await self.gateway.write_text(**kwargs)
