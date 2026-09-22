@@ -1,0 +1,44 @@
+{
+  "schema": "VERAMESH_WORKBRIDGE_CHAT_CONTINUATION_V3",
+  "observed_at": "2026-09-22",
+  "objective": "make WorkBridgeMCP and VeraMesh work together and connect Lappy without RDC",
+  "workbridge": {
+    "repo": "thebrazenbeard/WorkBridgeMCP",
+    "main": "12bcbec3a4bda69e8b9361317feb8e9d9d47b6df",
+    "pr": 5,
+    "head": "0b80fe050d8f03da54ee14123737af26740c1605",
+    "ci_run": 35788145362,
+    "state": "EXACT_HEAD_SOURCE_BUILD_PASS_REVIEW_PENDING_NOT_MERGED_NOT_INSTALLED"
+  },
+  "veramesh": {
+    "repo": "thebrazenbeard/vera-mesh",
+    "main_latest_observed": "82e6f463b4a3c239a4d658901bc6930f9d4320bf",
+    "workflow_pr": {
+      "number": 31,
+      "head": "ef8919a46bf87d6ec9fba622f042cc6ed49436c2"
+    },
+    "activation_pr": {
+      "number": 30,
+      "head": "856305679e3249ae18dbc6817debb7ff0ab99f6d"
+    },
+    "diagnostics_pr": {
+      "number": 29,
+      "head": "95e1c8a3d60e8b1ac9165f46ab317b50e58c57f9"
+    },
+    "integration_pr": {
+      "number": 28,
+      "head": "644009dd2f4c764abf30785da0676a9eb616e4dd",
+      "status": "STALE_AGAINST_WORKBRIDGE_PR5"
+    },
+    "persistent_surface_pr": {
+      "number": 25,
+      "head": "08911a03594608d2fc8d6dabd6c1d5ffb9263140"
+    }
+  },
+  "authority": {
+    "lappy_veramesh_connection": true,
+    "use_rdc": false,
+    "scope": "exact connection/provisioning effects only"
+  },
+  "next_directive": "FRESH_READ_BOTH_REPOS_AND_BUS__CONSUME_WORKBRIDGE_PR5_REVIEW__QUALIFY_VERAMESH_PR31__REFRESH_PR28_TO_PR5__ACTIVATE_LAPPY_WITHOUT_RDC__VERIFY_DOCTOR_TUNNEL_CHATGPT_READONLY_E2E"
+}
