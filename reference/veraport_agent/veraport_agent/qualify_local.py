@@ -15,7 +15,10 @@ from typing import Any
 from .controller_config import ControllerConfig
 from .controller_runtime import ControllerRuntime
 from .lappy_host import start_host
-from .provision import provision_local_pair
+from .provision import (
+    FILESYSTEM_CAPABILITIES,
+    provision_local_pair,
+)
 from .service_config import WindowsServiceConfig
 
 
@@ -49,7 +52,11 @@ def _unwrap(response: dict[str, Any], operation: str) -> dict[str, Any]:
     return result
 
 
-async def qualify_local(*, source_sha: str) -> dict[str, Any]:
+async def qualify_local(
+    *,
+    source_sha: str,
+    enable_process: bool = False,
+) -> dict[str, Any]:
     started = time.time()
     token = "veraport-qualified-" + uuid.uuid4().hex
     with tempfile.TemporaryDirectory(
@@ -65,8 +72,12 @@ async def qualify_local(*, source_sha: str) -> dict[str, Any]:
         sentinel = allowed / "sentinel.txt"
         sentinel.write_text(token, encoding="utf-8")
 
+        identity_capabilities = set(FILESYSTEM_CAPABILITIES)
+        if enable_process:
+            identity_capabilities.add("process.exec")
         manifest = provision_local_pair(
             identity,
+            capabilities=identity_capabilities,
             harden_windows_acl=False,
         )
 
@@ -80,7 +91,7 @@ async def qualify_local(*, source_sha: str) -> dict[str, Any]:
             "tls_key": str(identity / "tls-key.pem"),
             "workstation_key": str(identity / "workstation-key.pem"),
             "controller_trust": str(identity / "controller-trust.json"),
-            "allow_process_exec": False,
+            "allow_process_exec": bool(enable_process),
             "allow_non_loopback_listener": False,
             "max_lanes": 8,
             "max_inflight": 8,
@@ -95,6 +106,22 @@ async def qualify_local(*, source_sha: str) -> dict[str, Any]:
         try:
             prepared, server = await start_host(service_config)
 
+            requested_capabilities = ["fs.read"]
+            gateway_operations = [
+                "lane.list",
+                "lane.open",
+                "lane.close",
+                "fs.read_text",
+            ]
+            if enable_process:
+                requested_capabilities = ["process.exec"]
+                gateway_operations = [
+                    "lane.list",
+                    "lane.open",
+                    "lane.close",
+                    "process.exec",
+                ]
+
             controller_config = ControllerConfig.from_dict({
                 "schema": "VERAPORT_CONTROLLER_MCP_CONFIG_V1",
                 "controller_key": str(identity / "controller-key.pem"),
@@ -102,13 +129,8 @@ async def qualify_local(*, source_sha: str) -> dict[str, Any]:
                 "workstation_public_key": str(
                     identity / "workstation-public.pem"
                 ),
-                "requested_capabilities": ["fs.read"],
-                "gateway_operations": [
-                    "lane.list",
-                    "lane.open",
-                    "lane.close",
-                    "fs.read_text",
-                ],
+                "requested_capabilities": requested_capabilities,
+                "gateway_operations": gateway_operations,
                 "endpoints": [{
                     "endpoint_id": "local-qualification",
                     "mode": "DIRECT_STREAM",
@@ -138,7 +160,7 @@ async def qualify_local(*, source_sha: str) -> dict[str, Any]:
                     "runtime controller principal does not match "
                     "generated identity manifest"
                 )
-            if machine.get("requested_capabilities") != ["fs.read"]:
+            if machine.get("requested_capabilities") != requested_capabilities:
                 raise LocalQualificationError(
                     "controller requested capability ceiling drifted"
                 )
@@ -156,10 +178,136 @@ async def qualify_local(*, source_sha: str) -> dict[str, Any]:
                 raise LocalQualificationError(
                     "local path data plane was not verified"
                 )
-            if path_info.get("granted_capabilities") != ["fs.read"]:
+            if path_info.get("granted_capabilities") != requested_capabilities:
                 raise LocalQualificationError(
-                    "workstation granted capabilities outside read-only ceiling"
+                    "workstation granted capabilities outside qualification ceiling"
                 )
+
+            process_receipt = None
+            if enable_process:
+                process_lane = "qualify-process-" + uuid.uuid4().hex
+                process_opened = _unwrap(
+                    await runtime.open_lane(
+                        lane_id=process_lane,
+                        task_id="local-process-qualification",
+                        capabilities=["process.exec"],
+                        claims=[{
+                            "key": "cwd:" + allowed.resolve().as_posix(),
+                            "mode": "write",
+                        }],
+                        ttl_s=60.0,
+                    ),
+                    "lane.open",
+                )
+                process_fence = process_opened.get("fencing_token")
+                if type(process_fence) is not int or process_fence < 1:
+                    raise LocalQualificationError(
+                        "process lane returned no valid fencing token"
+                    )
+                command_token = "veraport-process-" + uuid.uuid4().hex
+                command = os.environ.get(
+                    "COMSPEC",
+                    r"C:\Windows\System32\cmd.exe",
+                )
+                process_result = _unwrap(
+                    await runtime.gateway.call_operation(
+                        "process.exec",
+                        lane_id=process_lane,
+                        fencing_token=process_fence,
+                        argv=[
+                            command,
+                            "/d",
+                            "/c",
+                            "echo",
+                            command_token,
+                        ],
+                        cwd=str(allowed),
+                        timeout_s=10.0,
+                    ),
+                    "process.exec",
+                )
+                if process_result.get("returncode") != 0:
+                    raise LocalQualificationError(
+                        "process.exec returned non-zero status"
+                    )
+                stdout = str(process_result.get("stdout", ""))
+                if command_token not in stdout:
+                    raise LocalQualificationError(
+                        "process.exec output did not contain qualification token"
+                    )
+                process_closed = _unwrap(
+                    await runtime.close_lane(
+                        lane_id=process_lane,
+                        fencing_token=process_fence,
+                    ),
+                    "lane.close",
+                )
+                process_receipt = {
+                    "lane_opened": True,
+                    "argv_vector": True,
+                    "shell_flag": False,
+                    "cwd_claim": "cwd:" + allowed.resolve().as_posix(),
+                    "returncode": process_result.get("returncode"),
+                    "stdout_token_match": True,
+                    "stdout_truncated": process_result.get(
+                        "stdout_truncated"
+                    ),
+                    "stderr_truncated": process_result.get(
+                        "stderr_truncated"
+                    ),
+                    "lane_closed": bool(
+                        process_closed.get("closed", True)
+                    ),
+                }
+
+            if enable_process:
+                return {
+                    "schema": "VERAPORT_LOCAL_PROCESS_QUALIFICATION_RECEIPT_V1",
+                    "pass": True,
+                    "source_sha": source_sha,
+                    "qualification_scope": (
+                        "ephemeral loopback VeraPort TLS/application-auth "
+                        "process.exec qualification; no service install"
+                    ),
+                    "host_observation": {
+                        "platform": platform.platform(),
+                        "hostname": platform.node(),
+                        "python": platform.python_version(),
+                    },
+                    "identity": {
+                        "workstation_principal": manifest[
+                            "workstation_principal"
+                        ],
+                        "controller_principal": manifest[
+                            "controller_principal"
+                        ],
+                    },
+                    "path": {
+                        "mode": path_info.get("mode"),
+                        "selected_path_id": machine.get(
+                            "selected_path_id"
+                        ),
+                        "authenticated": path_info.get("authenticated"),
+                        "data_plane_verified": path_info.get(
+                            "data_plane_verified"
+                        ),
+                        "granted_capabilities": path_info.get(
+                            "granted_capabilities"
+                        ),
+                    },
+                    "process": process_receipt,
+                    "effects": {
+                        "windows_service_installed": False,
+                        "firewall_changed": False,
+                        "programdata_written": False,
+                        "process_execution_enabled": True,
+                        "persistent_identity_created": False,
+                    },
+                    "elapsed_ms": round(
+                        (time.time() - started) * 1000,
+                        3,
+                    ),
+                }
 
             opened = _unwrap(
                 await runtime.open_lane(
@@ -296,9 +444,20 @@ def main() -> None:
         required=True,
         help="exact VeraMesh source commit being qualified",
     )
+    parser.add_argument(
+        "--process",
+        action="store_true",
+        help=(
+            "run the separate temporary process.exec qualification "
+            "instead of the default read-only qualification"
+        ),
+    )
     args = parser.parse_args()
     receipt = asyncio.run(
-        qualify_local(source_sha=args.source_sha.strip())
+        qualify_local(
+            source_sha=args.source_sha.strip(),
+            enable_process=args.process,
+        )
     )
     print(json.dumps(receipt, indent=2, sort_keys=True))
 
