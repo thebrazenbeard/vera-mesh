@@ -22,6 +22,8 @@ Only mutation-class operations use the durable request/idempotency ledger:
 - `lane.close`
 - `fs.write_text`
 - `process.exec`
+- `process.start`
+- `process.terminate`
 
 Ordinary `lane.list` probes and `fs.read_text` operations do not create durable request
 rows. Reads remain subject to session, lane, fencing, root, and workstation read-size
