@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from .controller import HotSessionPool, SessionEndpoint
 from .controller_config import ControllerConfig, EndpointConfig
-from .gateway import VeraPortGateway
+from .gateway import GatewayOperationDenied, VeraPortGateway
 from .hot_session import SessionBinding, principal_id
 from .read_lane import MirroredReadLaneRouter
 from .synchrony import PathDecision, PathObservation, select_path
@@ -185,6 +185,8 @@ class ControllerRuntime:
 
     async def read_bytes(self, **kwargs: Any) -> dict[str, Any]:
         await self.ensure_started()
+        if "fs.read_bytes" not in self.config.gateway_operations:
+            raise GatewayOperationDenied("fs.read_bytes")
         lane_id = kwargs.get("lane_id")
         fencing_token = kwargs.get("fencing_token")
         if (
