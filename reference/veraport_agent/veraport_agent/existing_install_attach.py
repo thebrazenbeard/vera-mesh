@@ -332,7 +332,6 @@ def prepare_existing_install_tunnel_attach(
             "mcp_executable": str(tunnel.mcp_executable),
             "mcp_executable_sha256": tunnel.mcp_executable_sha256,
         },
-        "write_actions": actions,
         "effects": {
             "existing_veraport_service_modified": False,
             "existing_veraport_identity_rotated": False,
