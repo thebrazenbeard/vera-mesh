@@ -40,7 +40,8 @@
         "fs.mkdir",
         "fs.move",
         "fs.replace_text",
-        "process.input"
+        "process.input",
+        "fs.search_content"
       ]
     },
     "lane_id": {
@@ -223,6 +224,15 @@
     },
     "append_newline": {
       "type": "boolean"
+    },
+    "file_pattern": {
+      "type": "string",
+      "minLength": 1
+    },
+    "max_total_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 16777216
     }
   },
   "allOf": [
@@ -443,74 +453,6 @@
       "if": {
         "properties": {
           "operation": {
-            "const": "fs.append_text"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "lane_id",
-          "fencing_token",
-          "path",
-          "content"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "operation": {
-            "const": "fs.mkdir"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "lane_id",
-          "fencing_token",
-          "path"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "operation": {
-            "const": "fs.move"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "lane_id",
-          "fencing_token",
-          "source",
-          "destination"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "operation": {
-            "const": "fs.replace_text"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "lane_id",
-          "fencing_token",
-          "path",
-          "old_string",
-          "new_string"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "operation": {
             "const": "process.input"
           }
         }
@@ -521,6 +463,23 @@
           "fencing_token",
           "process_handle",
           "input_text"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.search_content"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "root",
+          "query"
         ]
       }
     }
