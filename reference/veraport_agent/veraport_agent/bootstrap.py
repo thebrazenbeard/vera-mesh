@@ -40,6 +40,7 @@ FILESYSTEM_OPERATIONS = (
     "fs.stat",
     "fs.list_dir",
     "fs.search",
+    "fs.search_content",
     "fs.write_text",
     "fs.append_text",
     "fs.mkdir",
