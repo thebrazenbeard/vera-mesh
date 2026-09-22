@@ -7,87 +7,53 @@ Status: SOURCE CANDIDATE / INSTALL AND CUTOVER NOT AUTHORIZED
 Replace the practical Remote Desktop Commander path without requiring a foreground
 PowerShell window and without making ChatGPT itself a workstation authority.
 
-Target topology:
+Primary Plus/phone topology:
 
 ```text
-ChatGPT
-  |
-  | Secure MCP Tunnel
-  v
-OpenAI tunnel runtime on Lappy
-  |
-  | stdio: veraport-mcp-stdio
-  v
-VeraPort ControllerRuntime
-  |\
-  | \__ EDGE_STREAM -> VeraMesh Python SPK live edge -> Lappy VeraPort
-  |
-  \____ DIRECT_STREAM -------------------------------> Lappy VeraPort
-                                                         |
-                                                         v
-                                              allowed filesystem/process
+ChatGPT phone/web
+       |
+       | public HTTPS MCP + OAuth
+       v
+VeraMesh Public Gateway on Synology
+       |
+       | private VeraPort application-authenticated stream
+       v
+Lappy VeraPort Windows service
+       |
+       v
+allowed filesystem/process authority
 ```
 
-The ChatGPT conversation may be closed on Lappy. No browser/app window on Lappy is
-part of the liveness contract.
+The ChatGPT conversation may be closed on Lappy. No browser/app window or foreground
+terminal on Lappy is part of the liveness contract.
 
-## OpenAI tunnel-client source binding used for this integration
+The gateway hides VeraPort lane IDs and fencing tokens from ChatGPT. Public tools use
+ergonomic file/process parameters; the gateway creates least-authority internal lanes
+and maps public process handles to actor-bound internal process leases.
 
-Repository: `openai/tunnel-client`
+## ChatGPT route selection
 
-Inspected exact commit:
-`cce7a8226654c432ce53c7e05e17a9825a34b6e3`
+The current personal Plus target is the published-plugin path: a stable public HTTPS
+MCP resource server on the always-on Synology gateway with OAuth user authorization.
 
-The inspected client provides:
-- Windows amd64/arm64 support;
-- `runtimes connect` for a managed detached local runtime;
-- persisted process identity rather than trusting a bare PID;
-- `runtimes status <alias> --json` with explicit `process_running`,
-  `healthy`, and `ready` fields;
-- `runtimes stop` for local runtime teardown;
-- runtime API-key references using `env:NAME` or `file:/path`;
-- explicit profile/state roots;
-- local stdio MCP targets.
+The previously built Secure MCP Tunnel / Lappy-side stdio route remains source-supported
+as an optional future Business/Enterprise/Edu/API/Codex route. It is not the minimum
+Plus cutover and is no longer the primary topology.
 
-VeraMesh does not vendor or silently modify tunnel-client. A different tunnel-client
-version is a different runtime subject and must be compatibility-checked.
+The public gateway:
+- binds only to loopback behind a reviewed Synology HTTPS reverse proxy;
+- publishes RFC 9728 protected-resource metadata;
+- emits per-tool OAuth `securitySchemes` plus the compatibility `_meta` mirror;
+- requires a verified OAuth resource-owner subject and declared scopes before tool calls;
+- keeps OAuth token issuance outside VeraMesh and accepts an injected verifier for an
+  established authorization server;
+- enforces exact public Host/origin policy at the MCP transport;
+- forwards authorized calls through VeraPort rather than importing workstation code.
 
-## VeraMesh tunnel service role
-
-`VeraMeshTunnelRuntime` is a Windows SCM wrapper around the official managed-runtime
-interface. It does not reimplement the tunnel.
-
-Fixed service config:
-`C:\ProgramData\VeraMesh\tunnel-runtime.json`
-
-The service:
-1. validates its source-controlled config shape and required local files;
-2. validates the LocalSystem ACL profile for config, tunnel runtime key, VeraPort
-   controller config/identity material, and state/profile directories;
-3. verifies pinned SHA-256 identities for both `tunnel-client.exe` and the
-   `veraport-mcp-stdio` launcher before privileged execution;
-4. invokes `tunnel-client runtimes connect` with an existing tunnel ID;
-5. passes the runtime key only as `file:<protected path>`, never as a literal argv
-   value and never through `CONTROL_PLANE_API_KEY` / `OPENAI_API_KEY`;
-6. supplies `VERAPORT_CONTROLLER_CONFIG` and stdio mode to the spawned VeraPort MCP;
-7. verifies `process_running=true` and `healthy=true`;
-8. periodically checks health and reconnects an unhealthy managed runtime;
-9. invokes `runtimes stop` during SCM shutdown.
-
-`ready` is recorded separately. A tunnel can be locally running/healthy before the
-ChatGPT-side connector/app has completed every readiness condition.
-
-## Why managed stdio is preferred for this cut
-
-The tunnel runtime launches `veraport-mcp-stdio` directly. This avoids:
-- a public inbound listener on Lappy;
-- a second local HTTP listener solely for ChatGPT ingress;
-- exposing the tunnel runtime API key to VeraPort through environment inheritance;
-- tying VeraPort liveness to a foreground PowerShell process.
-
-VeraPort itself still owns controller/workstation authentication, capability ceilings,
-lane claims, fencing, mutation idempotency, and operation policy. Tunnel possession is
-not VeraPort authorization.
+Synology OAuth Service and Synology SSO Server are zero-new-spend authorization-server
+candidates. Neither is accepted until live metadata/flow qualification proves the
+required PKCE/client-registration or preconfigured-client behavior, resource binding,
+subject, expiry, audience, and scopes.
 
 ## VeraMesh Synology edge vs VeraRelay
 
