@@ -331,3 +331,49 @@ async def test_if_overflow_error_cannot_fit_stream_closes_deterministically() ->
         await client.close()
         server.close()
         await server.wait_closed()
+
+
+
+@pytest.mark.asyncio
+async def test_unserializable_handler_response_is_correlated() -> None:
+    async def handler(request):
+        return {
+            "protocol_version": "veraport-v1",
+            "request_id": request["request_id"],
+            "ok": True,
+            "result": {"bad": object()},
+        }
+
+    server = await asyncio.start_server(
+        lambda reader, writer: serve_multiplexed(
+            reader,
+            writer,
+            handler,
+            max_frame_bytes=512,
+        ),
+        "127.0.0.1",
+        0,
+    )
+    port = server.sockets[0].getsockname()[1]
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    client = MultiplexClient(
+        reader,
+        writer,
+        max_frame_bytes=512,
+        request_timeout_s=1.0,
+    )
+    try:
+        response = await client.request({
+            "request_id": "serialization-error",
+            "operation": "lane.list",
+        })
+        assert response["request_id"] == "serialization-error"
+        assert response["ok"] is False
+        assert (
+            response["error"]["code"]
+            == "RESPONSE_SERIALIZATION_ERROR"
+        )
+    finally:
+        await client.close()
+        server.close()
+        await server.wait_closed()
