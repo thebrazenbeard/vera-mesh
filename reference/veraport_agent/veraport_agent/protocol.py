@@ -19,6 +19,10 @@ DURABLE_MUTATING_OPERATIONS = frozenset({
     "lane.renew",
     "lane.close",
     "fs.write_text",
+    "fs.append_text",
+    "fs.mkdir",
+    "fs.move",
+    "fs.replace_text",
     "process.exec",
     "process.start",
     "process.terminate",
@@ -287,6 +291,51 @@ class VeraPortAgent:
                     ),
                 )
                 return {"written": True}
+
+        if operation in {
+            "fs.append_text",
+            "fs.mkdir",
+            "fs.move",
+            "fs.replace_text",
+        }:
+            lane_id = str(request["lane_id"])
+            fencing_token = int(request["fencing_token"])
+            async with self._lane_operation(lane_id):
+                if operation == "fs.append_text":
+                    await self.executor.append_text(
+                        lane_id=lane_id,
+                        fencing_token=fencing_token,
+                        path=str(request["path"]),
+                        content=str(request["content"]),
+                        encoding=str(request.get("encoding", "utf-8")),
+                    )
+                    return {"appended": True}
+                if operation == "fs.mkdir":
+                    await self.executor.make_directory(
+                        lane_id=lane_id,
+                        fencing_token=fencing_token,
+                        path=str(request["path"]),
+                        parents=request.get("parents", True),
+                    )
+                    return {"created": True}
+                if operation == "fs.move":
+                    await self.executor.move_path(
+                        lane_id=lane_id,
+                        fencing_token=fencing_token,
+                        source=str(request["source"]),
+                        destination=str(request["destination"]),
+                    )
+                    return {"moved": True}
+                count = await self.executor.replace_text(
+                    lane_id=lane_id,
+                    fencing_token=fencing_token,
+                    path=str(request["path"]),
+                    old_string=str(request["old_string"]),
+                    new_string=str(request["new_string"]),
+                    expected_count=request.get("expected_count", 1),
+                    encoding=str(request.get("encoding", "utf-8")),
+                )
+                return {"replacements": count}
 
         if operation == "process.exec":
             argv = request.get("argv")
