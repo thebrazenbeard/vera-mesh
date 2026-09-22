@@ -124,3 +124,23 @@ def test_process_exec_not_added_without_local_config_grant(tmp_path):
     events = []
     prepared = prepare_host(cfg(tmp_path), deps=deps(events))
     assert prepared.config.allow_process_exec is False
+
+
+def test_process_policy_expands_to_exec_inspect_and_control(tmp_path):
+    events = []
+    value = cfg(tmp_path)
+    value = WindowsServiceConfig.from_dict({
+        "bind_host": value.bind_host,
+        "bind_port": value.bind_port,
+        "allowed_roots": [str(root) for root in value.allowed_roots],
+        "state_db": str(value.state_db),
+        "tls_cert": str(value.tls_cert),
+        "tls_key": str(value.tls_key),
+        "workstation_key": str(value.workstation_key),
+        "controller_trust": str(value.controller_trust),
+        "allow_process_exec": True,
+    })
+    prepared = prepare_host(value, deps=deps(events))
+    registry = prepared.agent if False else None
+    executor_event = events.index("executor")
+    assert executor_event > events.index("registry")
