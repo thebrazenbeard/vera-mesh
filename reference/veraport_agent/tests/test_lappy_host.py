@@ -140,7 +140,32 @@ def test_process_policy_expands_to_exec_inspect_and_control(tmp_path):
         "controller_trust": str(value.controller_trust),
         "allow_process_exec": True,
     })
-    prepared = prepare_host(value, deps=deps(events))
-    registry = prepared.agent if False else None
-    executor_event = events.index("executor")
-    assert executor_event > events.index("registry")
+
+    base = deps(events)
+    captured = {}
+    original_registry = base.lane_registry_cls
+
+    def registry(caps, **kwargs):
+        captured["caps"] = frozenset(caps)
+        return original_registry(caps, **kwargs)
+
+    wrapped = HostDependencies(
+        base.load_identity,
+        base.state_store_cls,
+        registry,
+        base.executor_cls,
+        base.agent_cls,
+        base.authenticator_cls,
+        base.handler_factory_cls,
+        base.make_server_context,
+        base.serve_tls_connection,
+        base.start_server,
+    )
+    prepare_host(value, deps=wrapped)
+    assert captured["caps"] == frozenset({
+        "fs.read",
+        "fs.write",
+        "process.exec",
+        "process.inspect",
+        "process.control",
+    })
