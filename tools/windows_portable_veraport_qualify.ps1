@@ -1,6 +1,10 @@
+param(
+    [switch]$Process
+)
+
 $ErrorActionPreference = "Stop"
 
-$SourceSha = "13a16019f3ec45acd576eb22f75138e6820d6262"
+$SourceSha = "494914f97ad8d6e261e246e641d45e25f3394787"
 $PythonVersion = "3.11.9"
 $Root = Join-Path $env:TEMP "VeraMesh-Portable-Qualification"
 $PythonDir = Join-Path $Root "python"
@@ -69,8 +73,14 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
-Write-Host "Running real VeraPort loopback TLS/application-auth qualification..."
-& $Python -m veraport_agent.qualify_local --source-sha $SourceSha
+if ($Process) {
+    Write-Host "Running real VeraPort loopback TLS/application-auth process qualification..."
+    & $Python -m veraport_agent.qualify_local --source-sha $SourceSha --process
+}
+else {
+    Write-Host "Running real VeraPort loopback TLS/application-auth read-only qualification..."
+    & $Python -m veraport_agent.qualify_local --source-sha $SourceSha
+}
 if ($LASTEXITCODE -ne 0) {
     throw "VeraPort qualification failed with exit code $LASTEXITCODE"
 }
