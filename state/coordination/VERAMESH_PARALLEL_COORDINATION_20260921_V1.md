@@ -137,3 +137,26 @@ The existing PR #12 head already removed read-only requests from durable mutatio
 Claim ceiling remains source/static-readback only until executable qualification occurs.
 
 Hostile review caught and repaired a stale predecessor idempotency regression that still treated read-only `lane.list` as durable request-ID admission. The repaired test now collides two mutation-class requests.
+
+
+## Coordination refresh — PR #20 R2 / wire-safe split
+
+Fresh exact state:
+- PR #20 current head: `16bf262ebf6f5f79e49041804d09b95a3e16c95b`.
+- The earlier coordinator review at `5f1ed8d61fd0faf05bc5833d70b8a98ac9875691` is stale and superseded.
+- Current coordinator disposition at `16bf262...`: `ACCEPT_SOURCE_DESIGN / EXECUTABLE_QUALIFICATION_PENDING`.
+- Head movement repaired stale predecessor idempotency/PENDING fixtures so they now exercise mutation-class `lane.open`, consistent with the mutation-only durable ledger.
+- No hosted exact-head workflow is present. The authorized workstation is offline and Remote Desktop Commander reports zero remaining monthly remote-call budget, so executable qualification remains pending.
+
+The inherited wire-size blocker is now isolated as Issue #21, `VeraPort file reads must be wire-safe under serialized frame limits`.
+
+Parallel source split:
+1. PR #20 remains ledger-health qualification only.
+2. Issue #19 owns application-session drain/reap/lifetime repair.
+3. Issue #21 owns end-to-end wire-safe/ranged-read repair.
+4. Issue #19 and Issue #21 must remain on separate isolated successors until independently reviewed.
+5. PR #12 remains `CHANGES_REQUIRED` until both inherited blockers are closed, regardless of any scoped PR #20 PASS.
+
+Durable Bus supersession is on `bus/veramesh-coordinator-v1`; the current PR #20 qualification subject is `16bf262...`, not `5f1ed8d...`.
+
+Protected-effect gates remain unchanged.
