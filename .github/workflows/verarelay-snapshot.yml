@@ -3,7 +3,11 @@ name: VeraRelay 0.4 snapshot qualification
 on:
   push:
     branches:
-      - "work/veramesh-rdc-replacement-v1-20260922"
+      - main
+      - "work/**"
+      - "deploy/**"
+      - "feature/**"
+      - "vera/**"
     paths:
       - "reference/verarelay_0_4_candidate/**"
       - ".github/workflows/verarelay-snapshot.yml"
