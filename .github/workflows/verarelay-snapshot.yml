@@ -7,6 +7,10 @@ on:
     paths:
       - "reference/verarelay_0_4_candidate/**"
       - ".github/workflows/verarelay-snapshot.yml"
+  pull_request:
+    paths:
+      - "reference/verarelay_0_4_candidate/**"
+      - ".github/workflows/verarelay-snapshot.yml"
   workflow_dispatch:
 
 permissions:
