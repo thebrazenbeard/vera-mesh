@@ -144,11 +144,21 @@ async def test_live_edge_rejects_connections_above_admission_bound():
         "127.0.0.1", edge_port
     )
     second_writer.write(b"second")
-    await second_writer.drain()
-    assert await asyncio.wait_for(second_reader.read(), timeout=2) == b""
+    try:
+        await second_writer.drain()
+    except ConnectionResetError:
+        pass
+    try:
+        rejected = await asyncio.wait_for(second_reader.read(), timeout=2)
+    except ConnectionResetError:
+        rejected = b""
+    assert rejected == b""
 
     second_writer.close()
-    await second_writer.wait_closed()
+    try:
+        await second_writer.wait_closed()
+    except ConnectionResetError:
+        pass
     hold.set()
     first_writer.close()
     await first_writer.wait_closed()
