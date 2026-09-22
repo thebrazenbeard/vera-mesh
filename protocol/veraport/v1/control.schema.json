@@ -430,6 +430,74 @@
           "new_string"
         ]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.append_text"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "path",
+          "content"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.mkdir"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "path"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.move"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "source",
+          "destination"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "fs.replace_text"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "path",
+          "old_string",
+          "new_string"
+        ]
+      }
     }
   ]
 }
