@@ -166,7 +166,7 @@ def build_public_gateway_http_app(
         from mcp.server.transport_security import TransportSecuritySettings
         from pydantic import AnyHttpUrl
         from starlette.applications import Starlette
-        from starlette.authentication import AuthenticationMiddleware
+        from starlette.middleware.authentication import AuthenticationMiddleware
         from starlette.routing import Mount
     except ImportError as exc:
         raise RuntimeError(
