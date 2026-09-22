@@ -167,5 +167,6 @@ def test_process_policy_expands_to_exec_inspect_and_control(tmp_path):
         "fs.write",
         "process.exec",
         "process.inspect",
+        "process.interact",
         "process.control",
     })
