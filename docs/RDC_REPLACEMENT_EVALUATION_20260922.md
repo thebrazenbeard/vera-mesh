@@ -7,7 +7,7 @@ Status: SOURCE WORKING / NOT INSTALLED / NOT CURRENT CHATGPT ROUTE
 Replace the practical Remote Desktop Commander workflow with a zero-new-spend,
 source-controlled VeraMesh path while preserving a stricter authority model:
 
-`ChatGPT/App -> remote MCP surface -> VeraPort controller -> DIRECT_STREAM or VeraRelay EDGE_STREAM -> Lappy VeraPort service`
+`ChatGPT/App -> remote MCP surface -> VeraPort controller -> DIRECT_STREAM or VeraMesh Python SPK EDGE_STREAM -> Lappy VeraPort service`
 
 The chat being open on Lappy is intentionally irrelevant. The workstation bridge is a
 persistent Windows service.
@@ -68,7 +68,8 @@ Implemented and CI-covered:
 - managed process start/list/status/output/input/terminate;
 - automatic managed-process reap on lane close or application-session disconnect;
 - direct TLS hot path;
-- transparent VeraRelay/VeraMesh live edge carrying the same end-to-end TLS session;
+- transparent VeraMesh Python SPK live edge carrying the same end-to-end TLS session;
+- independent in-repo Python live-edge carrier retained as a conformance/reference implementation, not the production VeraRelay runtime;
 - MCP Streamable HTTP adapter over the controller runtime;
 - persistent Windows Service host for Lappy.
 
@@ -104,7 +105,8 @@ current ChatGPT route.
 A green source/CI run proves only the exact source under test. It does not prove:
 
 - Lappy production installation;
-- VeraRelay/Synology deployment;
+- current-head VeraMesh Synology SPK deployment;
+- VeraRelay Node.js durable-courier deployment;
 - public/private tunnel setup;
 - ChatGPT app/plugin registration;
 - end-to-end operation from a live ChatGPT tool call;
