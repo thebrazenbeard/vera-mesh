@@ -40,15 +40,39 @@ async def read_frame(reader: asyncio.StreamReader, *, max_frame_bytes: int = 1_0
     return value
 
 
+def encode_frame_payload(
+    value: dict[str, Any],
+    *,
+    max_frame_bytes: int = 1_048_576,
+) -> bytes:
+    try:
+        raw = json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise StreamProtocolError(
+            "response is not strict JSON-serializable"
+        ) from exc
+    if len(raw) > max_frame_bytes:
+        raise FrameTooLarge(
+            f"encoded frame size {len(raw)} exceeds policy"
+        )
+    return raw
+
+
 async def write_frame(
     writer: asyncio.StreamWriter,
     value: dict[str, Any],
     *,
     max_frame_bytes: int = 1_048_576,
 ) -> None:
-    raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
-    if len(raw) > max_frame_bytes:
-        raise FrameTooLarge(f"encoded frame size {len(raw)} exceeds policy")
+    raw = encode_frame_payload(
+        value,
+        max_frame_bytes=max_frame_bytes,
+    )
     writer.write(struct.pack("!I", len(raw)) + raw)
     await writer.drain()
 
@@ -176,34 +200,50 @@ async def serve_multiplexed(
                     "ok": False,
                     "error": {"code": exc.__class__.__name__.upper(), "message": str(exc)},
                 }
-            async with write_lock:
-                try:
+            try:
+                encode_frame_payload(
+                    response,
+                    max_frame_bytes=max_frame_bytes,
+                )
+            except FrameTooLarge:
+                response = {
+                    "protocol_version": "veraport-v1",
+                    "request_id": request.get("request_id"),
+                    "ok": False,
+                    "error": {
+                        "code": FrameTooLarge.code,
+                        "message": (
+                            "encoded response exceeds max_frame_bytes"
+                        ),
+                    },
+                }
+            except StreamProtocolError:
+                response = {
+                    "protocol_version": "veraport-v1",
+                    "request_id": request.get("request_id"),
+                    "ok": False,
+                    "error": {
+                        "code": "RESPONSE_SERIALIZATION_ERROR",
+                        "message": (
+                            "handler response is not JSON-serializable"
+                        ),
+                    },
+                }
+
+            try:
+                async with write_lock:
                     await write_frame(
                         writer,
                         response,
                         max_frame_bytes=max_frame_bytes,
                     )
-                except FrameTooLarge:
-                    overflow = {
-                        "protocol_version": "veraport-v1",
-                        "request_id": request.get("request_id"),
-                        "ok": False,
-                        "error": {
-                            "code": FrameTooLarge.code,
-                            "message": (
-                                "encoded response exceeds max_frame_bytes"
-                            ),
-                        },
-                    }
-                    try:
-                        await write_frame(
-                            writer,
-                            overflow,
-                            max_frame_bytes=max_frame_bytes,
-                        )
-                    except FrameTooLarge:
-                        writer.close()
-                        await writer.wait_closed()
+            except Exception:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except Exception:
+                    pass
+                raise
         finally:
             capacity.release()
 
