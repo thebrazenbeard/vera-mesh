@@ -414,6 +414,7 @@ if win32serviceutil is not None:
     class VeraMeshTunnelRuntimeService(win32serviceutil.ServiceFramework):
         _svc_name_ = "VeraMeshTunnelRuntime"
         _svc_display_name_ = "VeraMesh Secure MCP Tunnel Runtime"
+        _svc_deps_ = ["VeraPortAgent"]
         _svc_description_ = (
             "Keeps the managed OpenAI tunnel-client runtime available for "
             "VeraMesh without a foreground PowerShell session."
