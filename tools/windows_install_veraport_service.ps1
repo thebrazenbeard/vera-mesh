@@ -12,7 +12,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$SourceSha = "cecc418824b5ee0141d44a0b42637a9e54c1d4e3"
+$SourceSha = "7ddd0451605357dbe5129702b8d8325a2d966076"
 $PythonVersion = "3.11.9"
 $PythonUrl = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embeddable-amd64.zip"
 $PythonSha256 = "33b448f95fecb7c6f802157dbd5e6b40a2ad9bfc8b95ca634a06ba4073ad1ac0"
