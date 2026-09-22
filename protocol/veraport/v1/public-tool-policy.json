@@ -315,6 +315,22 @@
         "idempotentHint": true,
         "openWorldHint": false
       }
+    },
+    {
+      "name": "release_process",
+      "operation": "gateway.release_process",
+      "scopes": [
+        "computer.process"
+      ],
+      "capabilities": [
+        "process.control"
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
     }
   ],
   "invariants": [
@@ -323,6 +339,7 @@
     "a public filesystem call claims only the requested path or search root",
     "a public managed-process handle is mapped to one hidden VeraPort lane/fence owned by one authenticated actor",
     "successful mutations remain successful even if later lane cleanup fails; cleanup evidence is reported separately",
-    "public tool metadata must be generated from this catalog rather than maintained independently"
+    "public tool metadata must be generated from this catalog rather than maintained independently",
+    "release_process closes the hidden process lane and terminates the managed child if it is still running"
   ]
 }
