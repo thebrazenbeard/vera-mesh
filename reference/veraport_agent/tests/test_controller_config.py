@@ -69,3 +69,31 @@ def test_durable_relay_rejected_until_implemented():
     value["endpoints"][0]["mode"] = "DURABLE_RELAY"
     with pytest.raises(ControllerConfigError, match="durable relay"):
         ControllerConfig.from_dict(value)
+
+
+def test_discovery_tools_require_fs_read_capability():
+    value = base()
+    value["gateway_operations"].append("fs.search")
+    value["requested_capabilities"] = ["fs.write"]
+    with pytest.raises(ControllerConfigError, match="fs.read"):
+        ControllerConfig.from_dict(value)
+
+
+def test_managed_process_tools_require_narrow_capabilities():
+    value = base()
+    value["gateway_operations"] = ["process.start", "process.status", "process.terminate"]
+    value["requested_capabilities"] = ["process.exec"]
+    with pytest.raises(ControllerConfigError, match="process.inspect"):
+        ControllerConfig.from_dict(value)
+
+    value["requested_capabilities"] = ["process.exec", "process.inspect"]
+    with pytest.raises(ControllerConfigError, match="process.control"):
+        ControllerConfig.from_dict(value)
+
+    value["requested_capabilities"] = [
+        "process.exec", "process.inspect", "process.control"
+    ]
+    cfg = ControllerConfig.from_dict(value)
+    assert cfg.gateway_operations == frozenset({
+        "process.start", "process.status", "process.terminate"
+    })
