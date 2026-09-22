@@ -219,3 +219,83 @@ async def test_lane_close_reaps_owned_process(tmp_path):
     })
     assert closed["ok"] is True
     assert handle in closed["result"]["terminated_process_handles"]
+
+
+@pytest.mark.asyncio
+async def test_interactive_process_input_is_lane_owned_and_bounded(tmp_path):
+    registry = LaneRegistry({
+        "process.exec",
+        "process.inspect",
+        "process.interact",
+        "process.control",
+    })
+    lane = registry.open_lane(
+        lane_id="interactive",
+        task_id="repl",
+        capabilities=frozenset({
+            "process.exec",
+            "process.inspect",
+            "process.interact",
+            "process.control",
+        }),
+        claims=(ResourceClaim("cwd:" + tmp_path.as_posix(), ClaimMode.WRITE),),
+    )
+    surface = surface_for(
+        LocalExecutor(
+            registry,
+            allowed_roots=(tmp_path,),
+            allow_process_exec=True,
+        )
+    )
+    started = await surface.process_start(
+        lane_id=lane.lane_id,
+        fencing_token=lane.fencing_token,
+        argv=[
+            sys.executable,
+            "-u",
+            "-c",
+            "import sys; print('ready'); line=sys.stdin.readline(); print('got:'+line.strip())",
+        ],
+        cwd=str(tmp_path),
+        max_runtime_s=5,
+    )
+    handle = started["process_handle"]
+
+    for _ in range(100):
+        out = await surface.process_output(
+            lane_id=lane.lane_id,
+            fencing_token=lane.fencing_token,
+            process_handle=handle,
+        )
+        if "ready\n" in out["stdout"]:
+            break
+        await asyncio.sleep(0.01)
+    assert "ready\n" in out["stdout"]
+
+    wrote = await surface.process_input(
+        lane_id=lane.lane_id,
+        fencing_token=lane.fencing_token,
+        process_handle=handle,
+        input_text="hello",
+    )
+    assert wrote["bytes_written"] == 6
+
+    for _ in range(100):
+        final = await surface.process_output(
+            lane_id=lane.lane_id,
+            fencing_token=lane.fencing_token,
+            process_handle=handle,
+        )
+        if "got:hello\n" in final["stdout"]:
+            break
+        await asyncio.sleep(0.01)
+    assert "got:hello\n" in final["stdout"]
+
+    with pytest.raises(ValueError, match="65536"):
+        await surface.process_input(
+            lane_id=lane.lane_id,
+            fencing_token=lane.fencing_token,
+            process_handle=handle,
+            input_text="x" * 65537,
+            append_newline=False,
+        )
