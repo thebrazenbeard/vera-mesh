@@ -22,7 +22,7 @@ The stream layer independently enforces `max_frame_bytes` on the encoded respons
 If a handler result exceeds the frame policy:
 
 1. the server attempts a small correlated error using the original `request_id` and
-   `FRAME_TOO_LARGE`;
+   `RESPONSE_FRAME_TOO_LARGE`;
 2. if even that error cannot fit the configured frame ceiling, the server closes the
    stream;
 3. client pending requests must therefore resolve to a response or stream failure under
@@ -81,8 +81,8 @@ required.
 
 The bounded byte primitive reduces response-size variance but does not bypass the
 stream's encoded-frame policy. An unusually small configured `max_frame_bytes` can
-still reject a requested chunk. The deterministic overflow rule above remains
-controlling.
+still reject a requested chunk. The deterministic overflow rule above remains controlling. Its transport mechanics are
+normatively defined by `response-wire-size-profile.md`.
 
 Callers may retry a read-only chunk with a smaller `max_bytes` while preserving the
 same `expected_file_version`.
