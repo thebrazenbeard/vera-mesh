@@ -3,6 +3,7 @@ package veraport
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -46,5 +47,25 @@ func TestFrameRejectsInvalidUTF8AndInvalidLength(t *testing.T) {
 	bad.Write(header[:])
 	if err := ReadFrame(&bad, &target, DefaultMaxFrameBytes); err == nil {
 		t.Fatal("oversized declared frame accepted")
+	}
+}
+
+func TestFramePreservesExactGenericIntegers(t *testing.T) {
+	value := map[string]any{
+		"protocol_version": ProtocolVersion,
+		"request_id":       "r-large",
+		"fencing_token":    json.Number("9007199254740993"),
+	}
+	frame, err := EncodeFrame(value, DefaultMaxFrameBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := ReadFrame(bytes.NewReader(frame), &got, DefaultMaxFrameBytes); err != nil {
+		t.Fatal(err)
+	}
+	n, ok := got["fencing_token"].(json.Number)
+	if !ok || n.String() != "9007199254740993" {
+		t.Fatalf("generic integer lost precision/type: %#v", got["fencing_token"])
 	}
 }

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -115,8 +116,20 @@ func TestCanonicalRemotePathMatchesPublicPolicy(t *testing.T) {
 			t.Fatalf("%q => %q want %q", input, got, want)
 		}
 	}
-	if _, err := CanonicalRemotePath("relative/path"); err == nil {
-		t.Fatal("relative path accepted")
+	for _, invalid := range []string{"relative/path", "1:/not-a-drive", `\\\\server`, `\\\\server\\share\\..\\escape`, "C:/bad\x00name"} {
+		if _, err := CanonicalRemotePath(invalid); err == nil {
+			t.Fatalf("invalid path accepted: %q", invalid)
+		}
+	}
+}
+
+func TestExactInt64AcceptsJSONNumberWithoutPrecisionLoss(t *testing.T) {
+	got, ok := exactInt64(json.Number("9007199254740993"))
+	if !ok || got != 9007199254740993 {
+		t.Fatalf("exact JSON integer rejected or changed: got=%d ok=%v", got, ok)
+	}
+	if _, ok := exactInt64(json.Number("1.5")); ok {
+		t.Fatal("fractional JSON number accepted as int64")
 	}
 }
 

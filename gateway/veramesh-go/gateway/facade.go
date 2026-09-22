@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -66,8 +67,14 @@ func CanonicalRemotePath(value string) (string, error) {
 	if raw == "" {
 		return "", errors.New("path must be a non-empty absolute string")
 	}
+	if strings.ContainsRune(raw, '\x00') {
+		return "", errors.New("path must not contain NUL")
+	}
 	raw = strings.ReplaceAll(raw, "\\", "/")
 	if len(raw) >= 3 && raw[1] == ':' && raw[2] == '/' {
+		if !((raw[0] >= 'A' && raw[0] <= 'Z') || (raw[0] >= 'a' && raw[0] <= 'z')) {
+			return "", errors.New("Windows drive path must begin with a drive letter")
+		}
 		clean := path.Clean(raw[2:])
 		if clean == "." || !strings.HasPrefix(clean, "/") {
 			return "", errors.New("path must be absolute")
@@ -75,11 +82,29 @@ func CanonicalRemotePath(value string) (string, error) {
 		return raw[:2] + clean, nil
 	}
 	if strings.HasPrefix(raw, "//") {
-		clean := path.Clean("/" + strings.TrimPrefix(raw, "//"))
-		if clean == "/" {
+		parts := strings.Split(strings.TrimPrefix(raw, "//"), "/")
+		if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
 			return "", errors.New("UNC path must name a host/share")
 		}
-		return "/" + clean, nil
+		root := "//" + parts[0] + "/" + parts[1]
+		stack := make([]string, 0, len(parts)-2)
+		for _, segment := range parts[2:] {
+			switch segment {
+			case "", ".":
+				continue
+			case "..":
+				if len(stack) == 0 {
+					return "", errors.New("UNC path must not escape its share root")
+				}
+				stack = stack[:len(stack)-1]
+			default:
+				stack = append(stack, segment)
+			}
+		}
+		if len(stack) == 0 {
+			return root, nil
+		}
+		return root + "/" + strings.Join(stack, "/"), nil
 	}
 	clean := path.Clean(raw)
 	if !strings.HasPrefix(clean, "/") {
@@ -123,6 +148,9 @@ func exactInt64(value any) (int64, bool) {
 		return int64(v), true
 	case int64:
 		return v, true
+	case json.Number:
+		i, err := v.Int64()
+		return i, err == nil
 	case float64:
 		if math.IsNaN(v) || math.IsInf(v, 0) || math.Trunc(v) != v ||
 			v < math.MinInt64 || v > math.MaxInt64 {

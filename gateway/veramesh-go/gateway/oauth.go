@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -143,8 +144,14 @@ func (v *IntrospectionVerifier) Verify(
 		return nil, fmt.Errorf("%w: invalid introspection response size", auth.ErrInvalidToken)
 	}
 	var claims map[string]any
-	if err := json.Unmarshal(raw, &claims); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&claims); err != nil {
 		return nil, fmt.Errorf("%w: invalid introspection JSON", auth.ErrInvalidToken)
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		return nil, fmt.Errorf("%w: trailing introspection JSON", auth.ErrInvalidToken)
 	}
 	active, ok := claims["active"].(bool)
 	if !ok || !active {

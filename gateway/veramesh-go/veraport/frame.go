@@ -1,6 +1,7 @@
 package veraport
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -65,8 +66,17 @@ func ReadFrame(r io.Reader, target any, maxFrameBytes int) error {
 	if !utf8.Valid(raw) {
 		return errors.New("frame is not strict UTF-8 JSON")
 	}
-	if err := json.Unmarshal(raw, target); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(target); err != nil {
 		return fmt.Errorf("frame is not strict JSON: %w", err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return errors.New("frame contains multiple JSON values")
+		}
+		return fmt.Errorf("frame has trailing invalid JSON: %w", err)
 	}
 	return nil
 }
