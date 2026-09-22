@@ -34,6 +34,8 @@ veraport-provision-local = "veraport_agent.provision:main"
 veramesh-bootstrap-local = "veraport_agent.bootstrap:main"
 veramesh-oauth-qualify = "veraport_agent.oauth_qualification:main"
 veramesh-public-gateway = "veraport_agent.public_gateway_runtime:main"
+veraport-prepare-workstation = "veraport_agent.prepare_workstation:main"
+veraport-qualify-service = "veraport_agent.qualify_service:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
