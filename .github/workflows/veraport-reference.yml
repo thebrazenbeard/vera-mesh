@@ -24,6 +24,13 @@ jobs:
       - name: Test portable plugin renderer
         run: python -m unittest -v tools/test_render_veramesh_plugin.py
 
+  synology-connector-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate authorized Synology connector syntax
+        run: sh -n tools/synology_authorize_lappy_veramesh_connection.sh
+
   test:
     runs-on: ubuntu-latest
     strategy:
