@@ -64,13 +64,15 @@ The service:
 1. validates its source-controlled config shape and required local files;
 2. validates the LocalSystem ACL profile for config, tunnel runtime key, VeraPort
    controller config/identity material, and state/profile directories;
-3. invokes `tunnel-client runtimes connect` with an existing tunnel ID;
-4. passes the runtime key only as `file:<protected path>`, never as a literal argv
+3. verifies pinned SHA-256 identities for both `tunnel-client.exe` and the
+   `veraport-mcp-stdio` launcher before privileged execution;
+4. invokes `tunnel-client runtimes connect` with an existing tunnel ID;
+5. passes the runtime key only as `file:<protected path>`, never as a literal argv
    value and never through `CONTROL_PLANE_API_KEY` / `OPENAI_API_KEY`;
-5. supplies `VERAPORT_CONTROLLER_CONFIG` and stdio mode to the spawned VeraPort MCP;
-6. verifies `process_running=true` and `healthy=true`;
-7. periodically checks health and reconnects an unhealthy managed runtime;
-8. invokes `runtimes stop` during SCM shutdown.
+6. supplies `VERAPORT_CONTROLLER_CONFIG` and stdio mode to the spawned VeraPort MCP;
+7. verifies `process_running=true` and `healthy=true`;
+8. periodically checks health and reconnects an unhealthy managed runtime;
+9. invokes `runtimes stop` during SCM shutdown.
 
 `ready` is recorded separately. A tunnel can be locally running/healthy before the
 ChatGPT-side connector/app has completed every readiness condition.
