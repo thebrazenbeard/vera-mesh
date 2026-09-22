@@ -113,7 +113,7 @@ def config(
                 "lane.renew",
                 "lane.close",
                 "fs.read_text",
-            "fs.read_bytes",
+                "fs.read_bytes",
             ],
             "endpoints": [
                 {
