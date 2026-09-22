@@ -105,15 +105,7 @@ class VeraPortMCPFacade:
         fencing_token: int,
         **body: Any,
     ) -> dict[str, Any]:
-        await self.runtime.ensure_started()
-        if self.runtime._read_router.owns(lane_id, fencing_token):
-            return await self.runtime._read_router.call_read_operation(
-                operation=operation,
-                lane_id=lane_id,
-                fencing_token=fencing_token,
-                body=body,
-            )
-        return await self.runtime.gateway.call_operation(
+        return await self.runtime.read_operation(
             operation,
             lane_id=lane_id,
             fencing_token=fencing_token,
