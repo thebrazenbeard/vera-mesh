@@ -29,7 +29,7 @@ var Scopes = map[string]string{
 }
 
 var PublicTools = []ToolPolicy{
-	{Name:"computer_info", Operation:"machine.info", Scopes:[]string{"computer.profile"}, ReadOnly:true, Idempotent:true, Description:"Read authenticated workstation identity and live VeraPort path health."},
+	{Name:"computer_info", Operation:"machine.info", Scopes:[]string{"computer.profile"}, Capabilities:[]string{}, ReadOnly:true, Idempotent:true, Description:"Read authenticated workstation identity and live VeraPort path health."},
 	{Name:"read_file", Operation:"fs.read_text", Scopes:[]string{"computer.read"}, Capabilities:[]string{"fs.read"}, ReadOnly:true, Idempotent:true, Description:"Read bounded text from an absolute path inside workstation-allowed roots."},
 	{Name:"read_bytes", Operation:"fs.read_bytes", Scopes:[]string{"computer.read"}, Capabilities:[]string{"fs.read"}, ReadOnly:true, Idempotent:true, Description:"Read a version-bound byte range from an absolute allowed path."},
 	{Name:"stat_path", Operation:"fs.stat", Scopes:[]string{"computer.read"}, Capabilities:[]string{"fs.read"}, ReadOnly:true, Idempotent:true, Description:"Read metadata for an absolute allowed path without following the final symlink."},
