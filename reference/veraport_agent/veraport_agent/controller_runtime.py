@@ -129,6 +129,7 @@ class ControllerRuntime:
             ),
             "paths": [
                 {
+                    "path_id": endpoint.path.path_id,
                     "endpoint_id": endpoint.config.endpoint_id,
                     "mode": endpoint.config.mode.name,
                     "host": endpoint.config.host,
