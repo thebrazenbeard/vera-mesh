@@ -66,3 +66,24 @@ This profile is source behavior only.
 It does not establish workstation installation, MCP server runtime, plugin registration,
 current route, live read/write success, process execution, or RDC-equivalence boundary
 PASS.
+
+
+## Health observability
+
+The read-only ledger-health surface reports enough information to distinguish capacity
+pressure from state-store failure without writing a probe record:
+
+- current mutation/detail record count and tombstone count;
+- PENDING count, oldest mutation age, and oldest PENDING age;
+- SQLite database, WAL, and SHM byte counts;
+- journal mode;
+- remaining new-mutation capacity;
+- write-admission state and an explicit degraded reason.
+
+The V1 no-compaction policy has zero tombstones by design.
+
+If ledger inspection itself is unavailable, read-only `lane.list` remains a successful
+data-plane operation and reports `DEGRADED_STORE_UNAVAILABLE` with
+`write_admission=UNKNOWN_FAIL_CLOSED`. That condition is distinct from application
+authentication, path authorization, or filesystem-read failure. Mutating operations
+continue to fail closed when durable admission cannot be established.

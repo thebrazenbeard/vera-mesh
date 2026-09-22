@@ -127,25 +127,120 @@ class AgentStateStore:
             ).fetchone()
             return int(row["count"])
 
-    def request_ledger_health(self) -> dict[str, Any]:
-        count = self.request_record_count()
-        if count >= self.max_mutation_requests:
-            status = "FULL_FAIL_CLOSED"
-        elif count >= self.warn_at_records:
-            status = "DEGRADED_NEAR_CAPACITY"
-        else:
-            status = "HEALTHY"
-        return {
-            "schema": "VERAPORT_REQUEST_LEDGER_HEALTH_V1",
-            "status": status,
-            "mutation_records": count,
-            "warn_at_records": self.warn_at_records,
-            "max_mutation_requests": self.max_mutation_requests,
-            "remaining_new_mutations": max(
-                0, self.max_mutation_requests - count
-            ),
-            "retention": "NO_AUTOMATIC_EVICTION_FAIL_CLOSED_AT_CAPACITY",
-        }
+    def request_ledger_health(
+        self,
+        *,
+        now_ms: int | None = None,
+    ) -> dict[str, Any]:
+        now = int(time.time() * 1000) if now_ms is None else now_ms
+
+        def _size_or_zero(path: Path) -> int:
+            try:
+                return path.stat().st_size
+            except FileNotFoundError:
+                return 0
+
+        try:
+            with self._lock:
+                row = self.connection.execute(
+                    """
+                    SELECT
+                        COUNT(*) AS count,
+                        SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END)
+                            AS pending_count,
+                        MIN(started_at_ms) AS oldest_started_at_ms,
+                        MIN(
+                            CASE WHEN status = 'PENDING'
+                            THEN started_at_ms END
+                        ) AS oldest_pending_started_at_ms
+                    FROM requests
+                    """
+                ).fetchone()
+                mode_row = self.connection.execute(
+                    "PRAGMA journal_mode"
+                ).fetchone()
+
+            count = int(row["count"])
+            pending_count = int(row["pending_count"] or 0)
+            oldest_started = row["oldest_started_at_ms"]
+            oldest_pending = row["oldest_pending_started_at_ms"]
+
+            if count >= self.max_mutation_requests:
+                status = "FULL_FAIL_CLOSED"
+                write_admission = "BLOCKED_CAPACITY"
+                degraded_reason = "REQUEST_LEDGER_CAPACITY_EXHAUSTED"
+            elif count >= self.warn_at_records:
+                status = "DEGRADED_NEAR_CAPACITY"
+                write_admission = "ALLOWED_BY_LEDGER_CAPACITY"
+                degraded_reason = "REQUEST_LEDGER_NEAR_CAPACITY"
+            else:
+                status = "HEALTHY"
+                write_admission = "ALLOWED_BY_LEDGER_CAPACITY"
+                degraded_reason = None
+
+            wal_path = Path(str(self.path) + "-wal")
+            shm_path = Path(str(self.path) + "-shm")
+            return {
+                "schema": "VERAPORT_REQUEST_LEDGER_HEALTH_V1",
+                "status": status,
+                "mutation_records": count,
+                "detail_records": count,
+                "tombstone_records": 0,
+                "pending_records": pending_count,
+                "oldest_mutation_started_at_ms": oldest_started,
+                "oldest_mutation_age_ms": (
+                    None
+                    if oldest_started is None
+                    else max(0, now - int(oldest_started))
+                ),
+                "oldest_pending_started_at_ms": oldest_pending,
+                "oldest_pending_age_ms": (
+                    None
+                    if oldest_pending is None
+                    else max(0, now - int(oldest_pending))
+                ),
+                "warn_at_records": self.warn_at_records,
+                "max_mutation_requests": self.max_mutation_requests,
+                "remaining_new_mutations": max(
+                    0, self.max_mutation_requests - count
+                ),
+                "write_admission": write_admission,
+                "degraded_reason": degraded_reason,
+                "state_db_bytes": _size_or_zero(self.path),
+                "wal_bytes": _size_or_zero(wal_path),
+                "shm_bytes": _size_or_zero(shm_path),
+                "journal_mode": (
+                    str(mode_row[0]).upper()
+                    if mode_row is not None
+                    else "UNKNOWN"
+                ),
+                "retention":
+                    "NO_AUTOMATIC_EVICTION_FAIL_CLOSED_AT_CAPACITY",
+            }
+        except (sqlite3.Error, OSError):
+            return {
+                "schema": "VERAPORT_REQUEST_LEDGER_HEALTH_V1",
+                "status": "DEGRADED_STORE_UNAVAILABLE",
+                "mutation_records": None,
+                "detail_records": None,
+                "tombstone_records": 0,
+                "pending_records": None,
+                "oldest_mutation_started_at_ms": None,
+                "oldest_mutation_age_ms": None,
+                "oldest_pending_started_at_ms": None,
+                "oldest_pending_age_ms": None,
+                "warn_at_records": self.warn_at_records,
+                "max_mutation_requests": self.max_mutation_requests,
+                "remaining_new_mutations": None,
+                "write_admission": "UNKNOWN_FAIL_CLOSED",
+                "degraded_reason": "STATE_STORE_UNAVAILABLE",
+                "state_db_bytes": None,
+                "wal_bytes": None,
+                "shm_bytes": None,
+                "journal_mode": "UNKNOWN",
+                "retention":
+                    "NO_AUTOMATIC_EVICTION_FAIL_CLOSED_AT_CAPACITY",
+            }
 
     def begin_request(
         self,

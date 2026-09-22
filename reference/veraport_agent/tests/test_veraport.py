@@ -266,7 +266,11 @@ async def test_durable_idempotency_rejects_same_id_different_request(tmp_path: P
     first = await agent.handle({
         "protocol_version": "veraport-v1",
         "request_id": "collision-1",
-        "operation": "lane.list",
+        "operation": "lane.open",
+        "lane_id": "first",
+        "task_id": "first",
+        "capabilities": ["fs.read"],
+        "claims": [],
     })
     second = await agent.handle({
         "protocol_version": "veraport-v1",
@@ -291,7 +295,7 @@ def test_pending_request_survives_restart_as_outcome_unknown(tmp_path: Path) -> 
     from veraport_agent.state import AgentStateStore, RequestOutcomeUnknown
 
     db = tmp_path / "agent.sqlite3"
-    request = {"protocol_version": "veraport-v1", "request_id": "pending-1", "operation": "lane.list"}
+    request = {"protocol_version": "veraport-v1", "request_id": "pending-1", "operation": "lane.open"}
     digest = hashlib.sha256(
         json.dumps(request, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     ).hexdigest()
