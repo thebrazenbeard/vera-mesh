@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -52,10 +53,18 @@ type Controller struct {
 	mu    sync.Mutex
 	paths map[string]*livePath
 
-	laneMu    sync.Mutex
-	readLanes map[string]*logicalReadLane
-	nextFence int64
+	laneMu     sync.Mutex
+	readLanes  map[string]*logicalReadLane
+	fenceEpoch uint32
+	nextFence  uint32
 }
+
+const (
+	logicalFenceCounterBits = 21
+	logicalFenceMaxCounter  = (1 << logicalFenceCounterBits) - 1
+	logicalFenceEpochMask   = (1 << 31) - 1
+)
+
 
 func NewController(cfg *Config) (*Controller, error) {
 	if cfg == nil {
@@ -65,9 +74,14 @@ func NewController(cfg *Config) (*Controller, error) {
 	if err != nil {
 		return nil, err
 	}
+	fenceEpoch, err := newFenceEpoch()
+	if err != nil {
+		return nil, err
+	}
 	return &Controller{
-		cfg:   cfg,
-		creds: creds,
+		cfg:        cfg,
+		creds:      creds,
+		fenceEpoch: fenceEpoch,
 		dial: func(ctx context.Context, cfg veraport.ClientConfig) (veraportSession, error) {
 			return veraport.Dial(ctx, cfg)
 		},
@@ -414,12 +428,34 @@ func ttlSeconds(body map[string]any, fallback float64) (float64, bool) {
 	}
 }
 
-func (c *Controller) allocateFenceLocked() int64 {
-	c.nextFence++
-	if c.nextFence <= 0 {
-		c.nextFence = 1
+func newFenceEpoch() (uint32, error) {
+	var raw [4]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return 0, fmt.Errorf("logical fence epoch: %w", err)
 	}
-	return c.nextFence
+	epoch := binary.BigEndian.Uint32(raw[:]) & logicalFenceEpochMask
+	if epoch == 0 {
+		epoch = 1
+	}
+	return epoch, nil
+}
+
+func (c *Controller) allocateFenceLocked() (int64, error) {
+	if c.fenceEpoch == 0 {
+		epoch, err := newFenceEpoch()
+		if err != nil {
+			return 0, err
+		}
+		c.fenceEpoch = epoch
+	}
+	if c.nextFence >= logicalFenceMaxCounter {
+		return 0, errors.New("logical read fence space exhausted for gateway incarnation")
+	}
+	c.nextFence++
+	// Keep the externally visible token <= 2^52-1 so JSON/JavaScript clients
+	// preserve it exactly, while a random 31-bit incarnation epoch prevents a
+	// gateway restart from predictably reusing the previous process's fences.
+	return int64((uint64(c.fenceEpoch) << logicalFenceCounterBits) | uint64(c.nextFence)), nil
 }
 
 func (c *Controller) openLogicalReadLane(ctx context.Context, body map[string]any) (map[string]any, error) {
@@ -449,11 +485,15 @@ func (c *Controller) openLogicalReadLane(ctx context.Context, body map[string]an
 	if existing := c.readLanes[laneID]; existing != nil && c.now().UnixMilli() < existing.expiresAtMS {
 		return nil, fmt.Errorf("logical read lane already active: %s", laneID)
 	}
+	fence, err := c.allocateFenceLocked()
+	if err != nil {
+		return nil, err
+	}
 	lane := &logicalReadLane{
 		laneID:      laneID,
 		taskID:      taskID,
 		claims:      claims,
-		fence:       c.allocateFenceLocked(),
+		fence:       fence,
 		expiresAtMS: c.now().UnixMilli() + int64(ttl*1000),
 		mirrors:     map[string]remoteMirror{},
 	}

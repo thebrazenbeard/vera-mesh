@@ -310,3 +310,44 @@ func TestMutationTransportFailureIsNotReplayedToEdge(t *testing.T) {
 		}
 	}
 }
+
+func TestLogicalFenceEpochPreventsPredictableRestartReuse(t *testing.T) {
+	first := &Controller{fenceEpoch: 1}
+	second := &Controller{fenceEpoch: 2}
+
+	firstFence1, err := first.allocateFenceLocked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstFence2, err := first.allocateFenceLocked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondFence1, err := second.allocateFenceLocked()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if firstFence1 != (1<<logicalFenceCounterBits)|1 {
+		t.Fatalf("unexpected first incarnation fence: %d", firstFence1)
+	}
+	if firstFence2 != firstFence1+1 {
+		t.Fatalf("fence did not advance monotonically: %d -> %d", firstFence1, firstFence2)
+	}
+	if secondFence1 == firstFence1 {
+		t.Fatalf("different gateway epochs reused a logical fence: %d", secondFence1)
+	}
+	if secondFence1 > (1<<52)-1 {
+		t.Fatalf("logical fence exceeds exact JSON/JavaScript integer range: %d", secondFence1)
+	}
+}
+
+func TestLogicalFenceFailsClosedOnCounterExhaustion(t *testing.T) {
+	controller := &Controller{
+		fenceEpoch: 7,
+		nextFence:  logicalFenceMaxCounter,
+	}
+	if _, err := controller.allocateFenceLocked(); err == nil {
+		t.Fatal("logical fence counter exhaustion did not fail closed")
+	}
+}
