@@ -32,6 +32,10 @@ def _free_loopback_port() -> int:
         sock.close()
 
 
+def _fs_claim_key(path: Path) -> str:
+    return "fs:" + path.resolve().as_posix()
+
+
 def _unwrap(response: dict[str, Any], operation: str) -> dict[str, Any]:
     if response.get("ok") is not True:
         raise LocalQualificationError(
@@ -163,7 +167,7 @@ async def qualify_local(*, source_sha: str) -> dict[str, Any]:
                     task_id="local-qualification",
                     capabilities=["fs.read"],
                     claims=[{
-                        "key": f"fs:{sentinel}",
+                        "key": _fs_claim_key(sentinel),
                         "mode": "read",
                     }],
                     ttl_s=60.0,
@@ -234,7 +238,7 @@ async def qualify_local(*, source_sha: str) -> dict[str, Any]:
                 },
                 "operation": {
                     "lane_opened": True,
-                    "read_only_claim": f"fs:{sentinel}",
+                    "read_only_claim": _fs_claim_key(sentinel),
                     "sentinel_match": True,
                     "lane_closed": bool(closed.get("closed", True)),
                 },
