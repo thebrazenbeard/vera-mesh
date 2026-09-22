@@ -152,7 +152,7 @@ def test_prepare_workstation_refuses_existing_subjects(tmp_path: Path):
 
     with pytest.raises(
         WorkstationPreparationError,
-        match="service root must be absent or empty",
+        match="service root contains material",
     ):
         prepare_workstation_service(
             root,
@@ -181,3 +181,21 @@ def test_prepare_workstation_hardens_service_materials_on_windows(
     )
     service = WindowsServiceConfig.load(root / "veraport.json")
     validate_service_materials(root / "veraport.json", service)
+
+
+def test_prepare_workstation_allows_installer_owned_runtime(tmp_path: Path):
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    root = tmp_path / "service"
+    runtime = root / "runtime"
+    runtime.mkdir(parents=True)
+    (runtime / "python.exe").write_text("placeholder", encoding="utf-8")
+
+    manifest = prepare_workstation_service(
+        root,
+        tmp_path / "export",
+        allowed_roots=[allowed],
+        harden_windows_acl=False,
+    )
+    assert (root / "runtime" / "python.exe").is_file()
+    assert manifest["paths"]["service_root"] == str(root.resolve())
