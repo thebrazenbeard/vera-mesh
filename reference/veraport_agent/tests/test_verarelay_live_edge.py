@@ -105,3 +105,53 @@ def test_live_edge_config_bounds_resources():
             "127.0.0.1", 17445, "127.0.0.1", 17444,
             io_chunk_bytes=1,
         )
+
+
+
+@pytest.mark.asyncio
+async def test_live_edge_rejects_connections_above_admission_bound():
+    hold = asyncio.Event()
+
+    async def hold_open(reader, writer):
+        try:
+            await hold.wait()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    upstream = await asyncio.start_server(hold_open, "127.0.0.1", 0)
+    upstream_port = upstream.sockets[0].getsockname()[1]
+    edge_port = free_port()
+    edge = VeraRelayLiveEdge(
+        LiveEdgeConfig(
+            listen_host="127.0.0.1",
+            listen_port=edge_port,
+            upstream_host="127.0.0.1",
+            upstream_port=upstream_port,
+            max_connections=1,
+        )
+    )
+    await edge.start()
+
+    first_reader, first_writer = await asyncio.open_connection(
+        "127.0.0.1", edge_port
+    )
+    first_writer.write(b"first")
+    await first_writer.drain()
+    await asyncio.sleep(0.05)
+
+    second_reader, second_writer = await asyncio.open_connection(
+        "127.0.0.1", edge_port
+    )
+    second_writer.write(b"second")
+    await second_writer.drain()
+    assert await asyncio.wait_for(second_reader.read(), timeout=2) == b""
+
+    second_writer.close()
+    await second_writer.wait_closed()
+    hold.set()
+    first_writer.close()
+    await first_writer.wait_closed()
+    await edge.close()
+    upstream.close()
+    await upstream.wait_closed()
