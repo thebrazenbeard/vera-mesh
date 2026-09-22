@@ -80,6 +80,22 @@ class VeraPortMCPFacade:
             encoding=encoding,
         )
 
+    async def fs_read_bytes_chunk(
+        self,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        offset: int = 0,
+        max_bytes: int = 65_536,
+    ) -> dict[str, Any]:
+        return await self.runtime.read_bytes_chunk(
+            lane_id=lane_id,
+            fencing_token=fencing_token,
+            path=path,
+            offset=offset,
+            max_bytes=max_bytes,
+        )
+
     async def fs_write_text(
         self,
         lane_id: str,
@@ -181,6 +197,25 @@ def build_mcp_server(runtime: ControllerRuntime):
             path,
             encoding,
         )
+
+    if "fs.read_bytes_chunk" in runtime.config.gateway_operations:
+
+        @mcp.tool()
+        async def fs_read_bytes_chunk(
+            lane_id: str,
+            fencing_token: int,
+            path: str,
+            offset: int = 0,
+            max_bytes: int = 65_536,
+        ) -> dict[str, Any]:
+            """Read a bounded byte range as base64 with offset/EOF metadata."""
+            return await facade.fs_read_bytes_chunk(
+                lane_id,
+                fencing_token,
+                path,
+                offset,
+                max_bytes,
+            )
 
     if "fs.write_text" in runtime.config.gateway_operations:
 
