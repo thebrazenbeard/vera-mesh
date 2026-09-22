@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from render_veramesh_plugin import PluginRenderError, render_plugin, validate_mcp_url
+from tools.render_veramesh_plugin import PluginRenderError, render_plugin, validate_mcp_url
 
 
 ROOT = Path(__file__).resolve().parents[1]

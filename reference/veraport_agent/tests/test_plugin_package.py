@@ -58,12 +58,13 @@ def test_plugin_renderer_requires_real_https_mcp_and_does_not_overwrite(tmp_path
     )
     mcp = json.loads((output / "mcp.json").read_text(encoding="utf-8"))
     assert mcp == {
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
         "mcpServers": {
             "veramesh": {
-                "type": "http",
+                "type": "streamable-http",
                 "url": "https://mesh.example/mcp",
             }
-        }
+        },
     }
     assert not (output / "mcp.template.json").exists()
     assert not (output / "evals.json").exists()
