@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import json
 import os
@@ -7,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
 from cryptography.x509.oid import ExtensionOID
 
@@ -114,3 +116,83 @@ def test_provisioned_windows_material_matches_service_acl(tmp_path: Path):
     for path in root.iterdir():
         if path.is_file():
             validate_private_file(path)
+
+
+
+@pytest.mark.asyncio
+async def test_provisioned_material_completes_real_tls_application_handshake(tmp_path):
+    from veraport_agent.hot_session import WorkstationAuthenticator
+    from veraport_agent.tls_transport import (
+        make_client_context,
+        make_server_context,
+        open_tls_session,
+        serve_tls_connection,
+    )
+
+    root = tmp_path / "identity"
+    provision_local_pair(root)
+    identity = load_identity(
+        workstation_key_path=root / "workstation-key.pem",
+        controller_trust_path=root / "controller-trust.json",
+    )
+    controller_private = serialization.load_pem_private_key(
+        (root / "controller-key.pem").read_bytes(),
+        password=None,
+    )
+    workstation_public = serialization.load_pem_public_key(
+        (root / "workstation-public.pem").read_bytes()
+    )
+    assert isinstance(controller_private, ec.EllipticCurvePrivateKey)
+    assert isinstance(workstation_public, ec.EllipticCurvePublicKey)
+
+    authenticator = WorkstationAuthenticator(
+        workstation_private_key=identity.workstation_private_key,
+        allowed_controllers=identity.allowed_controllers,
+        capability_policy=identity.capability_policy,
+    )
+
+    async def handler(request):
+        return {
+            "protocol_version": "veraport-v1",
+            "request_id": request["request_id"],
+            "ok": True,
+            "result": {"provisioned": True},
+        }
+
+    server = await asyncio.start_server(
+        lambda reader, writer: serve_tls_connection(
+            reader,
+            writer,
+            authenticator=authenticator,
+            handler_factory=lambda binding: handler,
+        ),
+        "127.0.0.1",
+        0,
+        ssl=make_server_context(
+            certfile=root / "tls-cert.pem",
+            keyfile=root / "tls-key.pem",
+        ),
+    )
+    port = server.sockets[0].getsockname()[1]
+    client, binding = await open_tls_session(
+        host="127.0.0.1",
+        port=port,
+        ssl_context=make_client_context(cafile=root / "tls-ca.pem"),
+        server_hostname="localhost",
+        controller_private_key=controller_private,
+        workstation_public_key=workstation_public,
+        requested_capabilities={"fs.read", "fs.write"},
+    )
+    try:
+        assert binding.granted_capabilities == frozenset(
+            {"fs.read", "fs.write"}
+        )
+        result = await client.request({
+            "request_id": "provisioned-round-trip",
+        })
+        assert result["ok"] is True
+        assert result["result"]["provisioned"] is True
+    finally:
+        await client.close()
+        server.close()
+        await server.wait_closed()
