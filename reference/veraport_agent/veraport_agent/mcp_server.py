@@ -346,6 +346,23 @@ class VeraPortMCPFacade:
             max_bytes=max_bytes,
         )
 
+    async def process_input(
+        self,
+        lane_id: str,
+        fencing_token: int,
+        process_handle: str,
+        input_text: str,
+        append_newline: bool = True,
+    ) -> dict[str, Any]:
+        return await self._operation(
+            "process.input",
+            lane_id,
+            fencing_token,
+            process_handle=process_handle,
+            input_text=input_text,
+            append_newline=append_newline,
+        )
+
     async def process_terminate(
         self,
         lane_id: str,
@@ -637,6 +654,24 @@ def build_mcp_server(runtime: ControllerRuntime):
             return await facade.process_output(
                 lane_id, fencing_token, process_handle,
                 stdout_offset, stderr_offset, max_bytes,
+            )
+
+    if "process.input" in runtime.config.gateway_operations:
+        @mcp.tool()
+        async def process_input(
+            lane_id: str,
+            fencing_token: int,
+            process_handle: str,
+            input_text: str,
+            append_newline: bool = True,
+        ) -> dict[str, Any]:
+            """Send bounded UTF-8 input only to a managed process owned by this lane/fence."""
+            return await facade.process_input(
+                lane_id,
+                fencing_token,
+                process_handle,
+                input_text,
+                append_newline,
             )
 
     if "process.terminate" in runtime.config.gateway_operations:
