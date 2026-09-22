@@ -100,6 +100,7 @@ class ControllerConfig:
             "fs.stat": frozenset({"fs.read"}),
             "fs.list_dir": frozenset({"fs.read"}),
             "fs.search": frozenset({"fs.read"}),
+            "fs.search_content": frozenset({"fs.read"}),
             "fs.write_text": frozenset({"fs.write"}),
             "fs.append_text": frozenset({"fs.write"}),
             "fs.mkdir": frozenset({"fs.write"}),
