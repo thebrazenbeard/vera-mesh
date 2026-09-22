@@ -109,3 +109,15 @@ def test_replace_text_requires_read_and_write_session_capabilities():
     value["requested_capabilities"] = ["fs.read", "fs.write"]
     cfg = ControllerConfig.from_dict(value)
     assert cfg.gateway_operations == frozenset({"fs.replace_text"})
+
+
+def test_process_input_requires_interact_capability():
+    value = base()
+    value["gateway_operations"] = ["process.input"]
+    value["requested_capabilities"] = ["process.exec", "process.inspect"]
+    with pytest.raises(ControllerConfigError, match="process.interact"):
+        ControllerConfig.from_dict(value)
+
+    value["requested_capabilities"].append("process.interact")
+    cfg = ControllerConfig.from_dict(value)
+    assert cfg.gateway_operations == frozenset({"process.input"})
