@@ -10,6 +10,7 @@ from typing import Any, AsyncIterator
 
 from .core import ClaimMode, ResourceClaim, VeraPortError, LaneRegistry
 from .executor import LocalExecutor, PathOutsideRoots
+from .rdc_surface import surface_for
 from .state import AgentStateStore
 
 
@@ -19,6 +20,8 @@ DURABLE_MUTATING_OPERATIONS = frozenset({
     "lane.close",
     "fs.write_text",
     "process.exec",
+    "process.start",
+    "process.terminate",
 })
 
 
@@ -34,6 +37,7 @@ class VeraPortAgent:
         self.registry = registry
         self.executor = executor
         self.state_store = state_store
+        self.rdc = surface_for(executor)
         self._lane_locks: dict[str, asyncio.Lock] = {}
         self._lane_lock_users: dict[str, int] = {}
         self._lane_locks_guard = asyncio.Lock()
@@ -69,9 +73,7 @@ class VeraPortAgent:
         operation = request.get("operation")
         try:
             if request.get("protocol_version") != "veraport-v1":
-                raise ValueError(
-                    "protocol_version must be veraport-v1"
-                )
+                raise ValueError("protocol_version must be veraport-v1")
             if not isinstance(request_id, str) or not request_id:
                 raise ValueError("request_id is required")
             if not isinstance(operation, str) or not operation:
@@ -175,14 +177,20 @@ class VeraPortAgent:
 
         if operation == "lane.close":
             lane_id = str(request["lane_id"])
+            fencing_token = int(request["fencing_token"])
             async with self._lane_operation(lane_id):
+                terminated = await self.rdc.close_lane_processes(
+                    lane_id,
+                    fencing_token,
+                )
                 lane = self.registry.close(
                     lane_id,
-                    int(request["fencing_token"]),
+                    fencing_token,
                 )
                 return {
                     "lane_id": lane.lane_id,
                     "closed": True,
+                    "terminated_process_handles": terminated,
                 }
 
         if operation == "lane.list":
@@ -236,6 +244,36 @@ class VeraPortAgent:
                     "file_version": chunk.file_version,
                 }
 
+        if operation in {"fs.stat", "fs.list_dir", "fs.search"}:
+            lane_id = str(request["lane_id"])
+            fencing_token = int(request["fencing_token"])
+            async with self._lane_operation(lane_id):
+                if operation == "fs.stat":
+                    return await self.rdc.stat(
+                        lane_id=lane_id,
+                        fencing_token=fencing_token,
+                        path=str(request["path"]),
+                    )
+                if operation == "fs.list_dir":
+                    return await self.rdc.list_dir(
+                        lane_id=lane_id,
+                        fencing_token=fencing_token,
+                        path=str(request["path"]),
+                        offset=request.get("offset", 0),
+                        max_entries=request.get("max_entries", 200),
+                    )
+                return await self.rdc.search(
+                    lane_id=lane_id,
+                    fencing_token=fencing_token,
+                    root=str(request["root"]),
+                    query=str(request["query"]),
+                    offset=request.get("offset", 0),
+                    max_results=request.get("max_results", 100),
+                    max_entries=request.get("max_entries", 10_000),
+                    max_depth=request.get("max_depth", 12),
+                    case_sensitive=request.get("case_sensitive", False),
+                )
+
         if operation == "fs.write_text":
             lane_id = str(request["lane_id"])
             async with self._lane_operation(lane_id):
@@ -267,7 +305,86 @@ class VeraPortAgent:
                 )
                 return asdict(result)
 
+        if operation in {
+            "process.start",
+            "process.list",
+            "process.status",
+            "process.output",
+            "process.terminate",
+        }:
+            lane_id = str(request["lane_id"])
+            fencing_token = int(request["fencing_token"])
+            async with self._lane_operation(lane_id):
+                if operation == "process.start":
+                    argv = request.get("argv")
+                    if not isinstance(argv, list):
+                        raise ValueError("argv must be a list")
+                    return await self.rdc.process_start(
+                        lane_id=lane_id,
+                        fencing_token=fencing_token,
+                        argv=[str(item) for item in argv],
+                        cwd=str(request["cwd"]),
+                        max_runtime_s=request.get("max_runtime_s", 900.0),
+                    )
+                if operation == "process.list":
+                    return await self.rdc.process_list(
+                        lane_id=lane_id,
+                        fencing_token=fencing_token,
+                    )
+                if operation == "process.status":
+                    return await self.rdc.process_status(
+                        lane_id=lane_id,
+                        fencing_token=fencing_token,
+                        process_handle=str(request["process_handle"]),
+                    )
+                if operation == "process.output":
+                    return await self.rdc.process_output(
+                        lane_id=lane_id,
+                        fencing_token=fencing_token,
+                        process_handle=str(request["process_handle"]),
+                        stdout_offset=request.get("stdout_offset", 0),
+                        stderr_offset=request.get("stderr_offset", 0),
+                        max_bytes=request.get("max_bytes", 16_384),
+                    )
+                return await self.rdc.process_terminate(
+                    lane_id=lane_id,
+                    fencing_token=fencing_token,
+                    process_handle=str(request["process_handle"]),
+                    grace_s=request.get("grace_s", 2.0),
+                )
+
         raise ValueError(f"unknown operation: {operation}")
+
+    async def close_session(self, session_id: str) -> dict[str, Any]:
+        prefix = session_id + "::"
+        unresolved: list[str] = []
+        closed: list[str] = []
+        terminated: list[str] = []
+        for lane in self.registry.snapshot():
+            if not lane.lane_id.startswith(prefix):
+                continue
+            try:
+                async with self._lane_operation(lane.lane_id):
+                    terminated.extend(
+                        await self.rdc.close_lane_processes(
+                            lane.lane_id,
+                            lane.fencing_token,
+                        )
+                    )
+                    self.registry.close(
+                        lane.lane_id,
+                        lane.fencing_token,
+                    )
+                closed.append(lane.lane_id)
+            except Exception:
+                unresolved.append(lane.lane_id)
+        return {
+            "session_id": session_id,
+            "closed_lanes": sorted(closed),
+            "terminated_process_handles": sorted(terminated),
+            "unresolved_lanes": sorted(unresolved),
+            "drained": not unresolved,
+        }
 
     @staticmethod
     def _request_sha256(request: dict[str, Any]) -> str:
