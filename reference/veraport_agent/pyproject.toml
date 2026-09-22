@@ -16,7 +16,7 @@ windows-service = [
   "pywin32>=311"
 ]
 mcp = [
-  "mcp>=1.20,<2"
+  "mcp>=1.27.2,<2"
 ]
 test = [
   "pytest>=8,<10",
