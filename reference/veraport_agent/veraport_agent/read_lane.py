@@ -337,7 +337,12 @@ class MirroredReadLaneRouter:
         fencing_token: int,
         body: dict[str, Any],
     ) -> dict[str, Any]:
-        if operation not in {"fs.stat", "fs.list_dir", "fs.search"}:
+        if operation not in {
+            "fs.stat",
+            "fs.list_dir",
+            "fs.search",
+            "fs.search_content",
+        }:
             raise ValueError(f"unsupported mirrored read operation: {operation}")
         lane = self._require(lane_id, fencing_token)
         async with lane.lock:
