@@ -68,9 +68,11 @@ not enable them. Managed process handles are opaque and bound to the owning lane
 requires a distinct `process.interact` capability and is bounded to 65,536 bytes per call.
 Lane close and application-session disconnect reap owned children.
 
-The current source also includes a transparent VeraRelay/VeraMesh live edge carrier.
-The edge forwards opaque bytes and does not terminate VeraPort TLS, parse VeraPort frames,
-or receive workstation credentials.
+The current source also includes an independent Python reference live-edge carrier.
+Production `EDGE_STREAM` on Synology is the VeraMesh Python 3.11 SPK edge, not
+VeraRelay. VeraRelay 0.4 is a separate Node.js 22 + SQLite durable-courier role.
+Both live-edge implementations forward opaque VeraPort bytes without terminating
+VeraPort TLS, parsing VeraPort frames, or receiving workstation credentials.
 
 ## ChatGPT product boundary
 
