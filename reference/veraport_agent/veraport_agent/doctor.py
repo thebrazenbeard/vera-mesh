@@ -16,7 +16,10 @@ from .controller_runtime import ControllerRuntime
 from .hot_session import principal_id
 from .identity_store import load_identity
 from .service_config import WindowsServiceConfig
-from .windows_acl import validate_service_materials
+from .windows_acl import (
+    validate_controller_materials,
+    validate_service_materials,
+)
 
 
 @dataclass(frozen=True)
@@ -109,8 +112,16 @@ def offline_doctor(
         if os.name == "nt" and check_windows_acl:
             try:
                 validate_service_materials(service_config_path, service)
+                if controller is not None:
+                    validate_controller_materials(
+                        controller_config_path,
+                        controller,
+                    )
                 checks.append(
-                    _pass("windows_acl", "LocalSystem material ACL profile valid")
+                    _pass(
+                        "windows_acl",
+                        "LocalSystem workstation/controller material ACL profile valid",
+                    )
                 )
             except Exception as exc:
                 checks.append(_fail("windows_acl", exc))
