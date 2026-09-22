@@ -188,6 +188,74 @@ class VeraPortMCPFacade:
             encoding=encoding,
         )
 
+    async def fs_append_text(
+        self,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        content: str,
+        encoding: str = "utf-8",
+    ) -> dict[str, Any]:
+        return await self._operation(
+            "fs.append_text",
+            lane_id,
+            fencing_token,
+            path=path,
+            content=content,
+            encoding=encoding,
+        )
+
+    async def fs_mkdir(
+        self,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        parents: bool = True,
+    ) -> dict[str, Any]:
+        return await self._operation(
+            "fs.mkdir",
+            lane_id,
+            fencing_token,
+            path=path,
+            parents=parents,
+        )
+
+    async def fs_move(
+        self,
+        lane_id: str,
+        fencing_token: int,
+        source: str,
+        destination: str,
+    ) -> dict[str, Any]:
+        return await self._operation(
+            "fs.move",
+            lane_id,
+            fencing_token,
+            source=source,
+            destination=destination,
+        )
+
+    async def fs_replace_text(
+        self,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        old_string: str,
+        new_string: str,
+        expected_count: int = 1,
+        encoding: str = "utf-8",
+    ) -> dict[str, Any]:
+        return await self._operation(
+            "fs.replace_text",
+            lane_id,
+            fencing_token,
+            path=path,
+            old_string=old_string,
+            new_string=new_string,
+            expected_count=expected_count,
+            encoding=encoding,
+        )
+
     async def _operation(
         self,
         operation: str,
@@ -440,6 +508,68 @@ def build_mcp_server(runtime: ControllerRuntime):
             """Atomically write text only when every authority layer permits it."""
             return await facade.fs_write_text(
                 lane_id, fencing_token, path, content, encoding
+            )
+
+    if "fs.append_text" in runtime.config.gateway_operations:
+        @mcp.tool()
+        async def fs_append_text(
+            lane_id: str,
+            fencing_token: int,
+            path: str,
+            content: str,
+            encoding: str = "utf-8",
+        ) -> dict[str, Any]:
+            """Append text under fs.write authority without enabling process execution."""
+            return await facade.fs_append_text(
+                lane_id, fencing_token, path, content, encoding
+            )
+
+    if "fs.mkdir" in runtime.config.gateway_operations:
+        @mcp.tool()
+        async def fs_mkdir(
+            lane_id: str,
+            fencing_token: int,
+            path: str,
+            parents: bool = True,
+        ) -> dict[str, Any]:
+            """Create a directory only inside a claimed workstation root."""
+            return await facade.fs_mkdir(
+                lane_id, fencing_token, path, parents
+            )
+
+    if "fs.move" in runtime.config.gateway_operations:
+        @mcp.tool()
+        async def fs_move(
+            lane_id: str,
+            fencing_token: int,
+            source: str,
+            destination: str,
+        ) -> dict[str, Any]:
+            """Move or rename a path when both ends are within write claims."""
+            return await facade.fs_move(
+                lane_id, fencing_token, source, destination
+            )
+
+    if "fs.replace_text" in runtime.config.gateway_operations:
+        @mcp.tool()
+        async def fs_replace_text(
+            lane_id: str,
+            fencing_token: int,
+            path: str,
+            old_string: str,
+            new_string: str,
+            expected_count: int = 1,
+            encoding: str = "utf-8",
+        ) -> dict[str, Any]:
+            """Atomically replace an exact expected number of text matches."""
+            return await facade.fs_replace_text(
+                lane_id,
+                fencing_token,
+                path,
+                old_string,
+                new_string,
+                expected_count,
+                encoding,
             )
 
     if "process.exec" in runtime.config.gateway_operations:
