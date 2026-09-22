@@ -39,7 +39,8 @@
         "fs.append_text",
         "fs.mkdir",
         "fs.move",
-        "fs.replace_text"
+        "fs.replace_text",
+        "process.input"
       ]
     },
     "lane_id": {
@@ -70,7 +71,8 @@
           "fs.write",
           "process.exec",
           "process.inspect",
-          "process.control"
+          "process.control",
+          "process.interact"
         ]
       }
     },
@@ -215,6 +217,12 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 1000
+    },
+    "input_text": {
+      "type": "string"
+    },
+    "append_newline": {
+      "type": "boolean"
     }
   },
   "allOf": [
@@ -496,6 +504,23 @@
           "path",
           "old_string",
           "new_string"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "process.input"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lane_id",
+          "fencing_token",
+          "process_handle",
+          "input_text"
         ]
       }
     }
