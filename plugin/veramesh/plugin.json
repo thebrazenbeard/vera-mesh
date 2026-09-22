@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "veramesh",
   "version": "0.1.0",
-  "description": "Securely work with your enrolled computer through VeraPort-scoped file and managed-process tools.",
+  "description": "Securely work with your enrolled computer through VeraPort-scoped tools, using only the capabilities exposed by the active gateway policy.",
   "author": {
     "name": "V.E.R.A. Build Team Two"
   },

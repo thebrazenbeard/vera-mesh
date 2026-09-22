@@ -52,12 +52,13 @@ def render_plugin(
         ),
     )
     mcp = {
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
         "mcpServers": {
             "veramesh": {
-                "type": "http",
+                "type": "streamable-http",
                 "url": mcp_url,
             }
-        }
+        },
     }
     (output / "mcp.json").write_text(
         json.dumps(mcp, indent=2) + "\n",
