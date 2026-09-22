@@ -136,6 +136,14 @@ def provision_local_pair(
             + ", ".join(str(path) for path in existing)
         )
 
+    root.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        from .windows_acl import harden_private_directory
+
+        # Establish the protected LocalSystem/Admin boundary before any private
+        # material is created; chmod-style modes are not a Windows ACL policy.
+        harden_private_directory(root)
+
     workstation = ec.generate_private_key(ec.SECP256R1())
     controller = ec.generate_private_key(ec.SECP256R1())
     tls_key = ec.generate_private_key(ec.SECP256R1())
@@ -180,7 +188,12 @@ def provision_local_pair(
     }
 
     for name, payload in files.items():
-        _write_new(root / name, payload)
+        target = root / name
+        _write_new(target, payload)
+        if os.name == "nt":
+            from .windows_acl import harden_private_file
+
+            harden_private_file(target)
 
     manifest = {
         "schema": "VERAPORT_LOCAL_IDENTITY_MANIFEST_V1",
@@ -205,10 +218,15 @@ def provision_local_pair(
             for name, payload in sorted(files.items())
         },
     }
+    manifest_path = root / "identity-manifest.json"
     _write_new(
-        root / "identity-manifest.json",
+        manifest_path,
         (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8"),
     )
+    if os.name == "nt":
+        from .windows_acl import harden_private_file
+
+        harden_private_file(manifest_path)
     return manifest
 
 
