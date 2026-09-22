@@ -52,11 +52,11 @@ func NewPublicHTTPServer(
 		return nil, errors.New("expected_resource MCP path must not end with slash")
 	}
 
-	gateway, err := NewMCPGateway(controller, oauthConfig.ExpectedIssuer)
+	metadataURL := resourceURL.Scheme + "://" + resourceURL.Host + "/.well-known/oauth-protected-resource"
+	gateway, err := NewMCPGateway(controller, oauthConfig.ExpectedIssuer, metadataURL)
 	if err != nil {
 		return nil, err
 	}
-	metadataURL := resourceURL.Scheme + "://" + resourceURL.Host + "/.well-known/oauth-protected-resource"
 	metadata := &oauthex.ProtectedResourceMetadata{
 		Resource:             oauthConfig.ExpectedResource,
 		AuthorizationServers: []string{oauthConfig.ExpectedIssuer},
@@ -67,13 +67,15 @@ func NewPublicHTTPServer(
 
 	stream := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return gateway.Server()
-	}, nil)
-	protected := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{
-		ResourceMetadataURL: metadataURL,
-	})(OpenAISecuritySchemeShim(stream))
+	}, &mcp.StreamableHTTPOptions{Stateless: true})
+	mcpHandler := bearerWhenPresent(
+		verifier,
+		metadataURL,
+		OpenAISecuritySchemeShim(stream),
+	)
 
 	mux := http.NewServeMux()
-	mux.Handle(resourcePath, exactPath(resourcePath, protected))
+	mux.Handle(resourcePath, exactPath(resourcePath, mcpHandler))
 	mux.Handle("/.well-known/oauth-protected-resource",
 		exactPath("/.well-known/oauth-protected-resource", auth.ProtectedResourceMetadataHandler(metadata)))
 
@@ -122,5 +124,22 @@ func requirePublicHost(expected string, next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+func bearerWhenPresent(
+	verifier auth.TokenVerifier,
+	resourceMetadataURL string,
+	next http.Handler,
+) http.Handler {
+	protected := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{
+		ResourceMetadataURL: resourceMetadataURL,
+	})(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.TrimSpace(r.Header.Get("Authorization")) == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		protected.ServeHTTP(w, r)
 	})
 }

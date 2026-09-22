@@ -76,24 +76,61 @@ func TestPublicHTTPServerMetadataAndHostBoundary(t *testing.T) {
 	}
 }
 
-func TestPublicHTTPServerMCPRequiresBearerAndAdvertisesMetadata(t *testing.T) {
+func TestBearerWhenPresentAllowsDiscoveryAndRejectsInvalidToken(t *testing.T) {
 	verifier := func(ctx context.Context, token string, req *http.Request) (*auth.TokenInfo, error) {
 		return nil, auth.ErrInvalidToken
 	}
-	server, err := NewPublicHTTPServer(testPublicController(), testPublicOAuthConfig(), verifier)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	handler := bearerWhenPresent(
+		verifier,
+		"https://mesh.example/.well-known/oauth-protected-resource",
+		next,
+	)
+
+	anonymous := httptest.NewRequest(http.MethodPost, "https://mesh.example/mcp", nil)
+	anonymousRec := httptest.NewRecorder()
+	handler.ServeHTTP(anonymousRec, anonymous)
+	if anonymousRec.Code != http.StatusNoContent {
+		t.Fatalf("anonymous MCP discovery path blocked: %d", anonymousRec.Code)
+	}
+
+	invalid := httptest.NewRequest(http.MethodPost, "https://mesh.example/mcp", nil)
+	invalid.Header.Set("Authorization", "Bearer bad")
+	invalidRec := httptest.NewRecorder()
+	handler.ServeHTTP(invalidRec, invalid)
+	if invalidRec.Code != http.StatusUnauthorized {
+		t.Fatalf("invalid bearer status=%d body=%s", invalidRec.Code, invalidRec.Body.String())
+	}
+	challenge := invalidRec.Header().Get("WWW-Authenticate")
+	if !strings.Contains(challenge, "resource_metadata=\"https://mesh.example/.well-known/oauth-protected-resource\"") {
+		t.Fatalf("missing protected-resource metadata challenge: %q", challenge)
+	}
+}
+
+func TestMCPAuthErrorCarriesChatGPTOAuthChallenge(t *testing.T) {
+	gateway, err := NewMCPGateway(
+		testPublicController(),
+		"https://issuer.example",
+		"https://mesh.example/.well-known/oauth-protected-resource",
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "https://mesh.example/mcp", strings.NewReader("{}"))
-	req.Host = "mesh.example"
-	rec := httptest.NewRecorder()
-	server.Handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("missing bearer status=%d body=%s", rec.Code, rec.Body.String())
+	result := gateway.authErrorToolResult(
+		"insufficient_scope",
+		"Additional VeraMesh permission required: computer.read",
+		[]string{"computer.read"},
+	)
+	challenge, ok := result.Meta["mcp/www_authenticate"].([]string)
+	if !ok || len(challenge) != 1 {
+		t.Fatalf("missing MCP auth challenge: %#v", result.Meta)
 	}
-	challenge := rec.Header().Get("WWW-Authenticate")
-	if !strings.Contains(challenge, "resource_metadata=\"https://mesh.example/.well-known/oauth-protected-resource\"") {
-		t.Fatalf("missing protected-resource metadata challenge: %q", challenge)
+	if !strings.Contains(challenge[0], "resource_metadata=\"https://mesh.example/.well-known/oauth-protected-resource\"") ||
+		!strings.Contains(challenge[0], "error=\"insufficient_scope\"") ||
+		!strings.Contains(challenge[0], "scope=\"computer.read\"") {
+		t.Fatalf("incomplete MCP auth challenge: %q", challenge[0])
 	}
 }
 

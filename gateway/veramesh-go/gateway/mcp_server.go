@@ -15,15 +15,16 @@ import (
 )
 
 type MCPGateway struct {
-	controller *Controller
-	issuer     string
-	server     *mcp.Server
+	controller          *Controller
+	issuer              string
+	resourceMetadataURL string
+	server              *mcp.Server
 
 	mu      sync.Mutex
 	facades map[string]*Facade
 }
 
-func NewMCPGateway(controller *Controller, issuer string) (*MCPGateway, error) {
+func NewMCPGateway(controller *Controller, issuer, resourceMetadataURL string) (*MCPGateway, error) {
 	if controller == nil {
 		return nil, errors.New("controller is required")
 	}
@@ -31,9 +32,14 @@ func NewMCPGateway(controller *Controller, issuer string) (*MCPGateway, error) {
 	if issuer == "" {
 		return nil, errors.New("issuer is required")
 	}
+	resourceMetadataURL = strings.TrimSpace(resourceMetadataURL)
+	if resourceMetadataURL == "" {
+		return nil, errors.New("resource metadata URL is required")
+	}
 	g := &MCPGateway{
-		controller: controller,
-		issuer: issuer,
+		controller:          controller,
+		issuer:              issuer,
+		resourceMetadataURL: resourceMetadataURL,
 		server: mcp.NewServer(
 			&mcp.Implementation{
 				Name:    "VeraMesh Public Workstation Gateway",
@@ -125,17 +131,26 @@ func (g *MCPGateway) callTool(
 ) (*mcp.CallToolResult, error) {
 	if req == nil || req.Params == nil || req.Extra == nil ||
 		req.Extra.TokenInfo == nil {
-		return errorToolResult("invalid_token", "VeraMesh OAuth token is required"), nil
+		return g.authErrorToolResult(
+			"invalid_token",
+			"VeraMesh OAuth token is required",
+			policy.Scopes,
+		), nil
 	}
 	token := req.Extra.TokenInfo
 	if strings.TrimSpace(token.UserID) == "" {
-		return errorToolResult("invalid_token", "OAuth resource-owner subject is required"), nil
+		return g.authErrorToolResult(
+			"invalid_token",
+			"OAuth resource-owner subject is required",
+			policy.Scopes,
+		), nil
 	}
 	missing := missingScopes(token.Scopes, policy.Scopes)
 	if len(missing) != 0 {
-		return errorToolResult(
+		return g.authErrorToolResult(
 			"insufficient_scope",
 			"Additional VeraMesh permission required: "+strings.Join(missing, ", "),
+			policy.Scopes,
 		), nil
 	}
 	facade, err := g.facade(g.issuer + "|" + token.UserID)
@@ -178,6 +193,23 @@ func missingScopes(granted, required []string) []string {
 	}
 	sort.Strings(missing)
 	return missing
+}
+
+func (g *MCPGateway) authErrorToolResult(code, message string, scopes []string) *mcp.CallToolResult {
+	result := errorToolResult(code, message)
+	challenge := fmt.Sprintf(
+		"Bearer resource_metadata=%q, error=%q, error_description=%q",
+		g.resourceMetadataURL,
+		code,
+		message,
+	)
+	if len(scopes) != 0 {
+		challenge += fmt.Sprintf(", scope=%q", strings.Join(scopes, " "))
+	}
+	result.Meta = mcp.Meta{
+		"mcp/www_authenticate": []string{challenge},
+	}
+	return result
 }
 
 func errorToolResult(code, message string) *mcp.CallToolResult {
