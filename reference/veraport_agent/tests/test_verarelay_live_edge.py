@@ -7,7 +7,7 @@ import pytest
 
 from veraport_agent.verarelay_live_edge import (
     LiveEdgeConfig,
-    VeraRelayLiveEdge,
+    VeraMeshReferenceLiveEdge,
 )
 
 
@@ -34,7 +34,7 @@ async def test_live_edge_forwards_opaque_binary_without_parsing():
     upstream = await asyncio.start_server(echo, "127.0.0.1", 0)
     upstream_port = upstream.sockets[0].getsockname()[1]
     edge_port = free_port()
-    edge = VeraRelayLiveEdge(
+    edge = VeraMeshReferenceLiveEdge(
         LiveEdgeConfig(
             listen_host="127.0.0.1",
             listen_port=edge_port,
@@ -71,7 +71,7 @@ async def test_live_edge_forwards_opaque_binary_without_parsing():
 async def test_live_edge_fails_closed_when_upstream_is_absent():
     upstream_port = free_port()
     edge_port = free_port()
-    edge = VeraRelayLiveEdge(
+    edge = VeraMeshReferenceLiveEdge(
         LiveEdgeConfig(
             listen_host="127.0.0.1",
             listen_port=edge_port,
@@ -122,7 +122,7 @@ async def test_live_edge_rejects_connections_above_admission_bound():
     upstream = await asyncio.start_server(hold_open, "127.0.0.1", 0)
     upstream_port = upstream.sockets[0].getsockname()[1]
     edge_port = free_port()
-    edge = VeraRelayLiveEdge(
+    edge = VeraMeshReferenceLiveEdge(
         LiveEdgeConfig(
             listen_host="127.0.0.1",
             listen_port=edge_port,
