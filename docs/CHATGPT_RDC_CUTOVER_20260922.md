@@ -20,7 +20,7 @@ OpenAI tunnel runtime on Lappy
   v
 VeraPort ControllerRuntime
   |\
-  | \__ EDGE_STREAM -> transparent VeraRelay/VeraMesh edge -> Lappy VeraPort
+  | \__ EDGE_STREAM -> VeraMesh Python SPK live edge -> Lappy VeraPort
   |
   \____ DIRECT_STREAM -------------------------------> Lappy VeraPort
                                                          |
@@ -89,22 +89,28 @@ VeraPort itself still owns controller/workstation authentication, capability cei
 lane claims, fencing, mutation idempotency, and operation policy. Tunnel possession is
 not VeraPort authorization.
 
-## VeraRelay
+## VeraMesh Synology edge vs VeraRelay
 
-VeraRelay remains part of the replacement architecture but not a mandatory
-store-and-forward hop.
+These are separate components and runtimes.
 
-Preferred path order:
-1. `DIRECT_STREAM`
-2. `EDGE_STREAM` through the transparent VeraRelay/VeraMesh live edge
-3. `DURABLE_RELAY` only after its separately governed runtime is repaired/qualified
+**VeraMesh Synology SPK** is the live `EDGE_STREAM` implementation. Its package scripts
+run Python 3.11 from the installed Synology Python package, and its live edge forwards
+opaque VeraPort TLS bytes without terminating VeraPort application security. The
+production-verified R6 SPK is historical runtime evidence; later source heads require
+their own rebuild/install/readback before inheriting that qualification.
 
-The live edge forwards opaque VeraPort TLS bytes. It does not terminate the VeraPort
-TLS session, hold workstation credentials, or parse commands.
+**VeraRelay 0.4** is the separate Node.js 22 + SQLite durable authenticated courier.
+It is a `DURABLE_RELAY` / sealed-mailbox role, not the interactive live proxy. Queue
+custody never means the Lappy operation executed.
 
-The preserved historical VeraRelay executable is not accepted as the new hot path. Its
-known authorization/idempotency/audit defects remain disqualifying until repaired or
-superseded.
+Preferred path semantics:
+1. `DIRECT_STREAM` — live VeraPort connection.
+2. `EDGE_STREAM` — live VeraPort connection through the VeraMesh Python SPK.
+3. `DURABLE_RELAY` — Node.js VeraRelay only after its separate source/runtime
+   qualification; asynchronous custody only.
+
+The preserved historical VeraRelay predecessor is not accepted as the new durable
+runtime until its authorization/idempotency/audit defects are repaired or superseded.
 
 ## RDC replacement boundary
 
@@ -117,7 +123,8 @@ The first cut now natively covers the everyday RDC surface needed for VeraMesh w
 - lane-owned managed process start/list/status/output/input/terminate;
 - automatic process cleanup when lane/session authority ends;
 - persistent Windows VeraPort service;
-- direct and VeraRelay-edge live paths;
+- direct and VeraMesh-SPK live edge paths;
+- separate Node.js VeraRelay durable-courier role retained outside the interactive hot path;
 - ChatGPT MCP adapter with read-only tool annotations;
 - managed Secure MCP Tunnel runtime source support.
 
@@ -152,7 +159,7 @@ These states are separate:
 5. `CHATGPT_CONNECTED` — ChatGPT developer-mode app/tunnel is connected to the
    installed VeraMesh MCP surface.
 6. `END_TO_END_ACCEPTED` — live ChatGPT calls prove read/write/process operations,
-   reconnect, service restart, lane/fence enforcement, and VeraRelay edge fallback.
+   reconnect, service restart, lane/fence enforcement, and VeraMesh SPK edge fallback.
 7. `RDC_RETIRED` — RDC is no longer required for the accepted workflows.
 
 No earlier state implies a later one.
@@ -165,7 +172,8 @@ This branch does not:
 - create a runtime/API key;
 - register a ChatGPT developer-mode app;
 - change firewall/Tailscale/network policy;
-- deploy VeraRelay/Synology;
+- deploy/update the VeraMesh Synology SPK;
+- deploy/activate VeraRelay Node.js durable-courier runtime;
 - merge PR #25;
 - uninstall or retire RDC.
 
