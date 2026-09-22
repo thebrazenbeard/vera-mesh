@@ -7,6 +7,9 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 
+DEFAULT_MAX_FRAME_BYTES = 1_048_576
+
+
 class StreamProtocolError(RuntimeError):
     code = "STREAM_PROTOCOL_ERROR"
 
@@ -19,7 +22,7 @@ class StreamClosed(StreamProtocolError):
     code = "STREAM_CLOSED"
 
 
-async def read_frame(reader: asyncio.StreamReader, *, max_frame_bytes: int = 1_048_576) -> dict[str, Any]:
+async def read_frame(reader: asyncio.StreamReader, *, max_frame_bytes: int = DEFAULT_MAX_FRAME_BYTES) -> dict[str, Any]:
     try:
         header = await reader.readexactly(4)
     except asyncio.IncompleteReadError as exc:
@@ -43,7 +46,7 @@ async def read_frame(reader: asyncio.StreamReader, *, max_frame_bytes: int = 1_0
 def encode_frame_payload(
     value: dict[str, Any],
     *,
-    max_frame_bytes: int = 1_048_576,
+    max_frame_bytes: int = DEFAULT_MAX_FRAME_BYTES,
 ) -> bytes:
     try:
         raw = json.dumps(
@@ -67,7 +70,7 @@ async def write_frame(
     writer: asyncio.StreamWriter,
     value: dict[str, Any],
     *,
-    max_frame_bytes: int = 1_048_576,
+    max_frame_bytes: int = DEFAULT_MAX_FRAME_BYTES,
 ) -> None:
     raw = encode_frame_payload(
         value,
@@ -85,7 +88,7 @@ class MultiplexClient:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
         *,
-        max_frame_bytes: int = 1_048_576,
+        max_frame_bytes: int = DEFAULT_MAX_FRAME_BYTES,
         request_timeout_s: float = 5.0,
     ) -> None:
         if request_timeout_s <= 0:
@@ -173,7 +176,7 @@ async def serve_multiplexed(
     writer: asyncio.StreamWriter,
     handler: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]],
     *,
-    max_frame_bytes: int = 1_048_576,
+    max_frame_bytes: int = DEFAULT_MAX_FRAME_BYTES,
     max_inflight: int = 64,
 ) -> None:
     """Dispatch bounded independent frames over one authenticated connection.
