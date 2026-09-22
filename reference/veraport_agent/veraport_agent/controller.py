@@ -31,6 +31,8 @@ _MUTATING_OPERATIONS = frozenset({
     "lane.close",
     "fs.write_text",
     "process.exec",
+    "process.start",
+    "process.terminate",
 })
 
 
