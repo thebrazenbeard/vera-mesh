@@ -78,10 +78,10 @@ function Initialize-PortableRuntime(
         throw "Portable Python executable missing from $Destination"
     }
 
-    & $python $GetPip --disable-pip-version-check
+    & $python $GetPip --disable-pip-version-check | Out-Host
     Assert-ExitCode "get-pip"
 
-    & $python -m pip install --disable-pip-version-check "pip==26.2.1" "setuptools==84.0.0" "wheel==0.48.0" "packaging==26.3"
+    & $python -m pip install --disable-pip-version-check "pip==26.2.1" "setuptools==84.0.0" "wheel==0.48.0" "packaging==26.3" | Out-Host
     Assert-ExitCode "pinned packaging bootstrap"
 
     $target = $PackagePath
@@ -89,10 +89,10 @@ function Initialize-PortableRuntime(
         $target = $PackagePath + "[windows-service]"
     }
 
-    & $python -m pip install --disable-pip-version-check --no-build-isolation --constraint $ConstraintsPath $target
+    & $python -m pip install --disable-pip-version-check --no-build-isolation --constraint $ConstraintsPath $target | Out-Host
     Assert-ExitCode "VeraPort package installation"
 
-    return $python
+    Write-Output $python
 }
 
 function Wait-ServiceRunning([string]$Name, [int]$TimeoutSeconds = 30) {
