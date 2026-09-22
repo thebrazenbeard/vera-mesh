@@ -177,7 +177,33 @@ async def serve_multiplexed(
                     "error": {"code": exc.__class__.__name__.upper(), "message": str(exc)},
                 }
             async with write_lock:
-                await write_frame(writer, response, max_frame_bytes=max_frame_bytes)
+                try:
+                    await write_frame(
+                        writer,
+                        response,
+                        max_frame_bytes=max_frame_bytes,
+                    )
+                except FrameTooLarge:
+                    overflow = {
+                        "protocol_version": "veraport-v1",
+                        "request_id": request.get("request_id"),
+                        "ok": False,
+                        "error": {
+                            "code": FrameTooLarge.code,
+                            "message": (
+                                "encoded response exceeds max_frame_bytes"
+                            ),
+                        },
+                    }
+                    try:
+                        await write_frame(
+                            writer,
+                            overflow,
+                            max_frame_bytes=max_frame_bytes,
+                        )
+                    except FrameTooLarge:
+                        writer.close()
+                        await writer.wait_closed()
         finally:
             capacity.release()
 
