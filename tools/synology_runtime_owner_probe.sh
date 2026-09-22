@@ -57,12 +57,11 @@ fi
 
 echo "--- lifecycle-status ---"
 if [ -x "$PY" ] && [ -f "$TARGET/bin/veramesh_lifecycle.py" ]; then
-  "$PY" "$TARGET/bin/veramesh_lifecycle.py" status >/tmp/veramesh-probe-status.$$ 2>&1
+  lifecycle_output=$("$PY" "$TARGET/bin/veramesh_lifecycle.py" status 2>&1)
   rc=$?
   printf 'lifecycle_status_rc=%s output=' "$rc"
-  cat /tmp/veramesh-probe-status.$$ 2>/dev/null | one_line
+  printf '%s' "$lifecycle_output" | one_line
   echo
-  rm -f /tmp/veramesh-probe-status.$$
 else
   echo "lifecycle_status=UNAVAILABLE"
 fi
