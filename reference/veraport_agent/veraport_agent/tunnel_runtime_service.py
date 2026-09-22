@@ -229,12 +229,11 @@ def _run(
         check=False,
     )
     if completed.returncode != 0:
-        # Keep diagnostics bounded. The secret itself was never placed in argv
-        # or the environment, so ordinary tunnel-client diagnostics can be
-        # surfaced without echoing runtime_api_key_file contents.
-        detail = (completed.stderr or completed.stdout or "").strip()[:8192]
+        # Do not reflect child stdout/stderr into SCM errors. A dependency may
+        # regress its own redaction; the service boundary must not turn that
+        # into a secret-bearing Windows event-log message.
         raise TunnelRuntimeServiceError(
-            f"tunnel-client command failed rc={completed.returncode}: {detail}"
+            f"tunnel-client command failed rc={completed.returncode}"
         )
     return completed
 
@@ -349,18 +348,37 @@ def run_until_stop(
     if validate_acl:
         validate_service_materials(config_path, config)
 
-    connect_runtime(config, runner=runner)
-    status = read_status(config, runner=runner)
-    if not status.usable:
-        raise TunnelRuntimeServiceError(
-            "managed tunnel runtime did not become running and healthy"
-        )
-
     try:
-        while not stop_event.wait(config.status_interval_s):
+        try:
             status = read_status(config, runner=runner)
-            if status.usable:
+        except TunnelRuntimeServiceError:
+            status = None
+
+        if status is None or not status.usable:
+            if status is not None and status.process_running:
+                try:
+                    stop_runtime(config, runner=runner)
+                except TunnelRuntimeServiceError:
+                    pass
+            connect_runtime(config, runner=runner)
+            status = read_status(config, runner=runner)
+            if not status.usable:
+                raise TunnelRuntimeServiceError(
+                    "managed tunnel runtime did not become running and healthy"
+                )
+
+        while not stop_event.wait(config.status_interval_s):
+            try:
+                status = read_status(config, runner=runner)
+            except TunnelRuntimeServiceError:
+                status = None
+            if status is not None and status.usable:
                 continue
+            if status is not None and status.process_running:
+                try:
+                    stop_runtime(config, runner=runner)
+                except TunnelRuntimeServiceError:
+                    pass
             connect_runtime(config, runner=runner)
             status = read_status(config, runner=runner)
             if not status.usable:
