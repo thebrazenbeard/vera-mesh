@@ -44,9 +44,9 @@ Always registered:
 - `lane_renew`
 - `lane_close`
 - `fs_read_text`
-- `fs_read_bytes`
 
 Conditionally registered only when controller policy explicitly includes the operation:
+- `fs_read_bytes`
 - `fs_write_text`
 
 The current Lappy production policy observed on 2026-09-20 has
