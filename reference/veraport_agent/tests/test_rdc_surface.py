@@ -117,6 +117,7 @@ async def test_managed_process_lifecycle_and_chunked_output(tmp_path):
         if not status["running"]:
             break
         await asyncio.sleep(0.02)
+    await asyncio.sleep(0.05)
 
     first = await surface.process_output(
         lane_id=lane.lane_id,
@@ -148,7 +149,9 @@ async def test_process_handle_is_bound_to_lane_and_fence(tmp_path):
         "process.control",
     })
     lane_a = process_lane(registry, tmp_path, lane_id="a")
-    lane_b = process_lane(registry, tmp_path, lane_id="b")
+    other = tmp_path / "other"
+    other.mkdir()
+    lane_b = process_lane(registry, other, lane_id="b")
     surface = surface_for(
         LocalExecutor(
             registry,
