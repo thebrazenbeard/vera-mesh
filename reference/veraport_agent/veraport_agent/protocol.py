@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 from contextlib import asynccontextmanager
@@ -10,6 +11,7 @@ from typing import Any, AsyncIterator
 from .core import ClaimMode, ResourceClaim, VeraPortError, LaneRegistry
 from .executor import LocalExecutor, PathOutsideRoots
 from .state import AgentStateStore
+from .stream import DEFAULT_MAX_FRAME_BYTES, FrameTooLarge, encode_frame_payload
 
 
 DURABLE_MUTATING_OPERATIONS = frozenset({
@@ -29,10 +31,15 @@ class VeraPortAgent:
         registry: LaneRegistry,
         executor: LocalExecutor,
         state_store: AgentStateStore | None = None,
+        *,
+        max_frame_bytes: int = DEFAULT_MAX_FRAME_BYTES,
     ) -> None:
+        if type(max_frame_bytes) is not int or max_frame_bytes < 1:
+            raise ValueError("max_frame_bytes must be a positive integer")
         self.registry = registry
         self.executor = executor
         self.state_store = state_store
+        self.max_frame_bytes = max_frame_bytes
         self._lane_locks: dict[str, asyncio.Lock] = {}
         self._lane_lock_users: dict[str, int] = {}
         self._lane_locks_guard = asyncio.Lock()
@@ -210,6 +217,25 @@ class VeraPortAgent:
                 )
                 return {"content": content}
 
+        if operation == "fs.read_bytes_chunk":
+            lane_id = str(request["lane_id"])
+            offset = request.get("offset", 0)
+            max_bytes = request.get("max_bytes", 65_536)
+            async with self._lane_operation(lane_id):
+                chunk = await self.executor.read_bytes_chunk(
+                    lane_id=lane_id,
+                    fencing_token=int(request["fencing_token"]),
+                    path=str(request["path"]),
+                    offset=offset,
+                    max_bytes=max_bytes,
+                )
+                return self._wire_safe_chunk_result(
+                    request_id=str(request["request_id"]),
+                    offset=chunk.offset,
+                    data=chunk.data,
+                    size=chunk.size,
+                )
+
         if operation == "fs.write_text":
             lane_id = str(request["lane_id"])
             async with self._lane_operation(lane_id):
@@ -242,6 +268,65 @@ class VeraPortAgent:
                 return asdict(result)
 
         raise ValueError(f"unknown operation: {operation}")
+
+    def _wire_safe_chunk_result(
+        self,
+        *,
+        request_id: str,
+        offset: int,
+        data: bytes,
+        size: int,
+    ) -> dict[str, Any]:
+        def make_result(length: int) -> dict[str, Any]:
+            payload = data[:length]
+            next_offset = offset + length
+            return {
+                "encoding": "base64",
+                "offset": offset,
+                "length": length,
+                "next_offset": next_offset,
+                "eof": next_offset >= size,
+                "size": size,
+                "content_b64": base64.b64encode(payload).decode("ascii"),
+                "chunk_sha256": hashlib.sha256(payload).hexdigest(),
+            }
+
+        def fits(length: int) -> bool:
+            response = {
+                "protocol_version": "veraport-v1",
+                "request_id": request_id,
+                "ok": True,
+                "result": make_result(length),
+            }
+            try:
+                encode_frame_payload(
+                    response,
+                    max_frame_bytes=self.max_frame_bytes,
+                )
+                return True
+            except FrameTooLarge:
+                return False
+
+        if not fits(0):
+            raise FrameTooLarge(
+                "response metadata exceeds configured frame policy"
+            )
+        if not data:
+            return make_result(0)
+
+        low = 0
+        high = len(data)
+        while low < high:
+            mid = (low + high + 1) // 2
+            if fits(mid):
+                low = mid
+            else:
+                high = mid - 1
+        if low == 0:
+            raise FrameTooLarge(
+                "configured frame policy cannot carry one chunk byte"
+            )
+        return make_result(low)
 
     @staticmethod
     def _request_sha256(request: dict[str, Any]) -> str:
