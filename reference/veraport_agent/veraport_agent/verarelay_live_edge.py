@@ -62,7 +62,8 @@ class VeraRelayLiveEdge:
         self.config = config
         self._open_connection = open_connection
         self._start_server = start_server
-        self._capacity = asyncio.Semaphore(config.max_connections)
+        self._admission_lock = asyncio.Lock()
+        self._active_connections = 0
         self._server: asyncio.AbstractServer | None = None
         self._active: set[asyncio.Task[Any]] = set()
 
@@ -97,48 +98,62 @@ class VeraRelayLiveEdge:
         task = asyncio.current_task()
         if task is not None:
             self._active.add(task)
+        admitted = False
         try:
-            async with self._capacity:
-                try:
-                    upstream_reader, upstream_writer = await asyncio.wait_for(
-                        self._open_connection(
-                            self.config.upstream_host,
-                            self.config.upstream_port,
-                            limit=self.config.io_chunk_bytes,
-                        ),
-                        timeout=self.config.connect_timeout_s,
-                    )
-                except Exception:
+            async with self._admission_lock:
+                if self._active_connections >= self.config.max_connections:
                     downstream_writer.close()
                     try:
                         await downstream_writer.wait_closed()
                     except Exception:
                         pass
                     return
+                self._active_connections += 1
+                admitted = True
 
+            try:
+                upstream_reader, upstream_writer = await asyncio.wait_for(
+                    self._open_connection(
+                        self.config.upstream_host,
+                        self.config.upstream_port,
+                        limit=self.config.io_chunk_bytes,
+                    ),
+                    timeout=self.config.connect_timeout_s,
+                )
+            except Exception:
+                downstream_writer.close()
                 try:
-                    left = asyncio.create_task(
-                        self._pump(downstream_reader, upstream_writer)
-                    )
-                    right = asyncio.create_task(
-                        self._pump(upstream_reader, downstream_writer)
-                    )
-                    done, pending = await asyncio.wait(
-                        {left, right},
-                        return_when=asyncio.FIRST_COMPLETED,
-                    )
-                    for pending_task in pending:
-                        pending_task.cancel()
-                    await asyncio.gather(*done, *pending, return_exceptions=True)
-                finally:
-                    for writer in (upstream_writer, downstream_writer):
-                        writer.close()
-                    for writer in (upstream_writer, downstream_writer):
-                        try:
-                            await writer.wait_closed()
-                        except Exception:
-                            pass
+                    await downstream_writer.wait_closed()
+                except Exception:
+                    pass
+                return
+
+            try:
+                left = asyncio.create_task(
+                    self._pump(downstream_reader, upstream_writer)
+                )
+                right = asyncio.create_task(
+                    self._pump(upstream_reader, downstream_writer)
+                )
+                done, pending = await asyncio.wait(
+                    {left, right},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for pending_task in pending:
+                    pending_task.cancel()
+                await asyncio.gather(*done, *pending, return_exceptions=True)
+            finally:
+                for writer in (upstream_writer, downstream_writer):
+                    writer.close()
+                for writer in (upstream_writer, downstream_writer):
+                    try:
+                        await writer.wait_closed()
+                    except Exception:
+                        pass
         finally:
+            if admitted:
+                async with self._admission_lock:
+                    self._active_connections -= 1
             if task is not None:
                 self._active.discard(task)
 
