@@ -14,10 +14,11 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 
+from .controller_config import ControllerConfig
 from .gateway import ALL_OPERATIONS
 from .hot_session import key_id, principal_id
 from .service_config import WindowsServiceConfig
-from .windows_acl import harden_service_materials
+from .windows_acl import harden_controller_materials, harden_service_materials
 
 
 class ProvisioningError(RuntimeError):
@@ -354,7 +355,12 @@ def provision_bundle(
     parsed_service.validate_runtime_files()
 
     if os.name == "nt" and apply_windows_acl:
+        parsed_controller = ControllerConfig.load(paths["controller_config"])
         harden_service_materials(paths["service_config"], parsed_service)
+        harden_controller_materials(
+            paths["controller_config"],
+            parsed_controller,
+        )
 
     return ProvisionedBundle(
         root=root,
