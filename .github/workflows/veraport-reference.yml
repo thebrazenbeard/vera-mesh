@@ -72,6 +72,17 @@ jobs:
               veraport-service remove
             }
           }
+      - name: Full portable VeraPort service install and restart qualification
+        shell: pwsh
+        run: |
+          $allowed = Join-Path $env:RUNNER_TEMP "veramesh-allowed"
+          $export = Join-Path $env:RUNNER_TEMP "veramesh-controller-export"
+          New-Item -ItemType Directory -Path $allowed -Force | Out-Null
+          & .\tools\windows_install_veraport_service.ps1 `
+            -AllowedRoot $allowed `
+            -ControllerExportDir $export `
+            -Apply `
+            -RemoveAfterQualification
 
   go-veraport-armv7:
     runs-on: ubuntu-latest
