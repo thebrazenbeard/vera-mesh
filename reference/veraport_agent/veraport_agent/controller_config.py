@@ -110,6 +110,7 @@ class ControllerConfig:
             "process.list": frozenset({"process.inspect"}),
             "process.status": frozenset({"process.inspect"}),
             "process.output": frozenset({"process.inspect"}),
+            "process.input": frozenset({"process.interact"}),
             "process.terminate": frozenset({"process.control"}),
         }
         for operation, capabilities in required_caps.items():
