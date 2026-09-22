@@ -380,7 +380,9 @@ async def test_full_verarelay_edge_hot_path_rdc_surface_round_trip(tmp_path: Pat
             process_handle=handle,
         )
         assert output["ok"] is True
-        assert output["result"]["stdout"] == "verarelay-edge-ok\n"
+        assert output["result"]["stdout"].splitlines() == [
+            "verarelay-edge-ok"
+        ]
 
         closed = await gateway.close_lane(
             lane_id="edge-rdc",
