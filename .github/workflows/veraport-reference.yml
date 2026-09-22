@@ -50,4 +50,25 @@ jobs:
         run: python -m pip wheel --no-deps "./reference/veraport_agent" --wheel-dir wheelhouse
       - name: Test
         run: python -m pytest -q reference/veraport_agent/tests
+      - name: Register and remove Windows service entrypoints
+        shell: pwsh
+        run: |
+          $veraInstalled = $false
+          $tunnelInstalled = $false
+          try {
+            veraport-service install
+            $veraInstalled = $true
+            sc.exe query VeraPortAgent
+            veramesh-tunnel-service install
+            $tunnelInstalled = $true
+            sc.exe query VeraMeshTunnelRuntime
+          }
+          finally {
+            if ($tunnelInstalled) {
+              veramesh-tunnel-service remove
+            }
+            if ($veraInstalled) {
+              veraport-service remove
+            }
+          }
 
