@@ -102,10 +102,23 @@ def prepare_workstation_service(
         raise WorkstationPreparationError(
             "controller export directory must differ from service root"
         )
-    if root.exists() and any(root.iterdir()):
-        raise WorkstationPreparationError(
-            f"service root must be absent or empty: {root}"
-        )
+    if root.exists():
+        unexpected = [
+            item
+            for item in root.iterdir()
+            if item.name != "runtime"
+        ]
+        if unexpected:
+            raise WorkstationPreparationError(
+                "service root contains material outside installer-owned "
+                "runtime directory: "
+                + ", ".join(str(item) for item in unexpected)
+            )
+        runtime_dir = root / "runtime"
+        if runtime_dir.exists() and not runtime_dir.is_dir():
+            raise WorkstationPreparationError(
+                f"installer runtime path is not a directory: {runtime_dir}"
+            )
     if export.exists() and any(export.iterdir()):
         raise WorkstationPreparationError(
             f"controller export directory must be absent or empty: {export}"
