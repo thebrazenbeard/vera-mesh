@@ -14,7 +14,7 @@ class GatewayOperationDenied(GatewayError):
     code = "GATEWAY_OPERATION_DENIED"
 
 
-READ_OPERATIONS = frozenset({"lane.list", "fs.read_text"})
+READ_OPERATIONS = frozenset({"lane.list", "fs.read_text", "fs.read_bytes"})
 MUTATING_OPERATIONS = frozenset({
     "lane.open",
     "lane.renew",
@@ -38,6 +38,7 @@ TOOL_DESCRIPTORS = (
     ToolDescriptor("renew_lane", "lane.renew", True),
     ToolDescriptor("close_lane", "lane.close", True),
     ToolDescriptor("read_text", "fs.read_text", False),
+    ToolDescriptor("read_bytes", "fs.read_bytes", False),
     ToolDescriptor("write_text", "fs.write_text", True),
     ToolDescriptor("run_process", "process.exec", True),
 )
@@ -123,6 +124,25 @@ class VeraPortGateway:
             "fencing_token": fencing_token,
             "path": path,
             "encoding": encoding,
+        })
+
+    async def read_bytes(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        offset: int = 0,
+        max_bytes: int | None = None,
+        expected_file_version: str | None = None,
+    ) -> dict[str, Any]:
+        return await self._call("fs.read_bytes", {
+            "lane_id": lane_id,
+            "fencing_token": fencing_token,
+            "path": path,
+            "offset": offset,
+            "max_bytes": max_bytes,
+            "expected_file_version": expected_file_version,
         })
 
     async def write_text(
