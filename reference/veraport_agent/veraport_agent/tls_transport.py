@@ -17,7 +17,13 @@ from .hot_session import (
     WorkstationAuthenticator,
     verify_server_accept,
 )
-from .stream import MultiplexClient, read_frame, serve_multiplexed, write_frame
+from .stream import (
+    DEFAULT_MAX_FRAME_BYTES,
+    MultiplexClient,
+    read_frame,
+    serve_multiplexed,
+    write_frame,
+)
 
 
 ALPN = "veraport/1"
@@ -104,7 +110,7 @@ async def serve_tls_connection(
     handler_factory: Callable[[SessionBinding], Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]],
     now_ms: Callable[[], int] | None = None,
     session_ttl_ms: int = 300_000,
-    max_frame_bytes: int = 1_048_576,
+    max_frame_bytes: int = DEFAULT_MAX_FRAME_BYTES,
     max_inflight: int = 64,
 ) -> None:
     clock = now_ms or (lambda: int(time.time() * 1000))
@@ -159,7 +165,7 @@ async def open_tls_session(
     workstation_public_key: ec.EllipticCurvePublicKey,
     requested_capabilities: set[str] | frozenset[str],
     now_ms: Callable[[], int] | None = None,
-    max_frame_bytes: int = 1_048_576,
+    max_frame_bytes: int = DEFAULT_MAX_FRAME_BYTES,
     connect_timeout_s: float = 5.0,
     request_timeout_s: float = 5.0,
 ) -> tuple[MultiplexClient, SessionBinding]:
