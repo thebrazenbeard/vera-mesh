@@ -12,6 +12,20 @@ from veraport_agent.public_http import (
 
 
 class RuntimeStub:
+    def __init__(self):
+        self.config = type(
+            "Config",
+            (),
+            {
+                "requested_capabilities": frozenset({"fs.read"}),
+                "gateway_operations": frozenset({
+                    "lane.open",
+                    "lane.close",
+                    "fs.read_text",
+                }),
+            },
+        )()
+
     async def close(self):
         self.closed = True
 
