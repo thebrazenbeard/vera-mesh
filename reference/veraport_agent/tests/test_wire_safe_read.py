@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 from pathlib import Path
 
@@ -203,7 +204,7 @@ async def test_legacy_text_read_overflow_returns_correlated_error(
         ),
     )
 
-    server = await __import__("asyncio").start_server(
+    server = await asyncio.start_server(
         lambda reader, writer: serve_multiplexed(
             reader,
             writer,
@@ -214,7 +215,7 @@ async def test_legacy_text_read_overflow_returns_correlated_error(
         0,
     )
     port = server.sockets[0].getsockname()[1]
-    reader, writer = await __import__("asyncio").open_connection(
+    reader, writer = await asyncio.open_connection(
         "127.0.0.1",
         port,
     )
@@ -256,8 +257,6 @@ async def test_legacy_text_read_overflow_returns_correlated_error(
 
 @pytest.mark.asyncio
 async def test_if_overflow_error_cannot_fit_stream_closes_deterministically() -> None:
-    import asyncio
-
     async def handler(request):
         return {
             "protocol_version": "veraport-v1",
