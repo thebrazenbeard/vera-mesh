@@ -77,6 +77,7 @@ def prepare_host(
             capabilities.update({
                 "process.exec",
                 "process.inspect",
+                "process.interact",
                 "process.control",
             })
         registry = deps.lane_registry_cls(
