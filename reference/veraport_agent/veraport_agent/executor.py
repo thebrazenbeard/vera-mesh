@@ -23,6 +23,13 @@ class FileReadLimitExceeded(PermissionError):
 
 
 @dataclass(frozen=True)
+class FileChunk:
+    offset: int
+    data: bytes
+    size: int
+
+
+@dataclass(frozen=True)
 class ProcessResult:
     returncode: int
     stdout: str
@@ -90,6 +97,54 @@ class LocalExecutor:
                 f"file exceeds max_read_bytes={self.max_read_bytes}"
             )
         return payload.decode(encoding)
+
+    async def read_bytes_chunk(
+        self,
+        *,
+        lane_id: str,
+        fencing_token: int,
+        path: str,
+        offset: int,
+        max_bytes: int,
+    ) -> FileChunk:
+        if type(offset) is not int or offset < 0:
+            raise ValueError("offset must be a non-negative integer")
+        if type(max_bytes) is not int or max_bytes < 1:
+            raise ValueError("max_bytes must be a positive integer")
+        if max_bytes > self.max_read_bytes:
+            raise FileReadLimitExceeded(
+                f"max_bytes exceeds max_read_bytes={self.max_read_bytes}"
+            )
+        resolved = self._resolve_allowed(path)
+        self.registry.authorize(
+            lane_id,
+            fencing_token,
+            "fs.read",
+            resource_key=self._fs_resource(resolved),
+            resource_mode=ClaimMode.READ,
+        )
+        return await asyncio.to_thread(
+            self._read_bytes_chunk,
+            resolved,
+            offset,
+            max_bytes,
+        )
+
+    @staticmethod
+    def _read_bytes_chunk(
+        path: Path,
+        offset: int,
+        max_bytes: int,
+    ) -> FileChunk:
+        with path.open("rb") as handle:
+            size = os.fstat(handle.fileno()).st_size
+            if offset > size:
+                raise ValueError(
+                    f"offset {offset} exceeds file size {size}"
+                )
+            handle.seek(offset)
+            data = handle.read(max_bytes)
+        return FileChunk(offset=offset, data=data, size=size)
 
     async def write_text(
         self,
