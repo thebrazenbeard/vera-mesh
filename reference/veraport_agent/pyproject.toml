@@ -36,7 +36,9 @@ veramesh-bootstrap-local = "veraport_agent.bootstrap:main"
 veramesh-oauth-qualify = "veraport_agent.oauth_qualification:main"
 veramesh-public-gateway = "veraport_agent.public_gateway_runtime:main"
 veraport-prepare-workstation = "veraport_agent.prepare_workstation:main"
-veraport-qualify-service = "veraport_agent.qualify_service:main"\nveraport-doctor = "veraport_agent.doctor:main"\nveraport-mcp-service = "veraport_agent.windows_mcp_service:service_cli"
+veraport-qualify-service = "veraport_agent.qualify_service:main"
+veraport-doctor = "veraport_agent.doctor:main"
+veraport-mcp-service = "veraport_agent.windows_mcp_service:service_cli"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
