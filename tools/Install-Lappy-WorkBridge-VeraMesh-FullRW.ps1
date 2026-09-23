@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$VeraMeshSourceCommit = "aa56672e0d0d79927a895add673bbb8b2bb78f8d"
+$VeraMeshSourceCommit = "1e23849eeff9903c8419d5dabf3cebce96962e51"
 $WorkBridgeSourceCommit = "db56871f74f641a0819a601fe166e3241352edaf"
 $Root = "C:\ProgramData\VeraMesh"
 $ServiceConfig = Join-Path $Root "veraport.json"
@@ -168,7 +168,7 @@ try {
     }
 
     $packageRoot = Join-Path $veraMeshRepo "reference\veraport_agent"
-    $upgradeDriver = Join-Path $StageRoot "invoke-controller-capability-upgrade.py"
+    $upgradeDriver = Join-Path $StageRoot "invoke-filesystem-only-reconcile.py"
     $upgradeDriverSource = @'
 from __future__ import annotations
 
@@ -184,7 +184,7 @@ if not source_root.is_dir():
 
 sys.path.insert(0, str(source_root))
 
-from veraport_agent.controller_capability_upgrade import main
+from veraport_agent.filesystem_only_reconcile import main
 
 main()
 '@
@@ -207,13 +207,10 @@ main()
         $upgrade = (($upgradeOutput | ForEach-Object { [string]$_ }) -join [Environment]::NewLine) | ConvertFrom-Json
     }
     catch {
-        throw "VeraMesh read/write upgrade did not return valid JSON."
+        throw "VeraMesh filesystem-only reconcile did not return valid JSON."
     }
-    if (($upgrade.capabilities_after -join ",") -ne "fs.read,fs.write") {
-        throw "VeraMesh tunnel controller did not reach exact fs.read+fs.write."
-    }
-    if ($upgrade.process_execution_enabled -eq $true) {
-        throw "VeraMesh process execution unexpectedly became enabled."
+    if ([string]$upgrade.schema -ne "VERAMESH_FILESYSTEM_ONLY_RECONCILE_V1") {
+        throw "Unexpected VeraMesh filesystem-only reconcile result schema."
     }
 
     if ($upgrade.service_restart_required -eq $true) {
@@ -282,7 +279,7 @@ main()
             VeraPortAgent = (Get-Service -Name "VeraPortAgent").Status.ToString()
             VeraMeshTunnelRuntime = (Get-Service -Name "VeraMeshTunnelRuntime").Status.ToString()
             doctor = $doctorResult
-            capability_upgrade = $upgrade
+            filesystem_only_reconcile = $upgrade
         }
         effects = [ordered]@{
             firewall_changed = $false
