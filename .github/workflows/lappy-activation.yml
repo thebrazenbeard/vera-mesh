@@ -141,7 +141,7 @@ jobs:
           foreach ($required in @(
             'db56871f74f641a0819a601fe166e3241352edaf',
             '1e23849eeff9903c8419d5dabf3cebce96962e51',
-            'invoke-controller-capability-upgrade.py',
+            'invoke-filesystem-only-reconcile.py',
             'sys.path.insert(0, str(source_root))',
             'fs.read,fs.write',
             'process_enabled = $false',
