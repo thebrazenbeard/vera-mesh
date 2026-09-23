@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$VeraMeshSourceCommit = "aa56672e0d0d79927a895add673bbb8b2bb78f8d"
+$VeraMeshSourceCommit = "1e23849eeff9903c8419d5dabf3cebce96962e51"
 $Root = "C:\ProgramData\VeraMesh"
 $ServiceConfig = Join-Path $Root "veraport.json"
 $ControllerConfig = Join-Path $Root "controller.json"
@@ -73,13 +73,9 @@ foreach ($required in @($ServiceConfig, $ControllerConfig, $TunnelConfig, $Runti
     }
 }
 
-$service = Read-StrictJson $ServiceConfig
-$controller = Read-StrictJson $ControllerConfig
-
-# Capability/trust/process-operation validation is deliberately delegated to
-# controller_capability_upgrade.py, which uses the same VeraPort Python config
-# and trust parsers as the live runtime. Do not duplicate those semantics in
-# Windows PowerShell, where JSON array/scalar coercion can diverge.
+# Service/controller authority is deliberately interpreted by the VeraPort
+# Python runtime below. PowerShell only orchestrates the bounded reconcile and
+# independently checks service/tunnel health afterward.
 
 $plan = [ordered]@{
     schema = "VERAMESH_EXISTING_LAPPY_READWRITE_UPGRADE_PLAN_V1"
@@ -99,9 +95,7 @@ if (-not $Apply) {
 }
 
 Assert-Administrator
-$serviceHashBefore = Get-FileSha256 $ServiceConfig
 $tunnelHashBefore = Get-FileSha256 $TunnelConfig
-$allowedRootsBefore = @($service.allowed_roots | ForEach-Object { [string]$_ })
 
 New-Item -ItemType Directory -Force -Path $StageRoot | Out-Null
 try {
@@ -117,12 +111,12 @@ try {
     }
 
     $packageRoot = Join-Path $dirs[0].FullName "reference\veraport_agent"
-    $upgradeModule = Join-Path $packageRoot "veraport_agent\controller_capability_upgrade.py"
+    $upgradeModule = Join-Path $packageRoot "veraport_agent\filesystem_only_reconcile.py"
     if (-not (Test-Path -LiteralPath $upgradeModule -PathType Leaf)) {
-        throw "Pinned VeraMesh source is missing controller_capability_upgrade.py"
+        throw "Pinned VeraMesh source is missing filesystem_only_reconcile.py"
     }
 
-    $upgradeDriver = Join-Path $StageRoot "invoke-controller-capability-upgrade.py"
+    $upgradeDriver = Join-Path $StageRoot "invoke-filesystem-only-reconcile.py"
     $upgradeDriverSource = @'
 from __future__ import annotations
 
@@ -138,7 +132,7 @@ if not source_root.is_dir():
 
 sys.path.insert(0, str(source_root))
 
-from veraport_agent.controller_capability_upgrade import main
+from veraport_agent.filesystem_only_reconcile import main
 
 main()
 '@
@@ -154,22 +148,18 @@ main()
             --controller-config $ControllerConfig
     )
     if ($LASTEXITCODE -ne 0) {
-        throw "VeraMesh tunnel controller read/write upgrade failed."
+        throw "VeraMesh filesystem-only reconciliation failed."
     }
 
     try {
         $upgrade = (($upgradeOutput | ForEach-Object { [string]$_ }) -join [Environment]::NewLine) | ConvertFrom-Json
     }
     catch {
-        throw "VeraMesh read/write upgrade did not return valid JSON."
+        throw "VeraMesh filesystem-only reconcile did not return valid JSON."
     }
-    if (($upgrade.capabilities_after -join ",") -ne "fs.read,fs.write") {
-        throw "Controller did not reach exact fs.read+fs.write."
+    if ([string]$upgrade.schema -ne "VERAMESH_FILESYSTEM_ONLY_RECONCILE_V1") {
+        throw "Unexpected filesystem-only reconcile result schema."
     }
-    if ($upgrade.process_execution_enabled -eq $true) {
-        throw "Process execution unexpectedly became enabled."
-    }
-
     if ($upgrade.service_restart_required -eq $true) {
         Restart-Service -Name "VeraPortAgent" -Force
         Wait-ServiceRunning "VeraPortAgent"
@@ -180,18 +170,19 @@ main()
     }
 
     $doctor = Invoke-LiveDoctor
-    $serviceAfter = Read-StrictJson $ServiceConfig
     $writeOps = @("fs.write_text", "fs.append_text", "fs.mkdir", "fs.move", "fs.replace_text")
 
-    if ((Get-FileSha256 $ServiceConfig) -ne $serviceHashBefore) {
-        throw "VeraPort service config changed during controller-only upgrade."
-    }
     if ((Get-FileSha256 $TunnelConfig) -ne $tunnelHashBefore) {
-        throw "Tunnel runtime config changed during controller-only upgrade."
+        throw "Tunnel runtime config changed during filesystem-only reconcile."
     }
-    $allowedRootsAfter = @($serviceAfter.allowed_roots | ForEach-Object { [string]$_ })
-    if (($allowedRootsBefore -join [Environment]::NewLine) -ne ($allowedRootsAfter -join [Environment]::NewLine)) {
-        throw "VeraPort allowed roots changed during controller-only upgrade."
+    if ($upgrade.allowed_roots_unchanged -ne $true) {
+        throw "Filesystem-only reconcile did not preserve allowed roots."
+    }
+    if ($upgrade.identity_bindings_unchanged -ne $true) {
+        throw "Filesystem-only reconcile did not preserve identity bindings."
+    }
+    if ($upgrade.bind_unchanged -ne $true) {
+        throw "Filesystem-only reconcile did not preserve the VeraPort bind."
     }
     $processPolicy = @($doctor.checks | Where-Object { [string]$_.name -eq "process_policy" })
     if ($processPolicy.Count -ne 1 -or [string]$processPolicy[0].state -ne "PASS" -or [string]$processPolicy[0].detail -ne "process disabled") {
@@ -218,19 +209,19 @@ main()
         pass = $true
         observed_at = (Get-Date).ToString("o")
         source_commit = $VeraMeshSourceCommit
-        capabilities_before = $upgrade.capabilities_before
-        capabilities_after = $upgrade.capabilities_after
+        capabilities_before = $upgrade.controller_capabilities_before
+        capabilities_after = $upgrade.controller_capabilities_after
         write_operations = $writeOps
         process_execution = $false
         allowed_roots_unchanged = $true
-        service_config_unchanged = $true
+        service_config_changed = [bool]$upgrade.service_changed
         tunnel_config_unchanged = $true
         services = [ordered]@{
             VeraPortAgent = (Get-Service -Name "VeraPortAgent").Status.ToString()
             VeraMeshTunnelRuntime = (Get-Service -Name "VeraMeshTunnelRuntime").Status.ToString()
         }
         doctor = $doctor
-        upgrade = $upgrade
+        reconcile = $upgrade
         next_gate = "CREATE_OR_RESCAN_CHATGPT_TUNNEL_CONNECTOR_AND_RUN_READ_WRITE_CALL"
     }
     [IO.File]::WriteAllText(
