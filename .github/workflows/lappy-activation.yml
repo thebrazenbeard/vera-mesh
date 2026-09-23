@@ -140,7 +140,7 @@ jobs:
           $text = [IO.File]::ReadAllText(".\tools\Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1")
           foreach ($required in @(
             'db56871f74f641a0819a601fe166e3241352edaf',
-            'aa56672e0d0d79927a895add673bbb8b2bb78f8d',
+            '1e23849eeff9903c8419d5dabf3cebce96962e51',
             'invoke-controller-capability-upgrade.py',
             'sys.path.insert(0, str(source_root))',
             'fs.read,fs.write',
