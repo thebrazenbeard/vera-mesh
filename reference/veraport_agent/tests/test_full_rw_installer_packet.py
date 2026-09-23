@@ -22,6 +22,7 @@ def test_full_rw_installer_uses_explicit_driver_not_pythonpath():
     assert "invoke-filesystem-only-reconcile.py" in text
     assert "sys.path.insert(0, str(source_root))" in text
     assert "from veraport_agent.filesystem_only_reconcile import main" in text
+    assert "controller_capability_upgrade" not in text
     assert "$env:PYTHONPATH" not in text
     assert "fs.read,fs.write" in text
     assert "process_enabled = $false" in text
@@ -45,7 +46,7 @@ def test_embedded_upgrade_driver_imports_explicit_source_under_isolation(tmp_pat
     package = source_root / "veraport_agent"
     package.mkdir(parents=True)
     (package / "__init__.py").write_text("", encoding="utf-8")
-    (package / "controller_capability_upgrade.py").write_text(
+    (package / "filesystem_only_reconcile.py").write_text(
         "def main():\n"
         "    import json\n"
         "    print(json.dumps({'driver_import': 'PASS'}))\n",
