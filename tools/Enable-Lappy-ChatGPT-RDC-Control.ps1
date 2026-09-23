@@ -112,6 +112,10 @@ function Ensure-Running([string]$Name) {
 }
 
 function Restore-PreviousState {
+  if ($null -eq $upgrade -and -not $serviceCodeReplaced -and -not $tunnelCodeReplaced) {
+    Write-Warning "Activation failed before any VeraPort mutation; rollback is a no-op."
+    return
+  }
   Write-Warning "Restoring pre-upgrade VeraPort code and authority after failed qualification."
   try { Stop-Service VeraMeshTunnelRuntime -Force -ErrorAction SilentlyContinue } catch {}
   try { Stop-Service VeraPortAgent -Force -ErrorAction SilentlyContinue } catch {}
