@@ -95,11 +95,19 @@ func (c WorkBridgeUpstreamConfig) Validate() error {
 }
 
 type workBridgeBearerTransport struct {
-	token string
-	base  http.RoundTripper
+	token    string
+	endpoint *url.URL
+	base     http.RoundTripper
 }
 
 func (t *workBridgeBearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t.endpoint == nil || req.URL == nil ||
+		!strings.EqualFold(req.URL.Scheme, t.endpoint.Scheme) ||
+		!strings.EqualFold(req.URL.Host, t.endpoint.Host) ||
+		req.URL.EscapedPath() != t.endpoint.EscapedPath() ||
+		req.URL.RawQuery != t.endpoint.RawQuery || req.URL.User != nil || req.URL.Fragment != "" {
+		return nil, errors.New("WorkBridge request escaped its configured MCP endpoint")
+	}
 	base := t.base
 	if base == nil {
 		base = http.DefaultTransport
@@ -121,13 +129,20 @@ func NewWorkBridgeClient(ctx context.Context, cfg WorkBridgeUpstreamConfig) (*Wo
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	endpoint, err := url.Parse(strings.TrimSpace(cfg.Endpoint))
+	if err != nil {
+		return nil, err
+	}
 	token, err := loadWorkBridgeBearerToken(cfg.BearerTokenEnv)
 	if err != nil {
 		return nil, err
 	}
 	httpClient := &http.Client{
-		Timeout: time.Duration(cfg.TimeoutSeconds * float64(time.Second)),
-		Transport: &workBridgeBearerTransport{token: token},
+		Timeout:   time.Duration(cfg.TimeoutSeconds * float64(time.Second)),
+		Transport: &workBridgeBearerTransport{token: token, endpoint: endpoint},
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return errors.New("WorkBridge MCP endpoint redirected")
+		},
 	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "VeraMesh WorkBridge Upstream", Version: "0.1.0"}, nil)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
@@ -207,7 +222,6 @@ func (w *WorkBridgeClient) SupportsPublic(publicName string) bool {
 	_, ok = w.available[upstream]
 	return ok
 }
-
 
 func normalizeWorkBridgeRoots(values []string) ([]string, error) {
 	seen := map[string]struct{}{}
@@ -359,12 +373,12 @@ func (w *WorkBridgeClient) CallPublic(
 		next := end
 		eof := end >= len(rawEntries)
 		return map[string]any{
-			"path": path,
-			"entries": rawEntries[offset:end],
-			"offset": offset,
+			"path":        path,
+			"entries":     rawEntries[offset:end],
+			"offset":      offset,
 			"next_offset": next,
-			"eof": eof,
-			"backend": "workbridge",
+			"eof":         eof,
+			"backend":     "workbridge",
 		}, nil
 	case "write_file":
 		path, err := reqString(args, "path")

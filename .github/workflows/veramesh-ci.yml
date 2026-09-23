@@ -80,6 +80,36 @@ jobs:
       - name: Build gateway
         run: go build ./cmd/veramesh-gateway
 
+  workbridge-integration:
+    name: Real WorkBridge / VeraMesh HTTP integration
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: thebrazenbeard/WorkBridgeMCP
+          ref: d9e8881ca6ffa17ea5b98a6af8c0ef2b2d171f15
+          path: workbridge-source
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.12"
+          cache: false
+      - name: Build exact WorkBridge source
+        working-directory: workbridge-source
+        shell: pwsh
+        run: |
+          go mod verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go build -trimpath -o "$env:RUNNER_TEMP\workbridge-mcp.exe" ./cmd/workbridge-mcp
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exercise real WorkBridge through VeraMesh client
+        working-directory: gateway/veramesh-go
+        shell: pwsh
+        env:
+          WORKBRIDGE_BINARY: ${{ runner.temp }}\workbridge-mcp.exe
+        run: go test ./gateway -run '^TestWorkBridgeRealServerReadOnlyIntegration$' -count=1 -v
+
   repository-tools:
     name: Repository tooling
     runs-on: ubuntu-latest

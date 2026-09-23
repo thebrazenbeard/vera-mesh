@@ -18,23 +18,31 @@ func TestWorkBridgeClientDiscoversAndMapsTools(t *testing.T) {
 	mcp.AddTool(server, &mcp.Tool{Name: "workbridge_health"}, func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, map[string]any, error) {
 		return nil, map[string]any{"version": "test", "read_enabled": true, "write_enabled": true}, nil
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "workspace_read_text"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct{ Path string `json:"path"` }) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(server, &mcp.Tool{Name: "workspace_read_text"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct {
+		Path string `json:"path"`
+	}) (*mcp.CallToolResult, map[string]any, error) {
 		return nil, map[string]any{"text": "hello:" + in.Path}, nil
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "workspace_stat"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct{ Path string `json:"path"` }) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(server, &mcp.Tool{Name: "workspace_stat"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct {
+		Path string `json:"path"`
+	}) (*mcp.CallToolResult, map[string]any, error) {
 		return nil, map[string]any{"stat": map[string]any{"path": in.Path, "size": 5}}, nil
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "workspace_list"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct{ Path string `json:"path"` }) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(server, &mcp.Tool{Name: "workspace_list"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct {
+		Path string `json:"path"`
+	}) (*mcp.CallToolResult, map[string]any, error) {
 		return nil, map[string]any{"entries": []map[string]any{{"name": "a"}, {"name": "b"}, {"name": "c"}}}, nil
 	})
 	mcp.AddTool(server, &mcp.Tool{Name: "workspace_write_text"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct {
-		Path string `json:"path"`
-		Content string `json:"content"`
-		Overwrite bool `json:"overwrite"`
+		Path      string `json:"path"`
+		Content   string `json:"content"`
+		Overwrite bool   `json:"overwrite"`
 	}) (*mcp.CallToolResult, map[string]any, error) {
 		return nil, map[string]any{"bytes_written": len(in.Content), "overwrite": in.Overwrite}, nil
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "workspace_mkdir"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct{ Path string `json:"path"` }) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(server, &mcp.Tool{Name: "workspace_mkdir"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct {
+		Path string `json:"path"`
+	}) (*mcp.CallToolResult, map[string]any, error) {
 		return nil, map[string]any{"created": true}, nil
 	})
 
@@ -49,11 +57,11 @@ func TestWorkBridgeClientDiscoversAndMapsTools(t *testing.T) {
 	defer httpServer.Close()
 
 	cfg := WorkBridgeUpstreamConfig{
-		Schema: WorkBridgeUpstreamSchema,
-		Endpoint: httpServer.URL + "/mcp",
+		Schema:         WorkBridgeUpstreamSchema,
+		Endpoint:       httpServer.URL + "/mcp",
 		BearerTokenEnv: "WORKBRIDGE_TEST_TOKEN",
 		TimeoutSeconds: 5,
-		AllowedRoots: []string{"/tmp"},
+		AllowedRoots:   []string{"/tmp"},
 	}
 	client, err := NewWorkBridgeClient(context.Background(), cfg)
 	if err != nil {
@@ -83,11 +91,11 @@ func TestWorkBridgeClientDiscoversAndMapsTools(t *testing.T) {
 
 func TestWorkBridgeConfigRejectsInsecureRemoteHTTP(t *testing.T) {
 	cfg := WorkBridgeUpstreamConfig{
-		Schema: WorkBridgeUpstreamSchema,
-		Endpoint: "http://100.64.0.1:8765/mcp",
+		Schema:         WorkBridgeUpstreamSchema,
+		Endpoint:       "http://100.64.0.1:8765/mcp",
 		BearerTokenEnv: "WORKBRIDGE_HTTP_TOKEN",
 		TimeoutSeconds: 5,
-		AllowedRoots: []string{"/tmp"},
+		AllowedRoots:   []string{"/tmp"},
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("remote plaintext WorkBridge endpoint accepted")
@@ -112,17 +120,17 @@ func TestLoadWorkBridgeBearerToken(t *testing.T) {
 
 func TestWorkBridgeBackendRootCeiling(t *testing.T) {
 	client := &WorkBridgeClient{
-		available: map[string]struct{}{"workspace_read_text": {}},
+		available:    map[string]struct{}{"workspace_read_text": {}},
 		allowedRoots: []string{"C:/Users/Patrick"},
 	}
 	if !client.CanHandlePublic("read_file", map[string]any{
-		"path": "c:/users/patrick/repo/README.md",
+		"path":     "c:/users/patrick/repo/README.md",
 		"encoding": "utf-8",
 	}) {
 		t.Fatal("case-insensitive in-root Windows path was rejected")
 	}
 	if client.CanHandlePublic("read_file", map[string]any{
-		"path": "C:/Windows/System32/drivers/etc/hosts",
+		"path":     "C:/Windows/System32/drivers/etc/hosts",
 		"encoding": "utf-8",
 	}) {
 		t.Fatal("out-of-root WorkBridge path was admitted")
@@ -131,12 +139,47 @@ func TestWorkBridgeBackendRootCeiling(t *testing.T) {
 
 func TestWorkBridgeConfigRequiresExplicitIntegrationRoots(t *testing.T) {
 	cfg := WorkBridgeUpstreamConfig{
-		Schema: WorkBridgeUpstreamSchema,
-		Endpoint: "https://lappy.example.test/mcp",
+		Schema:         WorkBridgeUpstreamSchema,
+		Endpoint:       "https://lappy.example.test/mcp",
 		BearerTokenEnv: "WORKBRIDGE_HTTP_TOKEN",
 		TimeoutSeconds: 5,
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("WorkBridge config without allowed_roots was accepted")
+	}
+}
+
+func TestWorkBridgeRedirectDoesNotForwardBearerToken(t *testing.T) {
+	const token = "0123456789abcdef0123456789abcdef"
+	t.Setenv("WORKBRIDGE_REDIRECT_TOKEN", token)
+	forwarded := make(chan string, 1)
+	sink := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		forwarded <- r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer sink.Close()
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, sink.URL+"/capture", http.StatusTemporaryRedirect)
+	}))
+	defer redirector.Close()
+
+	cfg := WorkBridgeUpstreamConfig{
+		Schema:         WorkBridgeUpstreamSchema,
+		Endpoint:       redirector.URL + "/mcp",
+		BearerTokenEnv: "WORKBRIDGE_REDIRECT_TOKEN",
+		TimeoutSeconds: 5,
+		AllowedRoots:   []string{"/tmp"},
+	}
+	client, err := NewWorkBridgeClient(context.Background(), cfg)
+	if client != nil {
+		defer client.Close()
+	}
+	if err == nil {
+		t.Fatal("redirecting WorkBridge endpoint was accepted")
+	}
+	select {
+	case auth := <-forwarded:
+		t.Fatalf("redirect destination received WorkBridge bearer credential %q", auth)
+	default:
 	}
 }
