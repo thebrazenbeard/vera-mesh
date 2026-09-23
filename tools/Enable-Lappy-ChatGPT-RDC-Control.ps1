@@ -6,18 +6,15 @@ Set-StrictMode -Version Latest
 
 $SourceCommit = "720a1f446b433825e59f1119405bdfc57bccec8e"
 $Root = "C:\ProgramData\VeraMesh"
-$ProgramRoot = "C:\Program Files\VeraMesh\VeraPortAgent"
 $ServiceConfig = Join-Path $Root "veraport.json"
 $ControllerConfig = Join-Path $Root "controller.json"
 $TunnelPython = Join-Path $Root "tunnel-runtime\python.exe"
 $Doctor = Join-Path $Root "tunnel-runtime\Scripts\veraport-doctor.exe"
 $Receipt = Join-Path $Root "chatgpt-rdc-control-activation.json"
 $Stage = Join-Path $env:TEMP ("VeraMesh-RDC-Control-" + [guid]::NewGuid().ToString("N"))
+
 $upgrade = $null
-$serviceCodeReplaced = $false
 $tunnelCodeReplaced = $false
-$installedServicePackage = $null
-$servicePackageBackup = $null
 $installedTunnelPackage = $null
 $tunnelPackageBackup = $null
 $controllerTrustBefore = $null
@@ -55,20 +52,34 @@ function Download-ExactSource {
 }
 
 function Resolve-ServicePackage {
-  if (-not (Test-Path -LiteralPath $ProgramRoot -PathType Container)) {
-    throw "Existing VeraPort program root missing: $ProgramRoot"
+  $svc = Get-CimInstance Win32_Service -Filter "Name='VeraPortAgent'"
+  if (-not $svc) { throw "VeraPortAgent Win32 service metadata missing." }
+  $serviceHost = ([string]$svc.PathName).Trim().Trim('"')
+  if (-not (Test-Path -LiteralPath $serviceHost -PathType Leaf)) {
+    throw "VeraPort service host missing: $serviceHost"
   }
-  $matches = @(
-    Get-ChildItem -LiteralPath $ProgramRoot -Filter "windows_service.py" -File -Recurse -ErrorAction Stop |
-      Where-Object {
-        $_.Directory.Name -eq "veraport_agent" -and
-        $_.Directory.FullName -notmatch "\\.pre-rdc-"
-      }
-  )
-  if ($matches.Count -ne 1) {
-    throw "Expected exactly one active installed veraport_agent package under $ProgramRoot; found $($matches.Count)."
+  $pythonHome = Split-Path -Parent $serviceHost
+  $pkg = Join-Path $pythonHome "Lib\site-packages\veraport_agent"
+  if (-not (Test-Path -LiteralPath $pkg -PathType Container)) {
+    throw "Installed VeraPort package missing from service Python site-packages: $pkg"
   }
-  $matches[0].Directory.FullName
+  $pkg
+}
+
+function Assert-ServiceSurface([string]$PackagePath) {
+  $rdc = Join-Path $PackagePath "rdc_surface.py"
+  $protocol = Join-Path $PackagePath "protocol.py"
+  foreach ($p in @($rdc,$protocol)) {
+    if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { throw "Installed VeraPort surface file missing: $p" }
+  }
+  $rdcText = Get-Content -LiteralPath $rdc -Raw -Encoding UTF8
+  $protocolText = Get-Content -LiteralPath $protocol -Raw -Encoding UTF8
+  foreach ($needle in @("async def process_start","async def process_output","async def process_input","async def process_terminate")) {
+    if ($rdcText -notmatch [regex]::Escape($needle)) { throw "Installed VeraPort RDC surface missing: $needle" }
+  }
+  foreach ($needle in @('"process.start"','"process.output"','"process.input"','"process.terminate"')) {
+    if ($protocolText -notmatch [regex]::Escape($needle)) { throw "Installed VeraPort protocol missing: $needle" }
+  }
 }
 
 function Resolve-TunnelPackage {
@@ -112,11 +123,11 @@ function Ensure-Running([string]$Name) {
 }
 
 function Restore-PreviousState {
-  if ($null -eq $upgrade -and -not $serviceCodeReplaced -and -not $tunnelCodeReplaced) {
+  if ($null -eq $upgrade -and -not $tunnelCodeReplaced) {
     Write-Warning "Activation failed before any VeraPort mutation; rollback is a no-op."
     return
   }
-  Write-Warning "Restoring pre-upgrade VeraPort code and authority after failed qualification."
+  Write-Warning "Restoring pre-upgrade VeraPort authority/tunnel runtime after failed qualification."
   try { Stop-Service VeraMeshTunnelRuntime -Force -ErrorAction SilentlyContinue } catch {}
   try { Stop-Service VeraPortAgent -Force -ErrorAction SilentlyContinue } catch {}
 
@@ -128,10 +139,6 @@ function Restore-PreviousState {
     Copy-Item -LiteralPath ([string]$upgrade.service_config_backup) -Destination $ServiceConfig -Force
   }
 
-  if ($serviceCodeReplaced) {
-    Restore-PackageTree $installedServicePackage $servicePackageBackup
-    $script:serviceCodeReplaced = $false
-  }
   if ($tunnelCodeReplaced) {
     Restore-PackageTree $installedTunnelPackage $tunnelPackageBackup
     $script:tunnelCodeReplaced = $false
@@ -142,58 +149,38 @@ function Restore-PreviousState {
 }
 
 Assert-Admin
-if (-not (Test-Path -LiteralPath $ServiceConfig -PathType Leaf)) {
-  throw "Existing VeraPort config missing: $ServiceConfig"
-}
-if (-not (Get-Service VeraPortAgent -ErrorAction SilentlyContinue)) {
-  throw "VeraPortAgent service is missing."
+if (-not (Test-Path -LiteralPath $ServiceConfig -PathType Leaf)) { throw "Existing VeraPort config missing: $ServiceConfig" }
+if (-not (Get-Service VeraPortAgent -ErrorAction SilentlyContinue)) { throw "VeraPortAgent service is missing." }
+if (-not (Get-Service VeraMeshTunnelRuntime -ErrorAction SilentlyContinue)) { throw "VeraMeshTunnelRuntime service is missing." }
+foreach ($required in @($ControllerConfig,$TunnelPython,$Doctor)) {
+  if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Required tunnel material missing: $required" }
 }
 
 try {
-  Write-Host "=== Download exact full-control source ==="
+  Write-Host "=== Preflight installed VeraPort RDC surface ==="
+  $installedServicePackage = Resolve-ServicePackage
+  Assert-ServiceSurface $installedServicePackage
+  Write-Host "Service package: $installedServicePackage"
+
+  Write-Host "=== Download exact controller/tunnel source ==="
   $source = Download-ExactSource
-  $packageRoot = Join-Path $source "reference\veraport_agent"
-  $sourcePackage = Join-Path $packageRoot "veraport_agent"
-  $attachScript = Join-Path $source "tools\windows_attach_existing_lappy_veramesh.ps1"
+  $sourcePackage = Join-Path $source "reference\veraport_agent\veraport_agent"
   foreach ($required in @(
     (Join-Path $sourcePackage "controller_full_control_upgrade.py"),
-    (Join-Path $sourcePackage "full_control_qualification.py"),
-    (Join-Path $sourcePackage "rdc_surface.py"),
-    $attachScript
+    (Join-Path $sourcePackage "full_control_qualification.py")
   )) {
-    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-      throw "Pinned source missing: $required"
-    }
-  }
-
-  if (-not (Test-Path -LiteralPath $ControllerConfig -PathType Leaf) -or
-      -not (Test-Path -LiteralPath $TunnelPython -PathType Leaf) -or
-      -not (Get-Service VeraMeshTunnelRuntime -ErrorAction SilentlyContinue)) {
-    Write-Host "=== Existing Secure MCP tunnel is incomplete; attach/resume it first ==="
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $attachScript -Apply
-    if ($LASTEXITCODE -ne 0) { throw "Secure MCP tunnel attach/resume failed." }
-  }
-
-  foreach ($required in @($ControllerConfig,$TunnelPython,$Doctor)) {
-    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-      throw "Required tunnel material missing after attach: $required"
-    }
+    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Pinned source missing: $required" }
   }
 
   $serviceBefore = Read-Json $ServiceConfig
   $rootsBefore = @($serviceBefore.allowed_roots | ForEach-Object { [string]$_ })
   $controllerTrustBefore = [string]$serviceBefore.controller_trust
-  $installedServicePackage = Resolve-ServicePackage
   $installedTunnelPackage = Resolve-TunnelPackage
-
   $stamp = [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssZ")
-  $servicePackageBackup = $installedServicePackage + ".pre-rdc-" + $stamp
   $tunnelPackageBackup = $installedTunnelPackage + ".pre-rdc-" + $stamp
-
-  Write-Host "Service package: $installedServicePackage"
   Write-Host "Tunnel package:  $installedTunnelPackage"
 
-  Write-Host "=== Stop only VeraPort/tunnel services for atomic code + authority reload ==="
+  Write-Host "=== Stop only VeraPort/tunnel services for bounded authority reload ==="
   if ((Get-Service VeraMeshTunnelRuntime).Status.ToString() -eq "Running") {
     Stop-Service VeraMeshTunnelRuntime -Force
     Wait-ServiceState VeraMeshTunnelRuntime "Stopped"
@@ -203,9 +190,7 @@ try {
     Wait-ServiceState VeraPortAgent "Stopped"
   }
 
-  Write-Host "=== Replace exact VeraPort code trees with rollback backups ==="
-  Replace-PackageTree $installedServicePackage $sourcePackage $servicePackageBackup
-  $serviceCodeReplaced = $true
+  Write-Host "=== Update only tunnel-side VeraPort control code ==="
   Replace-PackageTree $installedTunnelPackage $sourcePackage $tunnelPackageBackup
   $tunnelCodeReplaced = $true
 
@@ -216,12 +201,8 @@ try {
 
   $serviceAfter = Read-Json $ServiceConfig
   $rootsAfter = @($serviceAfter.allowed_roots | ForEach-Object { [string]$_ })
-  if (($rootsBefore -join "`n") -cne ($rootsAfter -join "`n")) {
-    throw "VeraPort allowed roots changed unexpectedly."
-  }
-  if ($serviceAfter.allow_process_exec -ne $true) {
-    throw "VeraPort process execution did not become enabled."
-  }
+  if (($rootsBefore -join "`n") -cne ($rootsAfter -join "`n")) { throw "VeraPort allowed roots changed unexpectedly." }
+  if ($serviceAfter.allow_process_exec -ne $true) { throw "VeraPort process execution did not become enabled." }
 
   Write-Host "=== Restart VeraPort and Secure MCP tunnel ==="
   Start-Service VeraPortAgent
@@ -234,27 +215,21 @@ try {
   for ($i=1; $i -le 18; $i++) {
     $d = @(& $Doctor --live --tunnel-status)
     if ($LASTEXITCODE -eq 0) {
-      try {
-        $doctorResult = (($d | ForEach-Object { [string]$_ }) -join [Environment]::NewLine) | ConvertFrom-Json
-      } catch {}
+      try { $doctorResult = (($d | ForEach-Object { [string]$_ }) -join [Environment]::NewLine) | ConvertFrom-Json } catch {}
       if ($doctorResult -and $doctorResult.ok -eq $true) { break }
     }
     Start-Sleep -Seconds 5
   }
-  if (-not $doctorResult -or $doctorResult.ok -ne $true) {
-    throw "Secure MCP tunnel did not return to authenticated healthy state."
-  }
+  if (-not $doctorResult -or $doctorResult.ok -ne $true) { throw "Secure MCP tunnel did not return to authenticated healthy state." }
 
   Write-Host "=== Prove file control + one-shot + managed process control ==="
   $qraw = @(& $TunnelPython -m veraport_agent.full_control_qualification --controller-config $ControllerConfig --root "C:\Temp")
   if ($LASTEXITCODE -ne 0) { throw "Full-control VeraPort qualification failed." }
   $qualification = (($qraw | ForEach-Object { [string]$_ }) -join [Environment]::NewLine) | ConvertFrom-Json
-  if ($qualification.status -ne "PASS") {
-    throw "Full-control qualification did not return PASS."
-  }
+  if ($qualification.status -ne "PASS") { throw "Full-control qualification did not return PASS." }
 
   $receiptDoc = [ordered]@{
-    schema = "VERAMESH_CHATGPT_RDC_CONTROL_ACTIVATION_V2"
+    schema = "VERAMESH_CHATGPT_RDC_CONTROL_ACTIVATION_V3"
     status = "PASS"
     observed_at = (Get-Date).ToString("o")
     source_commit = $SourceCommit
@@ -264,11 +239,14 @@ try {
       allowed_roots_before = $rootsBefore
       allowed_roots_after = $rootsAfter
     }
-    code = [ordered]@{
-      service_package = $installedServicePackage
-      service_backup = $servicePackageBackup
-      tunnel_package = $installedTunnelPackage
-      tunnel_backup = $tunnelPackageBackup
+    service = [ordered]@{
+      installed_package = $installedServicePackage
+      package_code_replaced = $false
+    }
+    tunnel = [ordered]@{
+      installed_package = $installedTunnelPackage
+      backup = $tunnelPackageBackup
+      package_code_replaced = $true
     }
     services = [ordered]@{
       VeraPortAgent = (Get-Service VeraPortAgent).Status.ToString()
@@ -278,23 +256,14 @@ try {
     qualification = $qualification
     next_gate = "SELECT_SECURE_MCP_TUNNEL_IN_CHATGPT_AND_RUN_TOOL_CALL"
   }
-  [IO.File]::WriteAllText(
-    $Receipt,
-    ($receiptDoc | ConvertTo-Json -Depth 30) + [Environment]::NewLine,
-    [Text.UTF8Encoding]::new($false)
-  )
+  [IO.File]::WriteAllText($Receipt, ($receiptDoc | ConvertTo-Json -Depth 30) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
   Write-Host ""
   Write-Host "VERA -> LAPPY RDC-CLASS CONTROL LOCALLY QUALIFIED."
   Write-Host "Receipt: $Receipt"
   $receiptDoc | ConvertTo-Json -Depth 30
 }
 catch {
-  try {
-    Restore-PreviousState
-  }
-  catch {
-    Write-Warning ("Rollback failed: " + $_.Exception.Message)
-  }
+  try { Restore-PreviousState } catch { Write-Warning ("Rollback failed: " + $_.Exception.Message) }
   throw
 }
 finally {
