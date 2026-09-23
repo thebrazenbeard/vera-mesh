@@ -26,6 +26,7 @@ class WindowsServiceConfig:
     max_lanes: int = 32
     max_inflight: int = 64
     max_read_bytes: int = 1_048_576
+    workbridge_config: Path | None = None
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "WindowsServiceConfig":
@@ -55,6 +56,10 @@ class WindowsServiceConfig:
             max_lanes=int(value.get("max_lanes", 32)),
             max_inflight=int(value.get("max_inflight", 64)),
             max_read_bytes=int(value.get("max_read_bytes", 1_048_576)),
+            workbridge_config=(
+                Path(str(value["workbridge_config"])).expanduser().resolve()
+                if value.get("workbridge_config") else None
+            ),
         )
         cfg.validate_static()
         return cfg
@@ -96,3 +101,7 @@ class WindowsServiceConfig:
         for root in self.allowed_roots:
             if not root.is_dir():
                 raise ServiceConfigError(f"allowed root does not exist: {root}")
+        if self.workbridge_config is not None and not self.workbridge_config.is_file():
+            raise ServiceConfigError(
+                f"WorkBridge local config missing: {self.workbridge_config}"
+            )

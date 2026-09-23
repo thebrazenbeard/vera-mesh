@@ -170,3 +170,45 @@ def test_process_policy_expands_to_exec_inspect_and_control(tmp_path):
         "process.interact",
         "process.control",
     })
+
+
+def test_prepare_composes_optional_workbridge_after_registry(tmp_path):
+    events = []
+    value = cfg(tmp_path)
+    wb = tmp_path / "workbridge-local.json"
+    wb.write_text("{}", encoding="utf-8")
+    value = WindowsServiceConfig.from_dict({
+        "bind_host": value.bind_host,
+        "bind_port": value.bind_port,
+        "allowed_roots": [str(root) for root in value.allowed_roots],
+        "state_db": str(value.state_db),
+        "tls_cert": str(value.tls_cert),
+        "tls_key": str(value.tls_key),
+        "workstation_key": str(value.workstation_key),
+        "controller_trust": str(value.controller_trust),
+        "workbridge_config": str(wb),
+    })
+
+    base = deps(events)
+    captured = {}
+    class WB:
+        @classmethod
+        def load(cls, path, *, registry):
+            events.append("workbridge")
+            captured["path"] = path
+            captured["registry"] = registry
+            return object()
+    def agent(registry, executor, state, *, workbridge=None):
+        events.append("agent")
+        captured["workbridge"] = workbridge
+        return object()
+    wrapped = HostDependencies(
+        base.load_identity, base.state_store_cls, base.lane_registry_cls,
+        base.executor_cls, agent, base.authenticator_cls,
+        base.handler_factory_cls, base.make_server_context,
+        base.serve_tls_connection, base.start_server, WB,
+    )
+    prepare_host(value, deps=wrapped)
+    assert events.index("registry") < events.index("workbridge") < events.index("agent")
+    assert captured["path"] == wb.resolve()
+    assert captured["workbridge"] is not None

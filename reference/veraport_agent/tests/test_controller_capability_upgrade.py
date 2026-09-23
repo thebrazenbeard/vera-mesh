@@ -24,8 +24,15 @@ def fixture(tmp_path: Path):
     identity.mkdir(parents=True)
     manifest = provision_local_pair(
         identity,
-        capabilities={"fs.read"},
+        capabilities={"fs.read", "fs.write"},
         harden_windows_acl=False,
+    )
+    trust_path = identity / "controller-trust.json"
+    trust = json.loads(trust_path.read_text(encoding="utf-8"))
+    trust["controllers"][0]["capabilities"] = ["fs.read"]
+    trust_path.write_text(
+        json.dumps(trust, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
     )
     allowed = tmp_path / "allowed"
     allowed.mkdir()

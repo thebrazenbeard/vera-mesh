@@ -86,3 +86,15 @@ def test_read_bound_defaults_and_is_policy_bounded(tmp_path):
         WindowsServiceConfig.from_dict(config(tmp_path, max_read_bytes=0))
     with pytest.raises(ServiceConfigError, match="max_read_bytes"):
         WindowsServiceConfig.from_dict(config(tmp_path, max_read_bytes=16_777_217))
+
+
+def test_optional_workbridge_config_must_exist_at_runtime(tmp_path):
+    value = config(tmp_path, workbridge_config=str(tmp_path / "workbridge-local.json"))
+    for key in ("tls_cert", "tls_key", "workstation_key", "controller_trust"):
+        Path(value[key]).write_text("placeholder", encoding="utf-8")
+    cfg = WindowsServiceConfig.from_dict(value)
+    assert cfg.workbridge_config == (tmp_path / "workbridge-local.json").resolve()
+    with pytest.raises(ServiceConfigError, match="WorkBridge local config missing"):
+        cfg.validate_runtime_files()
+    cfg.workbridge_config.write_text("{}", encoding="utf-8")
+    cfg.validate_runtime_files()
