@@ -26,6 +26,8 @@ def test_resume_packet_is_module_only_and_preservation_bounded():
     assert "Start-Service -Name \"VeraMeshTunnelRuntime\"" in text
     assert "veraport-doctor.exe" in text
     assert '$RuntimePython -I -c "import veraport_agent.tunnel_runtime_service as m; print(m.__file__)"' in text
+    assert "Resolve-Path -LiteralPath $RuntimeDir" in text
+    assert "Resolve-Path -LiteralPath $InstalledModule" in text
     assert "VeraPortAgent restarted during tunnel resume" in text
     assert "runtime_key_unchanged = $true" in text
     assert "controller_trust_changed = $false" in text
