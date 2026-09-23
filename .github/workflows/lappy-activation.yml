@@ -95,28 +95,6 @@ jobs:
             if (-not $output.Contains($required)) {
               Write-Error "Plan output missing required marker: $required"
               Write-Host $output
-
-      - name: Verify one-shot full read-write installer contract
-        shell: pwsh
-        run: |
-          $text = [IO.File]::ReadAllText(".\tools\Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1")
-          foreach ($required in @(
-            'db56871f74f641a0819a601fe166e3241352edaf',
-            '432e870eff5d230ce33089f669ef9a7e8ef755af',
-            'fs.read,fs.write',
-            'process_enabled = $false',
-            'roots_broadened = $false',
-            'veraport-doctor --live --tunnel-status'
-          )) {
-            if (-not $text.Contains($required)) {
-              Write-Error "One-shot installer missing required marker: $required"
-              exit 1
-            }
-          }
-          if ($text.Contains('"process.exec"') -or $text.Contains('"process.start"')) {
-            Write-Error "One-shot installer unexpectedly contains process gateway operations"
-            exit 1
-          }
               exit 1
             }
           }
@@ -152,3 +130,25 @@ jobs:
             exit 1
           }
           Write-Host $output
+
+      - name: Verify one-shot full read-write installer contract
+        shell: pwsh
+        run: |
+          $text = [IO.File]::ReadAllText(".\tools\Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1")
+          foreach ($required in @(
+            'db56871f74f641a0819a601fe166e3241352edaf',
+            '432e870eff5d230ce33089f669ef9a7e8ef755af',
+            'fs.read,fs.write',
+            'process_enabled = $false',
+            'roots_broadened = $false',
+            'veraport-doctor --live --tunnel-status'
+          )) {
+            if (-not $text.Contains($required)) {
+              Write-Error "One-shot installer missing required marker: $required"
+              exit 1
+            }
+          }
+          if ($text.Contains('"process.exec"') -or $text.Contains('"process.start"')) {
+            Write-Error "One-shot installer unexpectedly contains process gateway operations"
+            exit 1
+          }
