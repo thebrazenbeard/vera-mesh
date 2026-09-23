@@ -75,9 +75,6 @@ foreach ($required in @($ServiceConfig, $ControllerConfig, $TunnelConfig, $Runti
 
 $service = Read-StrictJson $ServiceConfig
 $controller = Read-StrictJson $ControllerConfig
-if ($service.allow_process_exec -eq $true) {
-    throw "Refusing filesystem-only upgrade because VeraPort process execution is enabled."
-}
 
 $currentCaps = @($controller.requested_capabilities | ForEach-Object { [string]$_ } | Sort-Object)
 $currentCapsJoined = $currentCaps -join ","
@@ -216,8 +213,9 @@ main()
     if (($allowedRootsBefore -join [Environment]::NewLine) -ne ($allowedRootsAfter -join [Environment]::NewLine)) {
         throw "VeraPort allowed roots changed during controller-only upgrade."
     }
-    if ($serviceAfter.allow_process_exec -eq $true) {
-        throw "VeraPort process execution became enabled."
+    $processPolicy = @($doctor.checks | Where-Object { [string]$_.name -eq "process_policy" })
+    if ($processPolicy.Count -ne 1 -or [string]$processPolicy[0].state -ne "PASS" -or [string]$processPolicy[0].detail -ne "process disabled") {
+        throw "Live doctor does not confirm process execution remains disabled."
     }
 
     $machine = $doctor.machine_info
