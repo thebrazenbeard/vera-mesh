@@ -143,8 +143,17 @@ try {
         Wait-ServiceState "VeraPortAgent" ([System.ServiceProcess.ServiceControllerStatus]::Stopped)
     }
 
+    Write-Host "Building exact VeraPort wheel before changing the installed runtime..."
+    $wheelDir = Join-Path $StageRoot "wheel"
+    New-Item -ItemType Directory -Force -Path $wheelDir | Out-Null
+    $wheelArgs = @("-m","pip","wheel","--disable-pip-version-check","--no-index","--no-deps","--no-build-isolation","--wheel-dir",$wheelDir,$packageRoot)
+    & $RuntimePython @wheelArgs | Out-Host
+    Assert-ExitCode "exact VeraPort wheel build"
+    $wheels = @(Get-ChildItem -LiteralPath $wheelDir -Filter "veraport_agent_reference-*.whl" -File)
+    if ($wheels.Count -ne 1) { throw "Expected exactly one VeraPort wheel, found $($wheels.Count)." }
+
     Write-Host "Refreshing VeraPort package in existing isolated runtime..."
-    $pipArgs = @("-m","pip","install","--disable-pip-version-check","--no-index","--no-deps","--no-build-isolation","--force-reinstall",$packageRoot)
+    $pipArgs = @("-m","pip","install","--disable-pip-version-check","--no-index","--no-deps","--force-reinstall",$wheels[0].FullName)
     & $RuntimePython @pipArgs | Out-Host
     Assert-ExitCode "isolated VeraPort package refresh"
 
