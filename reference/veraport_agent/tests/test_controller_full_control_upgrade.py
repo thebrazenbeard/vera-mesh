@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from veraport_agent.controller_config import ControllerConfig
 from veraport_agent.controller_full_control_upgrade import (
     PROCESS_OPERATIONS,
@@ -13,6 +15,7 @@ from veraport_agent.controller_full_control_upgrade import (
 from veraport_agent.existing_install_attach import prepare_existing_install_tunnel_attach
 from veraport_agent.hot_session import principal_id
 from veraport_agent.identity_store import load_identity
+from veraport_agent.full_control_qualification import _result
 from veraport_agent.provision import provision_local_pair
 
 
@@ -133,3 +136,12 @@ def test_full_control_upgrade_is_idempotent(tmp_path):
     assert service.read_bytes() == service_after
     assert controller_config.read_bytes() == controller_after
     assert first["controller_principal"] == second["controller_principal"]
+
+
+def test_full_control_qualification_unwraps_protocol_response():
+    payload = {"ok": True, "result": {"content": "sentinel"}}
+    assert _result(payload, "fs.read_text") == {"content": "sentinel"}
+    with pytest.raises(RuntimeError, match="failed"):
+        _result({"ok": False, "error": {"code": "DENIED"}}, "fs.read_text")
+    with pytest.raises(RuntimeError, match="no result object"):
+        _result({"ok": True}, "fs.read_text")
