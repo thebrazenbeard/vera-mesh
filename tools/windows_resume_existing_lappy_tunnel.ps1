@@ -226,10 +226,15 @@ $InstalledModule = ([string]$moduleOutput[-1]).Trim()
 if ([string]::IsNullOrWhiteSpace($InstalledModule) -or -not (Test-Path -LiteralPath $InstalledModule -PathType Leaf)) {
     throw "Installed tunnel runtime module could not be located."
 }
-$runtimePrefix = [IO.Path]::GetFullPath($RuntimeDir).TrimEnd("\\") + "\\"
-$moduleFull = [IO.Path]::GetFullPath($InstalledModule)
-if (-not $moduleFull.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) {
-    throw "Installed tunnel runtime module escaped the isolated runtime directory."
+$runtimeResolved = [IO.Path]::GetFullPath(
+    (Resolve-Path -LiteralPath $RuntimeDir -ErrorAction Stop).ProviderPath
+).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+$moduleResolved = [IO.Path]::GetFullPath(
+    (Resolve-Path -LiteralPath $InstalledModule -ErrorAction Stop).ProviderPath
+)
+$runtimePrefix = $runtimeResolved + [IO.Path]::DirectorySeparatorChar
+if (-not $moduleResolved.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Installed tunnel runtime module escaped the isolated runtime directory. runtime=$runtimeResolved module=$moduleResolved"
 }
 
 $preservationRoots = @(
