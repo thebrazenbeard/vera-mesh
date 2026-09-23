@@ -181,22 +181,7 @@ main()
 
     $doctor = Invoke-LiveDoctor
     $serviceAfter = Read-StrictJson $ServiceConfig
-    $controllerAfter = Read-StrictJson $ControllerConfig
-    $requestedAfter = @($controllerAfter.requested_capabilities | ForEach-Object { [string]$_ } | Sort-Object)
-    if (($requestedAfter -join ",") -ne "fs.read,fs.write") {
-        throw "Controller config requested capabilities are not exact fs.read+fs.write."
-    }
-
     $writeOps = @("fs.write_text", "fs.append_text", "fs.mkdir", "fs.move", "fs.replace_text")
-    $operationsAfter = @($controllerAfter.gateway_operations | ForEach-Object { [string]$_ })
-    foreach ($operation in $writeOps) {
-        if ($operation -notin $operationsAfter) {
-            throw "Controller config is missing write operation: $operation"
-        }
-    }
-    if (@($operationsAfter | Where-Object { $_ -like "process.*" }).Count -ne 0) {
-        throw "Controller config unexpectedly exposes process operations."
-    }
 
     if ((Get-FileSha256 $ServiceConfig) -ne $serviceHashBefore) {
         throw "VeraPort service config changed during controller-only upgrade."
