@@ -88,7 +88,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: thebrazenbeard/WorkBridgeMCP
-          ref: 42d104e6fce8947792af59258f10f39925420ae3
+          ref: d9e8881ca6ffa17ea5b98a6af8c0ef2b2d171f15
           path: workbridge-source
           persist-credentials: false
       - uses: actions/setup-go@v6
