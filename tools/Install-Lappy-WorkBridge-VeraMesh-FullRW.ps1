@@ -168,16 +168,39 @@ try {
     }
 
     $packageRoot = Join-Path $veraMeshRepo "reference\veraport_agent"
-    $oldPythonPath = $env:PYTHONPATH
-    try {
-        $env:PYTHONPATH = $packageRoot
-        $upgradeOutput = @(& $RuntimePython -m veraport_agent.controller_capability_upgrade --service-config $ServiceConfig --controller-config $ControllerConfig)
-        if ($LASTEXITCODE -ne 0) {
-            throw "VeraMesh tunnel controller read/write upgrade failed."
-        }
-    }
-    finally {
-        $env:PYTHONPATH = $oldPythonPath
+    $upgradeDriver = Join-Path $StageRoot "invoke-controller-capability-upgrade.py"
+    $upgradeDriverSource = @'
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+if len(sys.argv) < 2:
+    raise SystemExit("source root argument is required")
+
+source_root = Path(sys.argv.pop(1)).resolve()
+if not source_root.is_dir():
+    raise SystemExit(f"source root is not a directory: {source_root}")
+
+sys.path.insert(0, str(source_root))
+
+from veraport_agent.controller_capability_upgrade import main
+
+main()
+'@
+    [IO.File]::WriteAllText(
+        $upgradeDriver,
+        $upgradeDriverSource,
+        [Text.UTF8Encoding]::new($false)
+    )
+
+    $upgradeOutput = @(
+        & $RuntimePython $upgradeDriver $packageRoot `
+            --service-config $ServiceConfig `
+            --controller-config $ControllerConfig
+    )
+    if ($LASTEXITCODE -ne 0) {
+        throw "VeraMesh tunnel controller read/write upgrade failed."
     }
 
     try {
