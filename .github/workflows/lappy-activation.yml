@@ -64,6 +64,8 @@ jobs:
         run: |
           python -m pytest -q ^
             reference/veraport_agent/tests/test_lappy_activation_packet.py ^
+            reference/veraport_agent/tests/test_existing_lappy_tunnel_attach_packet.py ^
+            reference/veraport_agent/tests/test_existing_lappy_tunnel_resume_packet.py ^
             reference/veraport_agent/tests/test_windows_acl.py ^
             reference/veraport_agent/tests/test_tunnel_runtime_service.py ^
             reference/veraport_agent/tests/test_windows_service.py ^
@@ -86,6 +88,33 @@ jobs:
             if (-not $output.Contains($required)) {
               Write-Error "Plan output missing required marker: $required"
               Write-Host $output
+
+      - name: Execute tunnel-resume plan only
+        shell: pwsh
+        run: |
+          $output = & .\tools\windows_resume_existing_lappy_tunnel.ps1 *>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error $output
+            exit $LASTEXITCODE
+          }
+          foreach ($required in @(
+            "VERAMESH_EXISTING_LAPPY_TUNNEL_RESUME_PLAN_V1",
+            '"module_only": true',
+            '"veraport_restart": false',
+            '"credentials_changed": false',
+            "PLAN ONLY"
+          )) {
+            if (-not $output.Contains($required)) {
+              Write-Error "Resume plan output missing required marker: $required"
+              Write-Host $output
+              exit 1
+            }
+          }
+          if ($output.Contains("Invoke-WebRequest")) {
+            Write-Error "Resume plan-only execution crossed into apply/download effects"
+            exit 1
+          }
+          Write-Host $output
               exit 1
             }
           }

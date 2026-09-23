@@ -221,7 +221,12 @@ if (-not (Test-Path -LiteralPath $ServiceConfig -PathType Leaf)) {
     throw "Existing VeraPort config not found: $ServiceConfig"
 }
 if (Get-Service -Name "VeraMeshTunnelRuntime" -ErrorAction SilentlyContinue) {
-    throw "VeraMeshTunnelRuntime already exists. Refusing to overwrite; reconcile existing tunnel state first."
+    $resumeScript = Join-Path $PSScriptRoot "windows_resume_existing_lappy_tunnel.ps1"
+    if (-not (Test-Path -LiteralPath $resumeScript -PathType Leaf)) {
+        throw "VeraMeshTunnelRuntime already exists and the bounded resume packet is missing: $resumeScript"
+    }
+    & $resumeScript -Apply
+    exit $LASTEXITCODE
 }
 foreach ($path in @(
     (Join-Path $Root "controller.json"),

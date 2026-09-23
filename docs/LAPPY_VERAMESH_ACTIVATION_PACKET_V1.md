@@ -69,6 +69,24 @@ Intended route:
 
 RDC is not a dependency.
 
+## Partial-state resume after tunnel runtime installation
+
+If a prior attach reached controller/tunnel material creation and installed `VeraMeshTunnelRuntime` but failed the final doctor gate, the fresh attach packet does not overwrite that state. It dispatches to:
+
+`tools/windows_resume_existing_lappy_tunnel.ps1`
+
+The resume packet is intentionally narrower than a fresh attach:
+
+- it requires the existing VeraPort service, exact read-only tunnel controller config, existing tunnel config, runtime key, tunnel client, and MCP executable;
+- it downloads exactly one module from immutable VeraMesh source `56a6334565352aee46cd20789b8a40282f7da8a9` and verifies Git blob `f7210d2703552b280a73a2df4137553f1971d2f6`;
+- it backs up and replaces only the isolated installed `veraport_agent/tunnel_runtime_service.py` module;
+- it restarts only `VeraMeshTunnelRuntime`, never `VeraPortAgent`;
+- it does not regenerate, rotate, or rewrite controller credentials, controller trust, tunnel ID, runtime key, allowed roots, process policy, firewall, or Tailscale state;
+- it verifies the VeraPort process ID, identity/controller hashes, service config, controller config, tunnel config, runtime key, tunnel-client, MCP executable, roots, and process-disabled policy remain unchanged;
+- it succeeds only when `veraport-doctor --live --tunnel-status` returns healthy authenticated VeraPort + managed tunnel state.
+
+This path exists specifically so a failed final-health check can be resumed without treating partial state as disposable or silently recreating credentials.
+
 ## Provider material
 
 The tunnel ID and restricted runtime API key are not stored in GitHub. The runtime key remains local under protected ProgramData storage and its value is excluded from receipts.

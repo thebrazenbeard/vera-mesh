@@ -34,7 +34,8 @@ def test_existing_attach_packet_is_identity_preserving_and_read_only():
     assert "changes_firewall = $false" in text
     assert "--enable-process" not in text
     assert "veraport_agent.existing_install_attach" in text
-    assert "VeraMeshTunnelRuntime already exists" in text
+    assert "windows_resume_existing_lappy_tunnel.ps1" in text
+    assert "bounded resume packet is missing" in text
 
 
 @pytest.mark.skipif(os.name != "nt", reason="PowerShell parser qualification")
