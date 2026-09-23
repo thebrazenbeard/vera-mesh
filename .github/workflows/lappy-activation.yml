@@ -88,6 +88,14 @@ jobs:
             if (-not $output.Contains($required)) {
               Write-Error "Plan output missing required marker: $required"
               Write-Host $output
+              exit 1
+            }
+          }
+          if ($output.Contains("Downloading pinned portable Python")) {
+            Write-Error "Plan-only execution crossed into apply/download effects"
+            exit 1
+          }
+          Write-Host $output
 
       - name: Execute tunnel-resume plan only
         shell: pwsh
@@ -112,14 +120,6 @@ jobs:
           }
           if ($output.Contains("Invoke-WebRequest")) {
             Write-Error "Resume plan-only execution crossed into apply/download effects"
-            exit 1
-          }
-          Write-Host $output
-              exit 1
-            }
-          }
-          if ($output.Contains("Downloading pinned portable Python")) {
-            Write-Error "Plan-only execution crossed into apply/download effects"
             exit 1
           }
           Write-Host $output
