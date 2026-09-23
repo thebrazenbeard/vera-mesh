@@ -28,6 +28,8 @@ def test_upgrade_packet_is_bounded_and_uses_explicit_driver(tmp_path):
     assert "Live doctor does not confirm process execution remains disabled." in text
     assert "$service.allow_process_exec -eq $true" not in text
     assert "$serviceAfter.allow_process_exec -eq $true" not in text
+    assert "Existing controller capabilities must be exact fs.read" not in text
+    assert "RUNTIME_AUTHORITATIVE_PREFLIGHT_ON_APPLY" in text
     assert 'allowed_roots_change = $false' in text
     assert 'reinstall = $false' in text
     assert '"fs.read", "fs.write"' in text
