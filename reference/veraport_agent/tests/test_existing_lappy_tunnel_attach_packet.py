@@ -16,7 +16,7 @@ SCRIPT = (
 
 def test_existing_attach_packet_is_identity_preserving_and_read_only():
     text = SCRIPT.read_text(encoding="utf-8").replace("\r\n", "\n")
-    assert "72d18d8267365f7f10a8068b232b43fd1c8f48a2" in text
+    assert "56a6334565352aee46cd20789b8a40282f7da8a9" in text
     assert "v0.0.14" in text
     assert "784ab8da7b5a88f0109f1fd8aaf0a1c86067430b896dddf307ef7e3cc49fa1a5" in text
     assert "vera-controller-bootstrap.pem" in text
