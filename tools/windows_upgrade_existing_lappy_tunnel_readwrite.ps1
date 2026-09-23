@@ -76,21 +76,16 @@ foreach ($required in @($ServiceConfig, $ControllerConfig, $TunnelConfig, $Runti
 $service = Read-StrictJson $ServiceConfig
 $controller = Read-StrictJson $ControllerConfig
 
-$currentCaps = @($controller.requested_capabilities | ForEach-Object { [string]$_ } | Sort-Object)
-$currentCapsJoined = $currentCaps -join ","
-if ($currentCapsJoined -ne "fs.read" -and $currentCapsJoined -ne "fs.read,fs.write") {
-    throw "Existing controller capabilities must be exact fs.read or exact fs.read+fs.write."
-}
-$currentOps = @($controller.gateway_operations | ForEach-Object { [string]$_ })
-if (@($currentOps | Where-Object { $_ -like "process.*" }).Count -ne 0) {
-    throw "Existing controller unexpectedly contains process operations."
-}
+# Capability/trust/process-operation validation is deliberately delegated to
+# controller_capability_upgrade.py, which uses the same VeraPort Python config
+# and trust parsers as the live runtime. Do not duplicate those semantics in
+# Windows PowerShell, where JSON array/scalar coercion can diverge.
 
 $plan = [ordered]@{
     schema = "VERAMESH_EXISTING_LAPPY_READWRITE_UPGRADE_PLAN_V1"
     apply = [bool]$Apply
     source_commit = $VeraMeshSourceCommit
-    capabilities_before = $currentCaps
+    capabilities_before = "RUNTIME_AUTHORITATIVE_PREFLIGHT_ON_APPLY"
     capabilities_after = @("fs.read", "fs.write")
     process_execution = $false
     allowed_roots_change = $false
