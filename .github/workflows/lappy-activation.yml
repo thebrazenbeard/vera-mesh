@@ -72,6 +72,7 @@ jobs:
             reference/veraport_agent/tests/test_lappy_activation_packet.py ^
             reference/veraport_agent/tests/test_existing_lappy_tunnel_attach_packet.py ^
             reference/veraport_agent/tests/test_existing_lappy_tunnel_resume_packet.py ^
+            reference/veraport_agent/tests/test_full_rw_installer_packet.py ^
             reference/veraport_agent/tests/test_controller_capability_upgrade.py ^
             reference/veraport_agent/tests/test_windows_acl.py ^
             reference/veraport_agent/tests/test_tunnel_runtime_service.py ^
@@ -137,7 +138,9 @@ jobs:
           $text = [IO.File]::ReadAllText(".\tools\Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1")
           foreach ($required in @(
             'db56871f74f641a0819a601fe166e3241352edaf',
-            '432e870eff5d230ce33089f669ef9a7e8ef755af',
+            'aa56672e0d0d79927a895add673bbb8b2bb78f8d',
+            'invoke-controller-capability-upgrade.py',
+            'sys.path.insert(0, str(source_root))',
             'fs.read,fs.write',
             'process_enabled = $false',
             'roots_broadened = $false',
