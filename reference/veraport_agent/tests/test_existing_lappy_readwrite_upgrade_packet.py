@@ -52,7 +52,7 @@ def test_upgrade_packet_is_bounded_and_uses_explicit_driver(tmp_path):
     package = source_root / "veraport_agent"
     package.mkdir(parents=True)
     (package / "__init__.py").write_text("", encoding="utf-8")
-    (package / "controller_capability_upgrade.py").write_text(
+    (package / "filesystem_only_reconcile.py").write_text(
         "def main():\n"
         "    import json\n"
         "    print(json.dumps({'driver_import': 'PASS'}))\n",
