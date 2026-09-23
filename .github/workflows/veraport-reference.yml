@@ -84,6 +84,10 @@ jobs:
         run: python -m pip wheel --no-deps "./reference/veraport_agent" --wheel-dir wheelhouse
       - name: Test
         run: python -m pytest -q reference/veraport_agent/tests
+      - name: Parse C Vera WorkBridge read activation script
+        shell: pwsh
+        run: |
+          [scriptblock]::Create((Get-Content -Raw .\tools\Enable-Lappy-CVera-WorkBridgeRead.ps1)) | Out-Null
       - name: Register and remove Windows service entrypoints
         shell: pwsh
         run: |
