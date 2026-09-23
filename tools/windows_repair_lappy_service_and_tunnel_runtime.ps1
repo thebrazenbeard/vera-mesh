@@ -69,7 +69,10 @@ function Invoke-LiveDoctor {
     } catch {
         throw "VeraMesh doctor did not return valid JSON."
     }
-    if ($exit -ne 0 -or $result.ok -ne $true) { throw "VeraMesh doctor did not reach ok=true." }
+    if ($exit -ne 0 -or $result.ok -ne $true) {
+        Write-Host (($result | ConvertTo-Json -Depth 20))
+        throw "VeraMesh doctor did not reach ok=true."
+    }
     return $result
 }
 
