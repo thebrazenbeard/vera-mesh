@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$VeraMeshSourceCommit = "432e870eff5d230ce33089f669ef9a7e8ef755af"
+$VeraMeshSourceCommit = "aa56672e0d0d79927a895add673bbb8b2bb78f8d"
 $WorkBridgeSourceCommit = "db56871f74f641a0819a601fe166e3241352edaf"
 $Root = "C:\ProgramData\VeraMesh"
 $ServiceConfig = Join-Path $Root "veraport.json"
