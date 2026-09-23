@@ -278,7 +278,7 @@ def reconcile_filesystem_only(
             raise FilesystemOnlyReconcileError(
                 "post-reconcile requested capabilities are not exact fs.read+fs.write"
             )
-        if tuple(config_after.gateway_operations) != TARGET_OPERATIONS:
+        if config_after.gateway_operations != frozenset(TARGET_OPERATIONS):
             raise FilesystemOnlyReconcileError(
                 "post-reconcile gateway operations are not the exact filesystem-only set"
             )
