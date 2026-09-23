@@ -72,6 +72,7 @@ jobs:
             reference/veraport_agent/tests/test_lappy_activation_packet.py ^
             reference/veraport_agent/tests/test_existing_lappy_tunnel_attach_packet.py ^
             reference/veraport_agent/tests/test_existing_lappy_tunnel_resume_packet.py ^
+            reference/veraport_agent/tests/test_existing_lappy_readwrite_upgrade_packet.py ^
             reference/veraport_agent/tests/test_full_rw_installer_packet.py ^
             reference/veraport_agent/tests/test_controller_capability_upgrade.py ^
             reference/veraport_agent/tests/test_windows_acl.py ^
