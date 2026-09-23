@@ -162,6 +162,62 @@ def _recovery_marker(
     }
 
 
+def _recovery_lock_path(service_config_path: str | Path) -> Path:
+    service_path = Path(service_config_path).expanduser().resolve()
+    service = WindowsServiceConfig.load(service_path)
+    return service.controller_trust.with_name(
+        service.controller_trust.name + ".recovery.lock"
+    )
+
+
+def _acquire_recovery_lock(path: Path) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+    try:
+        fd = os.open(path, flags, 0o600)
+    except FileExistsError as exc:
+        raise ControllerRecoveryError(
+            "controller trust recovery lock already exists; "
+            "another recovery may be active or a prior recovery requires "
+            f"explicit reconciliation: {path}"
+        ) from exc
+    try:
+        payload = (
+            json.dumps(
+                {
+                    "schema": "VERAPORT_CONTROLLER_RECOVERY_LOCK_V1",
+                    "pid": os.getpid(),
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        ).encode("utf-8")
+        os.write(fd, payload)
+        os.fsync(fd)
+        if os.name == "nt":
+            _harden_private(path)
+        return fd
+    except Exception:
+        os.close(fd)
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _release_recovery_lock(path: Path, fd: int) -> None:
+    try:
+        os.close(fd)
+    finally:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def _validate_marker(
     marker_path: Path,
     *,
@@ -180,7 +236,7 @@ def _validate_marker(
         )
 
 
-def ensure_readonly_controller(
+def _ensure_readonly_controller_locked(
     *,
     service_config_path: str | Path,
     preferred_controller_private_key_path: str | Path,
@@ -394,6 +450,36 @@ def ensure_readonly_controller(
         "private_key_value_recorded": False,
     }
 
+
+
+def ensure_readonly_controller(
+    *,
+    service_config_path: str | Path,
+    preferred_controller_private_key_path: str | Path,
+    generated_controller_private_key_path: str | Path,
+    harden_windows_acl: bool = True,
+) -> dict[str, Any]:
+    lock_path = _recovery_lock_path(service_config_path)
+    lock_fd = _acquire_recovery_lock(lock_path)
+    try:
+        result = _ensure_readonly_controller_locked(
+            service_config_path=service_config_path,
+            preferred_controller_private_key_path=preferred_controller_private_key_path,
+            generated_controller_private_key_path=generated_controller_private_key_path,
+            harden_windows_acl=harden_windows_acl,
+        )
+        result["recovery_lock"] = {
+            "path": str(lock_path),
+            "held_for_entire_transaction": True,
+            "released_on_return": True,
+            "noncooperating_external_writer_ceiling": (
+                "not prevented; external/manual trust mutation remains outside "
+                "the cooperative VeraMesh writer lock"
+            ),
+        }
+        return result
+    finally:
+        _release_recovery_lock(lock_path, lock_fd)
 
 def main() -> None:
     import argparse

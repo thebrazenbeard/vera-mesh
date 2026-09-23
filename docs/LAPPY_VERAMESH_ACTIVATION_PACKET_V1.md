@@ -39,8 +39,11 @@ The recovery operation is fail-closed:
 - the new controller receives exactly `fs.read`;
 - existing controller entries are appended-to, never replaced or retired;
 - a byte-for-byte backup of the pre-change trust JSON is written first;
-- trust is replaced atomically;
+- an exclusive sibling recovery lock is acquired before controller-trust recovery begins and held through post-write verification, serializing cooperating VeraMesh recovery writers;
+- an existing/stale recovery lock is never auto-broken because lock ownership cannot be proven safely; it requires explicit reconciliation;
+- trust is replaced atomically while that cooperative recovery lock is held;
 - the old entries are verified still present after mutation;
+- a noncooperating external/manual trust writer remains outside this lock guarantee and is explicitly not claimed to be prevented;
 - an interrupted generated-key state is resumable only when its recovery marker matches;
 - an unrelated pre-existing generated-key file is never silently enrolled;
 - private-key material is never written to Git, Bus, or receipts.

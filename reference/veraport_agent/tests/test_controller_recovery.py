@@ -188,3 +188,72 @@ def test_unowned_generated_key_is_not_silently_enrolled(tmp_path):
             generated_controller_private_key_path=fx["generated"],
             harden_windows_acl=False,
         )
+
+def test_recovery_refuses_existing_transaction_lock(tmp_path):
+    fx = fixture(tmp_path)
+    fx["preferred"].unlink()
+    lock = fx["controllers"].with_name(
+        fx["controllers"].name + ".recovery.lock"
+    )
+    lock.write_text(
+        '{"schema":"VERAPORT_CONTROLLER_RECOVERY_LOCK_V1","pid":999999}\n',
+        encoding="utf-8",
+    )
+    before = fx["controllers"].read_bytes()
+    with pytest.raises(
+        ControllerRecoveryError,
+        match="recovery lock already exists",
+    ):
+        ensure_readonly_controller(
+            service_config_path=fx["service"],
+            preferred_controller_private_key_path=fx["preferred"],
+            generated_controller_private_key_path=fx["generated"],
+            harden_windows_acl=False,
+        )
+    assert fx["controllers"].read_bytes() == before
+    assert lock.exists()
+
+
+def test_recovery_lock_is_released_after_success(tmp_path):
+    fx = fixture(tmp_path)
+    fx["preferred"].unlink()
+    result = ensure_readonly_controller(
+        service_config_path=fx["service"],
+        preferred_controller_private_key_path=fx["preferred"],
+        generated_controller_private_key_path=fx["generated"],
+        harden_windows_acl=False,
+    )
+    lock = fx["controllers"].with_name(
+        fx["controllers"].name + ".recovery.lock"
+    )
+    assert result["recovery_lock"]["held_for_entire_transaction"] is True
+    assert result["recovery_lock"]["released_on_return"] is True
+    assert not lock.exists()
+
+
+def test_recovery_lock_is_released_after_transaction_error(tmp_path):
+    fx = fixture(tmp_path)
+    fx["preferred"].unlink()
+    rogue = ec.generate_private_key(ec.SECP256R1())
+    fx["generated"].write_bytes(
+        rogue.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    lock = fx["controllers"].with_name(
+        fx["controllers"].name + ".recovery.lock"
+    )
+    with pytest.raises(
+        ControllerRecoveryError,
+        match="no recovery marker",
+    ):
+        ensure_readonly_controller(
+            service_config_path=fx["service"],
+            preferred_controller_private_key_path=fx["preferred"],
+            generated_controller_private_key_path=fx["generated"],
+            harden_windows_acl=False,
+        )
+    assert not lock.exists()
+
