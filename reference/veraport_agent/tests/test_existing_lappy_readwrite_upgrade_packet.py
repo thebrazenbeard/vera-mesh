@@ -25,6 +25,9 @@ def test_upgrade_packet_is_bounded_and_uses_explicit_driver(tmp_path):
     assert "sys.path.insert(0, str(source_root))" in text
     assert "$env:PYTHONPATH" not in text
     assert 'process_execution = $false' in text
+    assert "Live doctor does not confirm process execution remains disabled." in text
+    assert "$service.allow_process_exec -eq $true" not in text
+    assert "$serviceAfter.allow_process_exec -eq $true" not in text
     assert 'allowed_roots_change = $false' in text
     assert 'reinstall = $false' in text
     assert '"fs.read", "fs.write"' in text
