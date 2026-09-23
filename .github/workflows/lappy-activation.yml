@@ -10,6 +10,7 @@ on:
     paths:
       - "tools/windows_activate_lappy_veramesh.ps1"
       - "tools/windows_*.ps1"
+      - "tools/Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1"
       - "reference/veraport_agent/**"
       - "docs/LAPPY_VERAMESH_ACTIVATION_PACKET_V1.md"
       - ".github/workflows/lappy-activation.yml"
@@ -17,6 +18,7 @@ on:
     paths:
       - "tools/windows_activate_lappy_veramesh.ps1"
       - "tools/windows_*.ps1"
+      - "tools/Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1"
       - "reference/veraport_agent/**"
       - "docs/LAPPY_VERAMESH_ACTIVATION_PACKET_V1.md"
       - ".github/workflows/lappy-activation.yml"
@@ -45,7 +47,11 @@ jobs:
         shell: pwsh
         run: |
           $failed = $false
-          Get-ChildItem .\tools -Filter "windows_*.ps1" | ForEach-Object {
+          $scripts = @(
+            Get-ChildItem .\tools -Filter "windows_*.ps1"
+            Get-Item .\tools\Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1
+          )
+          $scripts | ForEach-Object {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
@@ -66,6 +72,7 @@ jobs:
             reference/veraport_agent/tests/test_lappy_activation_packet.py ^
             reference/veraport_agent/tests/test_existing_lappy_tunnel_attach_packet.py ^
             reference/veraport_agent/tests/test_existing_lappy_tunnel_resume_packet.py ^
+            reference/veraport_agent/tests/test_controller_capability_upgrade.py ^
             reference/veraport_agent/tests/test_windows_acl.py ^
             reference/veraport_agent/tests/test_tunnel_runtime_service.py ^
             reference/veraport_agent/tests/test_windows_service.py ^
@@ -88,6 +95,28 @@ jobs:
             if (-not $output.Contains($required)) {
               Write-Error "Plan output missing required marker: $required"
               Write-Host $output
+
+      - name: Verify one-shot full read-write installer contract
+        shell: pwsh
+        run: |
+          $text = [IO.File]::ReadAllText(".\tools\Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1")
+          foreach ($required in @(
+            'db56871f74f641a0819a601fe166e3241352edaf',
+            '432e870eff5d230ce33089f669ef9a7e8ef755af',
+            'fs.read,fs.write',
+            'process_enabled = $false',
+            'roots_broadened = $false',
+            'veraport-doctor --live --tunnel-status'
+          )) {
+            if (-not $text.Contains($required)) {
+              Write-Error "One-shot installer missing required marker: $required"
+              exit 1
+            }
+          }
+          if ($text.Contains('"process.exec"') -or $text.Contains('"process.start"')) {
+            Write-Error "One-shot installer unexpectedly contains process gateway operations"
+            exit 1
+          }
               exit 1
             }
           }
