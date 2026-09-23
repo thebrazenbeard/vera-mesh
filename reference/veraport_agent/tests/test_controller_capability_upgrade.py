@@ -24,7 +24,7 @@ def fixture(tmp_path: Path):
     identity.mkdir(parents=True)
     manifest = provision_local_pair(
         identity,
-        capabilities={"fs.read"},
+        capabilities={"fs.read", "fs.write"},
         harden_windows_acl=False,
     )
     allowed = tmp_path / "allowed"
@@ -35,7 +35,12 @@ def fixture(tmp_path: Path):
     workstation = identity / "workstation.pem"
     workstation.write_bytes((identity / "workstation-key.pem").read_bytes())
     controllers = identity / "controllers.json"
-    controllers.write_bytes((identity / "controller-trust.json").read_bytes())
+    trust = json.loads((identity / "controller-trust.json").read_text(encoding="utf-8"))
+    trust["controllers"][0]["capabilities"] = ["fs.read"]
+    controllers.write_text(
+        json.dumps(trust, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
     service = root / "veraport.json"
     service.write_text(
