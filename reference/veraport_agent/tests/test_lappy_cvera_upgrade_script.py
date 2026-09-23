@@ -7,6 +7,8 @@ def test_c_vera_workbridge_read_activation_script_is_narrow_and_pinned():
     assert '6c38e45d59f4cbdcc827effe905d04574b92b6db' in script
     assert 'C:\\Vera' in script
     assert '"http://127.0.0.1:8765/mcp"' in script
+    assert '"http://127.0.0.1:8765/mcp/healthz"' in script
+    assert '"http://127.0.0.1:8765/health"' not in script
     assert 'mcp==1.27.2' in script
     assert 'workbridge_local_qualification' in script
     assert 'delegated_c_vera_access = "READ_ONLY"' in script
