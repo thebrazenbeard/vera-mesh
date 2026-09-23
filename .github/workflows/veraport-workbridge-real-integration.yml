@@ -1,0 +1,148 @@
+name: VeraPort WorkBridge real integration
+
+on:
+  push:
+    branches:
+      - fix/veraport-workbridge-healthz-20260923-v1
+  pull_request:
+    paths:
+      - "reference/veraport_agent/**"
+      - "tools/Enable-Lappy-CVera-WorkBridgeRead.ps1"
+      - "tools/run_veraport_workbridge_real_integration.py"
+      - ".github/workflows/veraport-workbridge-real-integration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-real-workbridge:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: thebrazenbeard/WorkBridgeMCP
+          ref: d9e8881ca6ffa17ea5b98a6af8c0ef2b2d171f15
+          path: workbridge-source
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.12"
+          cache: false
+
+      - name: Install exact VeraPort MCP runtime
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check -e "./reference/veraport_agent[test,mcp]"
+          python -c "import mcp, veraport_agent.workbridge_local; print('PYTHON_ADAPTER_IMPORT=PASS')"
+
+      - name: Build exact WorkBridge binary
+        shell: pwsh
+        working-directory: workbridge-source
+        run: |
+          go version
+          go mod verify
+          go test ./...
+          go build -o "$env:RUNNER_TEMP\workbridge-mcp.exe" ./cmd/workbridge-mcp
+          if (-not (Test-Path -LiteralPath "$env:RUNNER_TEMP\workbridge-mcp.exe" -PathType Leaf)) {
+            throw "WorkBridge binary missing after build."
+          }
+
+      - name: Exercise VeraPort local adapter against real WorkBridge HTTP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "wb-root"
+          $executorRoot = Join-Path $env:RUNNER_TEMP "executor-root"
+          New-Item -ItemType Directory -Force -Path $root,$executorRoot | Out-Null
+          $fixture = Join-Path $root "marker.txt"
+          $marker = "VERAPORT_REAL_WORKBRIDGE_" + [Guid]::NewGuid().ToString("N")
+          [IO.File]::WriteAllText($fixture,$marker,[Text.UTF8Encoding]::new($false))
+
+          $token = ("r" * 48)
+          $tokenFile = Join-Path $env:RUNNER_TEMP "workbridge-token.txt"
+          [IO.File]::WriteAllText($tokenFile,$token,[Text.UTF8Encoding]::new($false))
+          $configPath = Join-Path $env:RUNNER_TEMP "workbridge-config.json"
+          $cfg = [ordered]@{
+            schema = "WORKBRIDGE_CONFIG_V1"
+            read_roots = @($root)
+            write_roots = @()
+            limits = [ordered]@{
+              max_read_bytes = 1048576
+              max_write_bytes = 1048576
+              max_directory_entries = 50
+            }
+            process = [ordered]@{
+              enabled = $false
+              allowed_executables = @()
+              working_roots = @()
+              max_runtime_seconds = 60
+              max_output_bytes = 1048576
+              max_args = 64
+            }
+            http = [ordered]@{
+              listen = "127.0.0.1:18765"
+              path = "/mcp"
+              bearer_token_env = "WORKBRIDGE_TEST_TOKEN"
+            }
+          }
+          [IO.File]::WriteAllText(
+            $configPath,
+            (($cfg | ConvertTo-Json -Depth 10) + [Environment]::NewLine),
+            [Text.UTF8Encoding]::new($false)
+          )
+
+          $binary = Join-Path $env:RUNNER_TEMP "workbridge-mcp.exe"
+          $stdout = Join-Path $env:RUNNER_TEMP "workbridge.stdout.log"
+          $stderr = Join-Path $env:RUNNER_TEMP "workbridge.stderr.log"
+          $env:WORKBRIDGE_TEST_TOKEN = $token
+          $process = $null
+          try {
+            $process = Start-Process -FilePath $binary -ArgumentList @("--transport","http","--config",$configPath) -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            $headers = @{ Authorization = "Bearer $token" }
+            $health = $null
+            $deadline = [DateTime]::UtcNow.AddSeconds(20)
+            do {
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:18765/mcp/healthz" -Headers $headers -TimeoutSec 2
+                if ($health.status -eq "ok") { break }
+              } catch {
+                $health = $null
+              }
+              Start-Sleep -Milliseconds 250
+            } while ([DateTime]::UtcNow -lt $deadline)
+            if ($null -eq $health -or $health.status -ne "ok") {
+              $err = if (Test-Path $stderr) { Get-Content $stderr -Raw } else { "" }
+              throw ("WorkBridge did not become healthy. " + $err)
+            }
+
+            $env:VERAPORT_REAL_WB_ROOT = $root
+            $env:VERAPORT_REAL_WB_FIXTURE = $fixture
+            $env:VERAPORT_REAL_WB_MARKER = $marker
+            $env:VERAPORT_REAL_WB_TOKEN_FILE = $tokenFile
+            $env:VERAPORT_REAL_EXECUTOR_ROOT = $executorRoot
+
+            python tools/run_veraport_workbridge_real_integration.py
+            if ($LASTEXITCODE -ne 0) {
+              throw "VeraPort local adapter real WorkBridge integration failed."
+            }
+          }
+          finally {
+            Remove-Item Env:WORKBRIDGE_TEST_TOKEN -ErrorAction SilentlyContinue
+            Remove-Item Env:VERAPORT_REAL_WB_ROOT -ErrorAction SilentlyContinue
+            Remove-Item Env:VERAPORT_REAL_WB_FIXTURE -ErrorAction SilentlyContinue
+            Remove-Item Env:VERAPORT_REAL_WB_MARKER -ErrorAction SilentlyContinue
+            Remove-Item Env:VERAPORT_REAL_WB_TOKEN_FILE -ErrorAction SilentlyContinue
+            Remove-Item Env:VERAPORT_REAL_EXECUTOR_ROOT -ErrorAction SilentlyContinue
+            if ($null -ne $process -and -not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            }
+          }

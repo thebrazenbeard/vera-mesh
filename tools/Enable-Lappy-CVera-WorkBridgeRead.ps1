@@ -253,7 +253,7 @@ try {
 
     $token = (Get-Content -LiteralPath $WorkBridgeToken -Raw -Encoding UTF8).Trim()
     if ($token.Length -lt 32) { throw "WorkBridge bearer token is invalid." }
-    $health = Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8765/health" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
+    $health = Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8765/mcp/healthz" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
     if ($health.status -ne "ok") {
         throw "WorkBridge authenticated health did not return status=ok."
     }
