@@ -17,6 +17,9 @@ def test_rdc_control_activation_packet_is_pinned_and_bounded():
     assert "Resolve-ServicePackage" in text
     assert "Resolve-TunnelPackage" in text
     assert "Replace-PackageTree" in text
+    assert "Assert-ServiceSurface" in text
+    assert "package_code_replaced = $false" in text
+    assert "Replace-PackageTree $installedServicePackage" not in text
     assert "Could not derive VeraPort service Python" not in text
     assert "SELECT_SECURE_MCP_TUNNEL_IN_CHATGPT_AND_RUN_TOOL_CALL" in text
 
