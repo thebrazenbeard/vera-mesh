@@ -220,16 +220,20 @@ if ((Get-FileSha256 $mcpExecutablePath) -ne ([string]$tunnel.mcp_executable_sha2
     throw "Existing MCP executable hash does not match tunnel runtime config."
 }
 
-$moduleOutput = @(& $RuntimePython -c "import veraport_agent.tunnel_runtime_service as m; print(m.__file__)")
+$moduleOutput = @(& $RuntimePython -I -c "import veraport_agent.tunnel_runtime_service as m; print(m.__file__)")
 Assert-ExitCode "locate installed tunnel runtime module"
 $InstalledModule = ([string]$moduleOutput[-1]).Trim()
 if ([string]::IsNullOrWhiteSpace($InstalledModule) -or -not (Test-Path -LiteralPath $InstalledModule -PathType Leaf)) {
     throw "Installed tunnel runtime module could not be located."
 }
-$runtimePrefix = [IO.Path]::GetFullPath($RuntimeDir).TrimEnd("\\") + "\\"
-$moduleFull = [IO.Path]::GetFullPath($InstalledModule)
-if (-not $moduleFull.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) {
-    throw "Installed tunnel runtime module escaped the isolated runtime directory."
+$runtimeResolved = (Resolve-Path -LiteralPath $RuntimeDir -ErrorAction Stop).ProviderPath
+$moduleResolved = (Resolve-Path -LiteralPath $InstalledModule -ErrorAction Stop).ProviderPath
+$runtimePrefix = $runtimeResolved
+if (-not $runtimePrefix.EndsWith([IO.Path]::DirectorySeparatorChar.ToString(), [StringComparison]::Ordinal)) {
+    $runtimePrefix += [IO.Path]::DirectorySeparatorChar
+}
+if (-not $moduleResolved.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Installed tunnel runtime module escaped the isolated runtime directory. runtime=$runtimeResolved module=$moduleResolved"
 }
 
 $preservationRoots = @(
