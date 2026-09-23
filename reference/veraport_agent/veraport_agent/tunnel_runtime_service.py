@@ -282,6 +282,8 @@ def _run(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="strict",
         timeout=config.command_timeout_s,
         shell=False,
         check=False,
