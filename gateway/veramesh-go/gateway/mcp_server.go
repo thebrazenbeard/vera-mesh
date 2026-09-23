@@ -14,8 +14,15 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+type workBridgeBackend interface {
+	SupportsPublic(string) bool
+	CanHandlePublic(string, map[string]any) bool
+	CallPublic(context.Context, string, map[string]any) (map[string]any, error)
+}
+
 type MCPGateway struct {
 	controller          *Controller
+	workbridge          workBridgeBackend
 	issuer              string
 	resourceMetadataURL string
 	server              *mcp.Server
@@ -25,6 +32,22 @@ type MCPGateway struct {
 }
 
 func NewMCPGateway(controller *Controller, issuer, resourceMetadataURL string) (*MCPGateway, error) {
+	return newMCPGateway(controller, issuer, resourceMetadataURL, nil)
+}
+
+func NewMCPGatewayWithWorkBridge(
+	controller *Controller,
+	issuer, resourceMetadataURL string,
+	workbridge *WorkBridgeClient,
+) (*MCPGateway, error) {
+	return newMCPGateway(controller, issuer, resourceMetadataURL, workbridge)
+}
+
+func newMCPGateway(
+	controller *Controller,
+	issuer, resourceMetadataURL string,
+	workbridge workBridgeBackend,
+) (*MCPGateway, error) {
 	if controller == nil {
 		return nil, errors.New("controller is required")
 	}
@@ -38,6 +61,7 @@ func NewMCPGateway(controller *Controller, issuer, resourceMetadataURL string) (
 	}
 	g := &MCPGateway{
 		controller:          controller,
+		workbridge:          workbridge,
 		issuer:              issuer,
 		resourceMetadataURL: resourceMetadataURL,
 		server: mcp.NewServer(
@@ -50,7 +74,7 @@ func NewMCPGateway(controller *Controller, issuer, resourceMetadataURL string) (
 		facades: map[string]*Facade{},
 	}
 	for _, policy := range PublicTools {
-		if !ToolSupported(controller.Config(), policy) {
+		if !g.supportsPolicy(policy) {
 			continue
 		}
 		p := policy
@@ -62,6 +86,30 @@ func NewMCPGateway(controller *Controller, issuer, resourceMetadataURL string) (
 }
 
 func (g *MCPGateway) Server() *mcp.Server { return g.server }
+
+func (g *MCPGateway) supportsPolicy(policy ToolPolicy) bool {
+	// WorkBridge is an implementation substitute below the existing VeraMesh
+	// public-policy ceiling. Backend substitution must never widen a tool/scope.
+	return ToolSupported(g.controller.Config(), policy)
+}
+
+func (g *MCPGateway) SupportedScopes() []string {
+	set := map[string]struct{}{}
+	for _, policy := range PublicTools {
+		if !g.supportsPolicy(policy) {
+			continue
+		}
+		for _, scope := range policy.Scopes {
+			set[scope] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for scope := range set {
+		out = append(out, scope)
+	}
+	sort.Strings(out)
+	return out
+}
 
 func (g *MCPGateway) Close(ctx context.Context) map[string]any {
 	g.mu.Lock()
@@ -153,13 +201,30 @@ func (g *MCPGateway) callTool(
 			policy.Scopes,
 		), nil
 	}
-	facade, err := g.facade(g.issuer + "|" + token.UserID)
-	if err != nil {
-		return errorToolResult("PUBLIC_GATEWAY_ERROR", err.Error()), nil
-	}
 	args, err := decodeArguments(req.Params.Arguments)
 	if err != nil {
 		return errorToolResult("INVALID_ARGUMENTS", err.Error()), nil
+	}
+
+	if g.workbridge != nil && g.workbridge.CanHandlePublic(policy.Name, args) {
+		result, wbErr := g.workbridge.CallPublic(ctx, policy.Name, args)
+		if wbErr == nil {
+			return successToolResult(result)
+		}
+		// A mutation may have reached the workstation before the transport
+		// failed. Never replay it through VeraPort. Read-only calls may fall
+		// back only when the VeraPort backend independently supports the tool.
+		if !policy.ReadOnly || !ToolSupported(g.controller.Config(), policy) {
+			return errorToolResult("WORKBRIDGE_UPSTREAM_ERROR", wbErr.Error()), nil
+		}
+	}
+
+	if !ToolSupported(g.controller.Config(), policy) {
+		return errorToolResult("BACKEND_UNAVAILABLE", "no backend can preserve this tool's semantics"), nil
+	}
+	facade, err := g.facade(g.issuer + "|" + token.UserID)
+	if err != nil {
+		return errorToolResult("PUBLIC_GATEWAY_ERROR", err.Error()), nil
 	}
 	result, err := dispatchTool(ctx, facade, policy.Name, args)
 	if err != nil {
@@ -170,14 +235,7 @@ func (g *MCPGateway) callTool(
 		}
 		return errorToolResult(code, err.Error()), nil
 	}
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return errorToolResult("RESULT_ENCODING_ERROR", err.Error()), nil
-	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: string(raw)}},
-		StructuredContent: result,
-	}, nil
+	return successToolResult(result)
 }
 
 func missingScopes(granted, required []string) []string {
@@ -210,6 +268,17 @@ func (g *MCPGateway) authErrorToolResult(code, message string, scopes []string) 
 		"mcp/www_authenticate": []string{challenge},
 	}
 	return result
+}
+
+func successToolResult(result map[string]any) (*mcp.CallToolResult, error) {
+	raw, err := json.Marshal(result)
+	if err != nil {
+		return errorToolResult("RESULT_ENCODING_ERROR", err.Error()), nil
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(raw)}},
+		StructuredContent: result,
+	}, nil
 }
 
 func errorToolResult(code, message string) *mcp.CallToolResult {

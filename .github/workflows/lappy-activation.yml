@@ -1,0 +1,125 @@
+name: Lappy activation packet
+
+on:
+  push:
+    branches:
+      - "work/**"
+      - "deploy/**"
+      - "feature/**"
+      - "vera/**"
+    paths:
+      - "tools/windows_activate_lappy_veramesh.ps1"
+      - "tools/windows_*.ps1"
+      - "reference/veraport_agent/**"
+      - "docs/LAPPY_VERAMESH_ACTIVATION_PACKET_V1.md"
+      - ".github/workflows/lappy-activation.yml"
+  pull_request:
+    paths:
+      - "tools/windows_activate_lappy_veramesh.ps1"
+      - "tools/windows_*.ps1"
+      - "reference/veraport_agent/**"
+      - "docs/LAPPY_VERAMESH_ACTIVATION_PACKET_V1.md"
+      - ".github/workflows/lappy-activation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: Windows activation packet qualification
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install VeraPort reference test dependencies
+        run: python -m pip install -e "./reference/veraport_agent[test,mcp,windows-service]"
+      - name: Parse PowerShell sources
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem .\tools -Filter "windows_*.ps1" | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              Write-Host "Parser errors in $($_.FullName)"
+              $errors | ForEach-Object { Write-Error $_ }
+            }
+          }
+          if ($failed) { exit 1 }
+      - name: Run activation/security regressions
+        run: |
+          python -m pytest -q ^
+            reference/veraport_agent/tests/test_lappy_activation_packet.py ^
+            reference/veraport_agent/tests/test_existing_lappy_tunnel_attach_packet.py ^
+            reference/veraport_agent/tests/test_existing_lappy_tunnel_resume_packet.py ^
+            reference/veraport_agent/tests/test_windows_acl.py ^
+            reference/veraport_agent/tests/test_tunnel_runtime_service.py ^
+            reference/veraport_agent/tests/test_windows_service.py ^
+            reference/veraport_agent/tests/test_windows_service_runtime.py
+        shell: cmd
+      - name: Execute activation plan only
+        shell: pwsh
+        run: |
+          $output = & .\tools\windows_activate_lappy_veramesh.ps1 *>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error $output
+            exit $LASTEXITCODE
+          }
+          foreach ($required in @(
+            "VERAMESH_LAPPY_ACTIVATION_PLAN_V1",
+            '"process_execution": false',
+            '"inbound_non_loopback_listener": false',
+            "PLAN ONLY"
+          )) {
+            if (-not $output.Contains($required)) {
+              Write-Error "Plan output missing required marker: $required"
+              Write-Host $output
+              exit 1
+            }
+          }
+          if ($output.Contains("Downloading pinned portable Python")) {
+            Write-Error "Plan-only execution crossed into apply/download effects"
+            exit 1
+          }
+          Write-Host $output
+
+      - name: Execute tunnel-resume plan only
+        shell: pwsh
+        run: |
+          $output = & .\tools\windows_resume_existing_lappy_tunnel.ps1 *>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error $output
+            exit $LASTEXITCODE
+          }
+          foreach ($required in @(
+            "VERAMESH_EXISTING_LAPPY_TUNNEL_RESUME_PLAN_V1",
+            '"module_only": true',
+            '"veraport_restart": false',
+            '"credentials_changed": false',
+            "PLAN ONLY"
+          )) {
+            if (-not $output.Contains($required)) {
+              Write-Error "Resume plan output missing required marker: $required"
+              Write-Host $output
+              exit 1
+            }
+          }
+          if ($output.Contains("Invoke-WebRequest")) {
+            Write-Error "Resume plan-only execution crossed into apply/download effects"
+            exit 1
+          }
+          Write-Host $output

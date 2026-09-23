@@ -276,3 +276,27 @@ def test_mcp_command_uses_single_quotes_for_windows_backslashes(tmp_path):
     command = trs.connect_args(cfg)[-1]
     assert command.startswith("'") and command.endswith("'")
     assert str(cfg.mcp_executable) in command
+
+def test_tunnel_client_subprocess_forces_utf8_decoding(tmp_path):
+    cfg = config(tmp_path)
+    captured = {}
+
+    def runner(args, **kwargs):
+        captured.update(kwargs)
+        return completed(
+            args,
+            stdout=json.dumps({
+                "process_running": True,
+                "healthy": True,
+                "ready": True,
+                "detail": "connected — Lappy",
+            }),
+        )
+
+    status = trs.read_status(cfg, runner=runner)
+
+    assert status.usable is True
+    assert captured["text"] is True
+    assert captured["encoding"] == "utf-8"
+    assert captured["errors"] == "strict"
+

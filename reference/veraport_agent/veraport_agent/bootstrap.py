@@ -21,7 +21,9 @@ from .tunnel_runtime_service import (
     validate_service_materials as validate_tunnel_materials,
 )
 from .windows_acl import (
+    harden_controller_materials,
     harden_service_materials as harden_veraport_materials,
+    validate_controller_materials,
     validate_service_materials as validate_veraport_materials,
 )
 
@@ -214,8 +216,10 @@ def prepare_local_bootstrap(
 
         if os.name == "nt" and harden_windows_acl:
             harden_veraport_materials(veraport_path, service_cfg)
+            harden_controller_materials(controller_path, controller_cfg)
             harden_tunnel_materials(tunnel_path, tunnel_cfg)
             validate_veraport_materials(veraport_path, service_cfg)
+            validate_controller_materials(controller_path, controller_cfg)
             validate_tunnel_materials(tunnel_path, tunnel_cfg)
 
         manifest = {
