@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$VeraMeshSourceSha = "d2782a0dc4e50e353a807aba93a55bb8ff97ac83"
+$VeraMeshSourceSha = "72d18d8267365f7f10a8068b232b43fd1c8f48a2"
 $TunnelClientVersion = "v0.0.14"
 $TunnelClientArchiveSha256 = "784ab8da7b5a88f0109f1fd8aaf0a1c86067430b896dddf307ef7e3cc49fa1a5"
 $TunnelClientUrl = "https://github.com/openai/tunnel-client/releases/download/v0.0.14/tunnel-client-v0.0.14-windows-amd64.zip"

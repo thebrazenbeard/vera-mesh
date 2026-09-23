@@ -56,7 +56,7 @@ The Secure MCP Tunnel controller itself still requests only `fs.read` and expose
 
 Current existing-install Python source pin:
 
-`d2782a0dc4e50e353a807aba93a55bb8ff97ac83`
+`72d18d8267365f7f10a8068b232b43fd1c8f48a2`
 
 OpenAI `tunnel-client` pin:
 
