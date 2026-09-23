@@ -6,7 +6,8 @@ Set-StrictMode -Version Latest
 
 $VeraMeshSourceCommit = "6c38e45d59f4cbdcc827effe905d04574b92b6db"
 $Root = "C:\ProgramData\VeraMesh"
-$RuntimePython = Join-Path $Root "runtime\python.exe"
+$RuntimeDir = Join-Path $Root "runtime"
+$RuntimePython = Join-Path $RuntimeDir "python.exe"
 $ServiceConfig = Join-Path $Root "veraport.json"
 $ControllerConfig = Join-Path $Root "controller.json"
 $WorkBridgeConfig = "C:\ProgramData\WorkBridgeMCP\config.json"
@@ -112,6 +113,32 @@ function Same-StringArray {
     return $true
 }
 
+function Copy-RuntimePreservingAcl {
+    param([string]$Source, [string]$Destination)
+    if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
+        throw "Runtime backup source is missing: $Source"
+    }
+    if (Test-Path -LiteralPath $Destination) {
+        throw "Runtime clone destination already exists: $Destination"
+    }
+    & robocopy.exe $Source $Destination /MIR /COPYALL /DCOPY:DAT /XJ /R:2 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+    $code = $LASTEXITCODE
+    if ($code -gt 7) {
+        throw "Runtime clone failed with robocopy exit code $code."
+    }
+}
+
+function Restore-RuntimeDirectory {
+    param([string]$Backup, [string]$Destination)
+    if (-not (Test-Path -LiteralPath $Backup -PathType Container)) {
+        throw "Runtime rollback backup is missing: $Backup"
+    }
+    if (Test-Path -LiteralPath $Destination) {
+        Remove-Item -LiteralPath $Destination -Recurse -Force
+    }
+    Move-Item -LiteralPath $Backup -Destination $Destination
+}
+
 Assert-Administrator
 
 foreach ($required in @($RuntimePython, $ServiceConfig, $ControllerConfig, $WorkBridgeConfig, $WorkBridgeToken)) {
@@ -135,6 +162,9 @@ $workBridgeBackup = $null
 $localConfigBackup = $null
 $modifiedService = $false
 $modifiedWorkBridge = $false
+$runtimeBackup = Join-Path $Root ("runtime.pre-cvera-" + $stamp + ".bak")
+$runtimeBackupReady = $false
+$runtimeCommitted = $false
 
 try {
     Write-Host "=== Pin and stage VeraMesh source ==="
@@ -173,7 +203,18 @@ try {
         Stop-ScheduledTask -TaskName "WorkBridgeMCP"
     }
 
-    Write-Host "=== Upgrade VeraPort service code with pinned MCP client ==="
+    Write-Host "=== Stage rollback-safe VeraPort runtime clone ==="
+    if (Test-Path -LiteralPath $runtimeBackup) {
+        throw "Runtime rollback backup already exists; refusing overwrite: $runtimeBackup"
+    }
+    Move-Item -LiteralPath $RuntimeDir -Destination $runtimeBackup
+    $runtimeBackupReady = $true
+    Copy-RuntimePreservingAcl -Source $runtimeBackup -Destination $RuntimeDir
+    if (-not (Test-Path -LiteralPath $RuntimePython -PathType Leaf)) {
+        throw "Cloned VeraPort runtime is missing python.exe."
+    }
+
+    Write-Host "=== Upgrade cloned VeraPort service code with pinned MCP client ==="
     & $RuntimePython -m pip install --disable-pip-version-check --constraint $constraints "mcp==1.27.2" | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Pinned MCP runtime installation failed." }
 
@@ -314,6 +355,11 @@ try {
     Write-Utf8Json $ReceiptPath $receipt
     Harden-PrivateFile $ReceiptPath
 
+    $runtimeCommitted = $true
+    if (Test-Path -LiteralPath $runtimeBackup -PathType Container) {
+        Remove-Item -LiteralPath $runtimeBackup -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     Write-Host ""
     Write-Host "C:\Vera READ ROUTE QUALIFIED LOCALLY."
     Write-Host "VeraPort roots unchanged; process execution remains OFF."
@@ -322,7 +368,22 @@ try {
     $receipt | ConvertTo-Json -Depth 30
 }
 catch {
-    Write-Warning ("Activation failed: " + $_.Exception.Message)
+    $activationError = $_
+    $runtimeRollbackError = $null
+    Write-Warning ("Activation failed: " + $activationError.Exception.Message)
+    if ($runtimeBackupReady -and -not $runtimeCommitted) {
+        try {
+            $liveService = Get-Service -Name "VeraPortAgent" -ErrorAction SilentlyContinue
+            if ($null -ne $liveService -and $liveService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
+                Stop-Service -Name "VeraPortAgent" -Force
+            }
+            Restore-RuntimeDirectory -Backup $runtimeBackup -Destination $RuntimeDir
+            $runtimeBackupReady = $false
+        }
+        catch {
+            $runtimeRollbackError = $_.Exception.Message
+        }
+    }
     if ($modifiedService -and $serviceBackup -and (Test-Path -LiteralPath $serviceBackup)) {
         Copy-Item -LiteralPath $serviceBackup -Destination $ServiceConfig -Force
     }
@@ -341,11 +402,15 @@ catch {
         }
     } catch {}
     try {
-        if ((Get-Service -Name "VeraPortAgent" -ErrorAction SilentlyContinue).Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) {
+        $serviceAfterFailure = Get-Service -Name "VeraPortAgent" -ErrorAction SilentlyContinue
+        if ($null -ne $serviceAfterFailure -and $serviceAfterFailure.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) {
             Start-Service -Name "VeraPortAgent"
         }
     } catch {}
-    throw
+    if ($null -ne $runtimeRollbackError) {
+        throw ("Activation failed and exact runtime rollback also failed: " + $runtimeRollbackError + " | original: " + $activationError.Exception.Message)
+    }
+    throw $activationError
 }
 finally {
     Remove-Item -LiteralPath $StageRoot -Recurse -Force -ErrorAction SilentlyContinue
