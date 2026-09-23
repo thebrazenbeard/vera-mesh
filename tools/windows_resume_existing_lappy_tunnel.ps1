@@ -226,13 +226,12 @@ $InstalledModule = ([string]$moduleOutput[-1]).Trim()
 if ([string]::IsNullOrWhiteSpace($InstalledModule) -or -not (Test-Path -LiteralPath $InstalledModule -PathType Leaf)) {
     throw "Installed tunnel runtime module could not be located."
 }
-$runtimeResolved = [IO.Path]::GetFullPath(
-    (Resolve-Path -LiteralPath $RuntimeDir -ErrorAction Stop).ProviderPath
-).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
-$moduleResolved = [IO.Path]::GetFullPath(
-    (Resolve-Path -LiteralPath $InstalledModule -ErrorAction Stop).ProviderPath
-)
-$runtimePrefix = $runtimeResolved + [IO.Path]::DirectorySeparatorChar
+$runtimeResolved = (Resolve-Path -LiteralPath $RuntimeDir -ErrorAction Stop).ProviderPath
+$moduleResolved = (Resolve-Path -LiteralPath $InstalledModule -ErrorAction Stop).ProviderPath
+$runtimePrefix = $runtimeResolved
+if (-not $runtimePrefix.EndsWith([IO.Path]::DirectorySeparatorChar.ToString(), [StringComparison]::Ordinal)) {
+    $runtimePrefix += [IO.Path]::DirectorySeparatorChar
+}
 if (-not $moduleResolved.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Installed tunnel runtime module escaped the isolated runtime directory. runtime=$runtimeResolved module=$moduleResolved"
 }
