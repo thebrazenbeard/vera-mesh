@@ -170,7 +170,7 @@ def _recovery_lock_path(service_config_path: str | Path) -> Path:
     )
 
 
-def _acquire_recovery_lock(path: Path) -> int:
+def _acquire_recovery_lock(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_BINARY"):
@@ -194,28 +194,32 @@ def _acquire_recovery_lock(path: Path) -> int:
             )
             + "\n"
         ).encode("utf-8")
-        os.write(fd, payload)
-        os.fsync(fd)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
         if os.name == "nt":
             _harden_private(path)
-        return fd
-    except Exception:
-        os.close(fd)
+    except Exception as exc:
         try:
             path.unlink()
-        except OSError:
-            pass
-        raise
+        except OSError as cleanup_exc:
+            raise ControllerRecoveryError(
+                "controller trust recovery lock setup failed and the lock "
+                f"could not be cleaned up: {path}"
+            ) from cleanup_exc
+        raise exc
 
 
-def _release_recovery_lock(path: Path, fd: int) -> None:
+def _release_recovery_lock(path: Path) -> None:
     try:
-        os.close(fd)
-    finally:
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise ControllerRecoveryError(
+            f"controller trust recovery lock could not be released: {path}"
+        ) from exc
 
 
 def _validate_marker(
@@ -460,7 +464,7 @@ def ensure_readonly_controller(
     harden_windows_acl: bool = True,
 ) -> dict[str, Any]:
     lock_path = _recovery_lock_path(service_config_path)
-    lock_fd = _acquire_recovery_lock(lock_path)
+    _acquire_recovery_lock(lock_path)
     try:
         result = _ensure_readonly_controller_locked(
             service_config_path=service_config_path,
@@ -479,7 +483,7 @@ def ensure_readonly_controller(
         }
         return result
     finally:
-        _release_recovery_lock(lock_path, lock_fd)
+        _release_recovery_lock(lock_path)
 
 def main() -> None:
     import argparse

@@ -257,3 +257,15 @@ def test_recovery_lock_is_released_after_transaction_error(tmp_path):
         )
     assert not lock.exists()
 
+def test_recovery_lock_descriptor_is_closed_after_acquire(tmp_path):
+    fx = fixture(tmp_path)
+    fx["preferred"].unlink()
+    result = ensure_readonly_controller(
+        service_config_path=fx["service"],
+        preferred_controller_private_key_path=fx["preferred"],
+        generated_controller_private_key_path=fx["generated"],
+        harden_windows_acl=False,
+    )
+    assert result["recovery_lock"]["held_for_entire_transaction"] is True
+    assert result["recovery_lock"]["released_on_return"] is True
+

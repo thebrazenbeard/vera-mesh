@@ -39,7 +39,7 @@ The recovery operation is fail-closed:
 - the new controller receives exactly `fs.read`;
 - existing controller entries are appended-to, never replaced or retired;
 - a byte-for-byte backup of the pre-change trust JSON is written first;
-- an exclusive sibling recovery lock is acquired before controller-trust recovery begins and held through post-write verification, serializing cooperating VeraMesh recovery writers;
+- an exclusive sibling recovery lock file is created before controller-trust recovery begins; its creation descriptor is durably flushed and closed immediately, while the lock-file sentinel itself remains present through post-write verification to serialize cooperating VeraMesh recovery writers;
 - an existing/stale recovery lock is never auto-broken because lock ownership cannot be proven safely; it requires explicit reconciliation;
 - trust is replaced atomically while that cooperative recovery lock is held;
 - the old entries are verified still present after mutation;
