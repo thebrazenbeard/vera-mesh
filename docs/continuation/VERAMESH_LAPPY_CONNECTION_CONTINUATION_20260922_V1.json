@@ -1,0 +1,45 @@
+{
+  "schema": "VERAMESH_LAPPY_CONNECTION_CONTINUATION_V1",
+  "saved_at_utc": "2026-09-23T00:17:00Z",
+  "repository": "thebrazenbeard/vera-mesh",
+  "continuation_branch": "state/veramesh-lappy-connection-continuation-20260922-v1",
+  "live_subject": {
+    "pr": 25,
+    "branch": "work/veramesh-rdc-replacement-v1-20260922",
+    "head": "60d233c8ccc25871b0666d00c53fa9be26c7cc74"
+  },
+  "connection": {
+    "nas_edge": "127.0.0.1:17445",
+    "lappy_veraport": "100.88.50.35:17444",
+    "tls": "TLSv1.3",
+    "alpn": "veraport/1",
+    "transport": "QUALIFIED",
+    "application_auth": "QUALIFIED",
+    "lane_list": "PASS",
+    "lane_count": 0,
+    "granted_capability_classes": [
+      "fs.read",
+      "fs.write"
+    ],
+    "rdc_used": false,
+    "process_execution_changed": false
+  },
+  "path_probe": {
+    "smb_445": true,
+    "veraport_17444": true,
+    "ssh_22": false,
+    "winrm_5985": false,
+    "winrm_5986": false,
+    "rdp_3389": false,
+    "workbridge_8765": false
+  },
+  "companion_workbridge": {
+    "repository": "thebrazenbeard/WorkBridgeMCP",
+    "continuation_branch": "state/workbridge-lappy-install-continuation-20260922-v1",
+    "pr": 5,
+    "head": "92c66159d9b610a94f59066ab2bb6416f4513093",
+    "ci_run": 35797931646,
+    "ci_status": "PASS"
+  },
+  "next": "Resume authorized WorkBridge install on Lappy, qualify loopback runtime, then connect VeraMesh to WorkBridge without RDC or wider network exposure."
+}
