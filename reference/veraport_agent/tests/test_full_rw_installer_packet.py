@@ -18,10 +18,10 @@ SCRIPT = (
 
 def test_full_rw_installer_uses_explicit_driver_not_pythonpath():
     text = SCRIPT.read_text(encoding="utf-8").replace("\r\n", "\n")
-    assert "aa56672e0d0d79927a895add673bbb8b2bb78f8d" in text
-    assert "invoke-controller-capability-upgrade.py" in text
+    assert "1e23849eeff9903c8419d5dabf3cebce96962e51" in text
+    assert "invoke-filesystem-only-reconcile.py" in text
     assert "sys.path.insert(0, str(source_root))" in text
-    assert "from veraport_agent.controller_capability_upgrade import main" in text
+    assert "from veraport_agent.filesystem_only_reconcile import main" in text
     assert "$env:PYTHONPATH" not in text
     assert "fs.read,fs.write" in text
     assert "process_enabled = $false" in text
@@ -38,7 +38,7 @@ def test_embedded_upgrade_driver_imports_explicit_source_under_isolation(tmp_pat
     )
     assert match is not None
 
-    driver = tmp_path / "invoke-controller-capability-upgrade.py"
+    driver = tmp_path / "invoke-filesystem-only-reconcile.py"
     driver.write_text(match.group("driver") + "\n", encoding="utf-8")
 
     source_root = tmp_path / "source"
