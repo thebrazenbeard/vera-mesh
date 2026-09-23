@@ -19,6 +19,7 @@ class HostDependencies:
     make_server_context: Callable[..., Any]
     serve_tls_connection: Callable[..., Any]
     start_server: Callable[..., Any] = asyncio.start_server
+    workbridge_backend_cls: Callable[..., Any] | None = None
 
 
 @dataclass
@@ -41,6 +42,7 @@ def default_dependencies() -> HostDependencies:
     from .runtime import WorkstationHandlerFactory
     from .state import AgentStateStore
     from .tls_transport import make_server_context, serve_tls_connection
+    from .workbridge_local import WorkBridgeLocalBackend
 
     return HostDependencies(
         load_identity=load_identity,
@@ -52,6 +54,7 @@ def default_dependencies() -> HostDependencies:
         handler_factory_cls=WorkstationHandlerFactory,
         make_server_context=make_server_context,
         serve_tls_connection=serve_tls_connection,
+        workbridge_backend_cls=WorkBridgeLocalBackend,
     )
 
 
@@ -91,7 +94,23 @@ def prepare_host(
             max_read_bytes=config.max_read_bytes,
             allow_process_exec=config.allow_process_exec,
         )
-        agent = deps.agent_cls(registry, executor, state_store)
+        workbridge = None
+        if config.workbridge_config is not None:
+            if deps.workbridge_backend_cls is None:
+                raise RuntimeError("WorkBridge local config present but backend is unavailable")
+            workbridge = deps.workbridge_backend_cls.load(
+                config.workbridge_config,
+                registry=registry,
+            )
+        if workbridge is None:
+            agent = deps.agent_cls(registry, executor, state_store)
+        else:
+            agent = deps.agent_cls(
+                registry,
+                executor,
+                state_store,
+                workbridge=workbridge,
+            )
         authenticator = deps.authenticator_cls(
             workstation_private_key=identity.workstation_private_key,
             allowed_controllers=identity.allowed_controllers,

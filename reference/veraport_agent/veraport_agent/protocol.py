@@ -38,10 +38,13 @@ class VeraPortAgent:
         registry: LaneRegistry,
         executor: LocalExecutor,
         state_store: AgentStateStore | None = None,
+        *,
+        workbridge: Any | None = None,
     ) -> None:
         self.registry = registry
         self.executor = executor
         self.state_store = state_store
+        self.workbridge = workbridge
         self.rdc = surface_for(executor)
         self._lane_locks: dict[str, asyncio.Lock] = {}
         self._lane_lock_users: dict[str, int] = {}
@@ -213,14 +216,25 @@ class VeraPortAgent:
 
         if operation == "fs.read_text":
             lane_id = str(request["lane_id"])
+            path = str(request["path"])
+            encoding = str(request.get("encoding", "utf-8"))
             async with self._lane_operation(lane_id):
+                if (
+                    self.workbridge is not None
+                    and self.workbridge.can_handle(path)
+                ):
+                    content = await self.workbridge.read_text(
+                        lane_id=lane_id,
+                        fencing_token=int(request["fencing_token"]),
+                        path=path,
+                        encoding=encoding,
+                    )
+                    return {"content": content, "backend": "workbridge"}
                 content = await self.executor.read_text(
                     lane_id=lane_id,
                     fencing_token=int(request["fencing_token"]),
-                    path=str(request["path"]),
-                    encoding=str(
-                        request.get("encoding", "utf-8")
-                    ),
+                    path=path,
+                    encoding=encoding,
                 )
                 return {"content": content}
 
@@ -254,16 +268,38 @@ class VeraPortAgent:
             fencing_token = int(request["fencing_token"])
             async with self._lane_operation(lane_id):
                 if operation == "fs.stat":
+                    path = str(request["path"])
+                    if (
+                        self.workbridge is not None
+                        and self.workbridge.can_handle(path)
+                    ):
+                        return await self.workbridge.stat(
+                            lane_id=lane_id,
+                            fencing_token=fencing_token,
+                            path=path,
+                        )
                     return await self.rdc.stat(
                         lane_id=lane_id,
                         fencing_token=fencing_token,
-                        path=str(request["path"]),
+                        path=path,
                     )
                 if operation == "fs.list_dir":
+                    path = str(request["path"])
+                    if (
+                        self.workbridge is not None
+                        and self.workbridge.can_handle(path)
+                    ):
+                        return await self.workbridge.list_dir(
+                            lane_id=lane_id,
+                            fencing_token=fencing_token,
+                            path=path,
+                            offset=request.get("offset", 0),
+                            max_entries=request.get("max_entries", 200),
+                        )
                     return await self.rdc.list_dir(
                         lane_id=lane_id,
                         fencing_token=fencing_token,
-                        path=str(request["path"]),
+                        path=path,
                         offset=request.get("offset", 0),
                         max_entries=request.get("max_entries", 200),
                     )
