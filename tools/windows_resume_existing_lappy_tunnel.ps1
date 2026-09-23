@@ -220,7 +220,7 @@ if ((Get-FileSha256 $mcpExecutablePath) -ne ([string]$tunnel.mcp_executable_sha2
     throw "Existing MCP executable hash does not match tunnel runtime config."
 }
 
-$moduleOutput = @(& $RuntimePython -c "import veraport_agent.tunnel_runtime_service as m; print(m.__file__)")
+$moduleOutput = @(& $RuntimePython -I -c "import veraport_agent.tunnel_runtime_service as m; print(m.__file__)")
 Assert-ExitCode "locate installed tunnel runtime module"
 $InstalledModule = ([string]$moduleOutput[-1]).Trim()
 if ([string]::IsNullOrWhiteSpace($InstalledModule) -or -not (Test-Path -LiteralPath $InstalledModule -PathType Leaf)) {
