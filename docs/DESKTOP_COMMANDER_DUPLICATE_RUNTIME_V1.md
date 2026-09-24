@@ -1,6 +1,6 @@
-# VeraMesh / Desktop Commander duplicate runtime
+# VeraMesh / VeraRelay / Desktop Commander duplicate runtime
 
-This source path makes the existing VeraMesh Secure MCP Tunnel launch the exact upstream DesktopCommanderMCP server built by WorkBridgeMCP, rather than translating Desktop Commander behavior into VeraPort operations.
+This source path runs the exact upstream DesktopCommanderMCP server built by WorkBridgeMCP. It does not translate Desktop Commander behavior into VeraPort operations.
 
 Source binding:
 
@@ -9,18 +9,32 @@ Source binding:
 - WorkBridge's installer builds that exact source and emits hashes for its private packaged `node.exe` and `dist/index.js`.
 - VeraMesh tunnel runtime verifies both hashes before launch.
 
-Runtime command shape:
+## Primary Secure MCP Tunnel path
+
+```text
+ChatGPT -> VeraMesh Secure MCP Tunnel -> private node.exe -> exact DesktopCommanderMCP dist/index.js -> workstation
+```
+
+The managed tunnel command is:
 
 ```text
 '<private node.exe>' '<DesktopCommanderMCP\\dist\\index.js>' '--no-onboarding'
 ```
 
-The upstream Desktop Commander server therefore owns its native tools and semantics, including `start_process(command=...)` with unrestricted command strings, interactive process sessions, file/search/edit tools, process listing/control, local tool-call history, and its document convenience tools.
+The upstream Desktop Commander server owns its native tools and semantics, including unrestricted `start_process(command=...)`, interactive process sessions, filesystem/search/edit tools, process listing/control, recent tool-call history, document convenience tools, and configuration tools present at the pinned source subject.
 
-VeraMesh remains the authenticated remote transport. It does not rewrite the upstream Desktop Commander tool surface on this path.
+## VeraRelay live path
 
-The activation source is `tools/Enable-Lappy-DesktopCommander-Duplicate.ps1`. It is transactional: it verifies the exact WorkBridge manifest and runtime hashes, backs up the current tunnel configuration, swaps only the MCP executable/entrypoint/arguments, restarts the managed tunnel runtime, checks tunnel-client health, and restores the prior configuration if qualification fails.
+```text
+MCP stream -> verarelay-desktop-commander -> veramesh-desktop-commander-host -> exact DesktopCommanderMCP stdio server
+```
 
-VeraRelay remains part of the broader VeraMesh system, but the live MCP request/response stream on this duplicate path is the Secure MCP Tunnel. VeraRelay must not narrow or reinterpret Desktop Commander's tool semantics if it later carries discovery, custody, or fallback signaling for this path.
+`veramesh-desktop-commander-host` turns the exact upstream stdio process into an opaque loopback byte stream without parsing MCP. `verarelay-desktop-commander` forwards that stream bidirectionally without inspecting or rewriting tool names, arguments, command strings, responses, notifications, or errors.
 
-This repository change is source only. Running the activation packet is a separate workstation/runtime effect.
+The exact-head E2E workflow builds the pinned WorkBridge/DesktopCommander source and sends a real `start_process` arbitrary command through this entire relay chain on Windows and Linux.
+
+## Activation
+
+The activation source is `tools/Enable-Lappy-DesktopCommander-Duplicate.ps1`. It verifies the exact WorkBridge manifest and runtime hashes, backs up the current tunnel configuration, swaps only the MCP executable/entrypoint/arguments, restarts the managed tunnel runtime, checks tunnel-client health, and restores the prior configuration if qualification fails.
+
+Repository source and CI do not themselves prove Lappy installation or live ChatGPT consumption. Those are separate runtime effects.
