@@ -1,0 +1,54 @@
+{
+  "schema": "PROJECT_RUNNER_P0_PROJECT_MANIFEST_V1",
+  "corpus_id": "PROJECT_RUNNER_PORTFOLIO_CORPUS_V1",
+  "classification": {
+    "project_id": "vera-mesh",
+    "repository": "thebrazenbeard/vera-mesh",
+    "priority": "P0",
+    "family_id": "vera-runtime",
+    "activity_state": "ACTIVE_HEAVY",
+    "observed_at": "2026-09-24T13:08:00-04:00",
+    "source_kind": "PUBLIC_CORPUS_SNAPSHOT",
+    "source_subject": "thebrazenbeard/project-runner@4bc9dfee1204c774d077419ee9c3fdf91ebc141f:portfolio/corpus.public.json"
+  },
+  "role": {
+    "purpose": "Persistent transport and node connectivity for Vera and authorized machines.",
+    "status": "Large WorkBridge/VeraPort/Lappy activation stack remains open.",
+    "current_frontier": "Collapse stacked activation work into one qualified transport path."
+  },
+  "governance": {
+    "priority_is_authority": false,
+    "scheduling_requires_currentness": true,
+    "effect_requires_explicit_authority": true,
+    "merge_deploy_not_granted": true
+  },
+  "build_tracks": [
+    {
+      "id": "transport-convergence",
+      "goal": "Converge the VeraPort/VeraMesh activation stack onto one qualified transport route.",
+      "acceptance": [
+        "One route owns each live listener.",
+        "Handshake and capability negotiation are explicit.",
+        "Alternative/stale activation paths are classified."
+      ]
+    },
+    {
+      "id": "workbridge-integration",
+      "goal": "Keep WorkBridge delegation narrow, authenticated and scope-bound.",
+      "acceptance": [
+        "Requested capabilities equal granted capabilities.",
+        "Filesystem effects remain within authorized roots.",
+        "Process execution stays separately gated."
+      ]
+    },
+    {
+      "id": "rollback",
+      "goal": "Make activation and recovery rollback exact and observable.",
+      "acceptance": [
+        "Rollback restores the prior runtime subject.",
+        "Partial activation is distinguishable from success.",
+        "Readback verifies service/config state after effects."
+      ]
+    }
+  ]
+}
