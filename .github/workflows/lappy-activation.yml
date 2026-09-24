@@ -12,6 +12,7 @@ on:
       - "tools/windows_*.ps1"
       - "tools/Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1"
       - "tools/Enable-Lappy-CVera-WorkBridgeRead.ps1"
+      - "tools/Enable-Lappy-DesktopCommander-Duplicate.ps1"
       - "reference/veraport_agent/**"
       - "docs/LAPPY_VERAMESH_ACTIVATION_PACKET_V1.md"
       - ".github/workflows/lappy-activation.yml"
@@ -20,6 +21,7 @@ on:
       - "tools/windows_activate_lappy_veramesh.ps1"
       - "tools/windows_*.ps1"
       - "tools/Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1"
+      - "tools/Enable-Lappy-DesktopCommander-Duplicate.ps1"
       - "reference/veraport_agent/**"
       - "docs/LAPPY_VERAMESH_ACTIVATION_PACKET_V1.md"
       - ".github/workflows/lappy-activation.yml"
@@ -52,6 +54,7 @@ jobs:
             Get-ChildItem .\tools -Filter "windows_*.ps1"
             Get-Item .\tools\Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1
             Get-Item .\tools\Enable-Lappy-CVera-WorkBridgeRead.ps1
+            Get-Item .\tools\Enable-Lappy-DesktopCommander-Duplicate.ps1
           )
           $scripts | ForEach-Object {
             $tokens = $null
@@ -177,6 +180,29 @@ jobs:
           if ($text.Contains('"process.exec"') -or $text.Contains('"process.start"')) {
             Write-Error "C Vera activation unexpectedly contains process gateway operations"
             exit 1
+          }
+
+      - name: Verify Desktop Commander duplicate activation contract
+        shell: pwsh
+        run: |
+          $text = [IO.File]::ReadAllText(".\tools\Enable-Lappy-DesktopCommander-Duplicate.ps1")
+          foreach ($required in @(
+            '550a0b3e31da18b7cf25e87ed840e3d953b6da42',
+            '6f2d813b59fe2ff0f0aafa6a60feaacc7eea0de7',
+            'Resolve-TunnelPackage',
+            'Replace-PackageTree',
+            'Restore-PackageTree',
+            'mcp_entrypoint',
+            'mcp_entrypoint_sha256',
+            'mcp_arguments',
+            'unrestricted_command_string_shell',
+            'harden_service_materials',
+            'CALL_DESKTOP_COMMANDER_TOOL_FROM_CHATGPT_THROUGH_SELECTED_SECURE_MCP_TUNNEL'
+          )) {
+            if (-not $text.Contains($required)) {
+              Write-Error "Desktop Commander activation script missing required marker: $required"
+              exit 1
+            }
           }
 
       - name: Publish C Vera activation packet
