@@ -300,3 +300,79 @@ def test_tunnel_client_subprocess_forces_utf8_decoding(tmp_path):
     assert captured["encoding"] == "utf-8"
     assert captured["errors"] == "strict"
 
+
+
+def desktop_commander_config(tmp_path: Path) -> trs.TunnelRuntimeServiceConfig:
+    base = config(tmp_path)
+    entrypoint = tmp_path / "DesktopCommanderMCP" / "dist" / "index.js"
+    entrypoint.parent.mkdir(parents=True)
+    entrypoint.write_text("desktop-commander-entrypoint", encoding="utf-8")
+    return trs.TunnelRuntimeServiceConfig.from_dict({
+        "schema": "VERAMESH_TUNNEL_RUNTIME_SERVICE_V1",
+        "tunnel_client": str(base.tunnel_client),
+        "tunnel_client_sha256": base.tunnel_client_sha256,
+        "alias": base.alias,
+        "tunnel_id": base.tunnel_id,
+        "runtime_api_key_file": str(base.runtime_api_key_file),
+        "controller_config": str(base.controller_config),
+        "mcp_executable": str(base.mcp_executable),
+        "mcp_executable_sha256": base.mcp_executable_sha256,
+        "mcp_entrypoint": str(entrypoint),
+        "mcp_entrypoint_sha256": digest(entrypoint),
+        "mcp_arguments": ["--no-onboarding"],
+        "profile_dir": str(base.profile_dir),
+        "state_dir": str(base.state_dir),
+        "status_interval_s": base.status_interval_s,
+        "command_timeout_s": base.command_timeout_s,
+    })
+
+
+def test_desktop_commander_entrypoint_is_integrity_bound_and_quoted(tmp_path):
+    cfg = desktop_commander_config(tmp_path)
+    cfg.validate_runtime_files()
+    args = trs.connect_args(cfg)
+    command = args[args.index("--mcp-command") + 1]
+    assert command == (
+        "'" + str(cfg.mcp_executable) + "' "
+        "'" + str(cfg.mcp_entrypoint) + "' "
+        "'--no-onboarding'"
+    )
+    env = trs.runtime_environment(cfg, {"PATH": "safe"})
+    assert env["DC_REMOTE_DEVICE"] == "true"
+
+
+def test_desktop_commander_entrypoint_hash_mismatch_fails_closed(tmp_path):
+    cfg = desktop_commander_config(tmp_path)
+    assert cfg.mcp_entrypoint is not None
+    cfg.mcp_entrypoint.write_text("tampered", encoding="utf-8")
+    with pytest.raises(
+        trs.TunnelRuntimeServiceError,
+        match="managed MCP entrypoint SHA-256 mismatch",
+    ):
+        cfg.validate_runtime_files()
+
+
+def test_desktop_commander_argument_injection_is_rejected(tmp_path):
+    base = config(tmp_path)
+    entrypoint = tmp_path / "index.js"
+    entrypoint.write_text("entrypoint", encoding="utf-8")
+    with pytest.raises(
+        trs.TunnelRuntimeServiceError,
+        match="mcp_arguments\\[0\\]",
+    ):
+        trs.TunnelRuntimeServiceConfig.from_dict({
+            "schema": "VERAMESH_TUNNEL_RUNTIME_SERVICE_V1",
+            "tunnel_client": str(base.tunnel_client),
+            "tunnel_client_sha256": base.tunnel_client_sha256,
+            "alias": base.alias,
+            "tunnel_id": base.tunnel_id,
+            "runtime_api_key_file": str(base.runtime_api_key_file),
+            "controller_config": str(base.controller_config),
+            "mcp_executable": str(base.mcp_executable),
+            "mcp_executable_sha256": base.mcp_executable_sha256,
+            "mcp_entrypoint": str(entrypoint),
+            "mcp_entrypoint_sha256": digest(entrypoint),
+            "mcp_arguments": ["bad'argument"],
+            "profile_dir": str(base.profile_dir),
+            "state_dir": str(base.state_dir),
+        })
