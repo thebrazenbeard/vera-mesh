@@ -41,6 +41,9 @@ class TunnelRuntimeServiceConfig:
     mcp_executable_sha256: str
     profile_dir: Path
     state_dir: Path
+    mcp_entrypoint: Path | None = None
+    mcp_entrypoint_sha256: str | None = None
+    mcp_arguments: tuple[str, ...] = ()
     status_interval_s: float = 5.0
     command_timeout_s: float = 60.0
 
@@ -80,6 +83,21 @@ class TunnelRuntimeServiceConfig:
                 f"missing required fields: {missing}"
             )
 
+        raw_mcp_arguments = value.get("mcp_arguments", [])
+        if (
+            not isinstance(raw_mcp_arguments, list)
+            or not all(isinstance(item, str) for item in raw_mcp_arguments)
+        ):
+            raise TunnelRuntimeServiceError(
+                "mcp_arguments must be an array of strings"
+            )
+        raw_mcp_entrypoint = value.get("mcp_entrypoint")
+        raw_mcp_entrypoint_sha256 = value.get("mcp_entrypoint_sha256")
+        if (raw_mcp_entrypoint is None) != (raw_mcp_entrypoint_sha256 is None):
+            raise TunnelRuntimeServiceError(
+                "mcp_entrypoint and mcp_entrypoint_sha256 must be supplied together"
+            )
+
         cfg = cls(
             tunnel_client=Path(str(value["tunnel_client"])).expanduser().resolve(),
             tunnel_client_sha256=str(
@@ -101,6 +119,17 @@ class TunnelRuntimeServiceConfig:
             ).strip().lower(),
             profile_dir=Path(str(value["profile_dir"])).expanduser().resolve(),
             state_dir=Path(str(value["state_dir"])).expanduser().resolve(),
+            mcp_entrypoint=(
+                Path(str(raw_mcp_entrypoint)).expanduser().resolve()
+                if raw_mcp_entrypoint is not None
+                else None
+            ),
+            mcp_entrypoint_sha256=(
+                str(raw_mcp_entrypoint_sha256).strip().lower()
+                if raw_mcp_entrypoint_sha256 is not None
+                else None
+            ),
+            mcp_arguments=tuple(raw_mcp_arguments),
             status_interval_s=float(value.get("status_interval_s", 5.0)),
             command_timeout_s=float(value.get("command_timeout_s", 60.0)),
         )
@@ -120,18 +149,34 @@ class TunnelRuntimeServiceConfig:
             raise TunnelRuntimeServiceError(
                 "tunnel_id must be a bounded non-whitespace identifier"
             )
-        for name, digest in (
+        digest_items = [
             ("tunnel_client_sha256", self.tunnel_client_sha256),
             ("mcp_executable_sha256", self.mcp_executable_sha256),
-        ):
+        ]
+        if self.mcp_entrypoint_sha256 is not None:
+            digest_items.append(
+                ("mcp_entrypoint_sha256", self.mcp_entrypoint_sha256)
+            )
+        for name, digest in digest_items:
             if not re.fullmatch(r"[0-9a-f]{64}", digest):
                 raise TunnelRuntimeServiceError(
                     f"{name} must be 64 lowercase hex characters"
                 )
-        if "'" in str(self.mcp_executable):
-            raise TunnelRuntimeServiceError(
-                "mcp_executable path must not contain a single quote"
-            )
+        for label, value in (
+            ("mcp_executable", str(self.mcp_executable)),
+            (
+                "mcp_entrypoint",
+                "" if self.mcp_entrypoint is None else str(self.mcp_entrypoint),
+            ),
+            *[
+                (f"mcp_arguments[{index}]", item)
+                for index, item in enumerate(self.mcp_arguments)
+            ],
+        ):
+            if value and any(ch in value for ch in "\x00\r\n'"):
+                raise TunnelRuntimeServiceError(
+                    f"{label} cannot contain NUL, CR, LF, or single quote"
+                )
         if not 1.0 <= self.status_interval_s <= 300.0:
             raise TunnelRuntimeServiceError(
                 "status_interval_s must be in 1..300"
@@ -142,15 +187,20 @@ class TunnelRuntimeServiceConfig:
             )
 
     def validate_runtime_files(self) -> None:
-        for path, label in (
+        required_files = [
             (self.tunnel_client, "tunnel-client executable"),
-            (self.mcp_executable, "VeraMesh stdio MCP executable"),
+            (self.mcp_executable, "managed MCP runtime executable"),
             (self.runtime_api_key_file, "runtime API key file"),
             (self.controller_config, "VeraPort controller config"),
-        ):
+        ]
+        if self.mcp_entrypoint is not None:
+            required_files.append(
+                (self.mcp_entrypoint, "managed MCP entrypoint")
+            )
+        for path, label in required_files:
             if not path.is_file():
                 raise TunnelRuntimeServiceError(f"{label} missing: {path}")
-        for path, expected, label in (
+        hashed_files = [
             (
                 self.tunnel_client,
                 self.tunnel_client_sha256,
@@ -159,9 +209,21 @@ class TunnelRuntimeServiceConfig:
             (
                 self.mcp_executable,
                 self.mcp_executable_sha256,
-                "VeraMesh stdio MCP executable",
+                "managed MCP runtime executable",
             ),
+        ]
+        if (
+            self.mcp_entrypoint is not None
+            and self.mcp_entrypoint_sha256 is not None
         ):
+            hashed_files.append(
+                (
+                    self.mcp_entrypoint,
+                    self.mcp_entrypoint_sha256,
+                    "managed MCP entrypoint",
+                )
+            )
+        for path, expected, label in hashed_files:
             if _sha256_file(path) != expected:
                 raise TunnelRuntimeServiceError(
                     f"{label} SHA-256 mismatch"
@@ -200,15 +262,26 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _tunnel_quote_executable(path: Path) -> str:
-    value = str(path)
+def _tunnel_quote_argument(value: str) -> str:
     if not value or any(ch in value for ch in "\x00\r\n'"):
         raise TunnelRuntimeServiceError(
-            "MCP executable path cannot be represented safely"
+            "MCP command argument cannot be represented safely"
         )
     # tunnel-client preserves Windows backslashes inside single quotes.
     # Its double-quoted parser treats backslashes as escapes.
     return "'" + value + "'"
+
+
+def _tunnel_quote_executable(path: Path) -> str:
+    return _tunnel_quote_argument(str(path))
+
+
+def mcp_command(config: TunnelRuntimeServiceConfig) -> str:
+    parts = [_tunnel_quote_executable(config.mcp_executable)]
+    if config.mcp_entrypoint is not None:
+        parts.append(_tunnel_quote_argument(str(config.mcp_entrypoint)))
+    parts.extend(_tunnel_quote_argument(item) for item in config.mcp_arguments)
+    return " ".join(parts)
 
 
 def runtime_environment(
@@ -225,6 +298,8 @@ def runtime_environment(
     env["TUNNEL_CLIENT_STATE_DIR"] = str(config.state_dir)
     env["VERAPORT_CONTROLLER_CONFIG"] = str(config.controller_config)
     env["VERAPORT_MCP_TRANSPORT"] = "stdio"
+    if config.mcp_entrypoint is not None:
+        env["DC_REMOTE_DEVICE"] = "true"
     return env
 
 
@@ -244,7 +319,7 @@ def connect_args(config: TunnelRuntimeServiceConfig) -> list[str]:
         "--profile-dir",
         str(config.profile_dir),
         "--mcp-command",
-        _tunnel_quote_executable(config.mcp_executable),
+        mcp_command(config),
     ]
 
 
@@ -358,6 +433,8 @@ def harden_service_materials(
         controller.tls_ca,
         controller.workstation_public_key,
     }
+    if config.mcp_entrypoint is not None:
+        protected_files.add(config.mcp_entrypoint)
     protected_dirs = {
         config_path.parent,
         config.profile_dir,
@@ -386,6 +463,8 @@ def validate_service_materials(
         controller.tls_ca,
         controller.workstation_public_key,
     }
+    if config.mcp_entrypoint is not None:
+        protected_files.add(config.mcp_entrypoint)
     protected_dirs = {
         config_path.parent,
         config.profile_dir,
