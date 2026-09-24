@@ -157,7 +157,35 @@ async def test_exact_desktop_commander_executes_command_through_verarelay():
             for item in started["result"].get("content", [])
             if item.get("type") == "text"
         )
-        assert marker in text, text
+        if marker not in text:
+            import re
+
+            match = re.search(r"PID\\s+(-?\\d+)", text, re.IGNORECASE)
+            assert match is not None, text
+            await send(
+                writer,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 4,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "read_process_output",
+                        "arguments": {
+                            "pid": int(match.group(1)),
+                            "offset": -20,
+                            "length": 20,
+                            "timeout_ms": 2000,
+                        },
+                    },
+                },
+            )
+            output = await read_response(reader, 4)
+            output_text = "\n".join(
+                item.get("text", "")
+                for item in output["result"].get("content", [])
+                if item.get("type") == "text"
+            )
+            assert marker in output_text, output_text
     finally:
         writer.close()
         await writer.wait_closed()
