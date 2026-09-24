@@ -1,3 +1,4 @@
+[CmdletBinding()]
 param(
     [string]$WorkBridgeInstallRoot = "C:\ProgramData\WorkBridgeMCP\DesktopCommanderMCP",
     [string]$TunnelConfigPath = "C:\ProgramData\VeraMesh\tunnel-runtime.json",
@@ -8,8 +9,27 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$ExpectedSchema = "WORKBRIDGE_DESKTOP_COMMANDER_DUPLICATE_V1"
+$ExpectedManifestSchema = "WORKBRIDGE_DESKTOP_COMMANDER_DUPLICATE_V1"
 $ExpectedUpstreamCommit = "550a0b3e31da18b7cf25e87ed840e3d953b6da42"
+$VeraMeshRuntimeSourceCommit = "6f2d813b59fe2ff0f0aafa6a60feaacc7eea0de7"
+$Root = "C:\ProgramData\VeraMesh"
+$TunnelPython = Join-Path $Root "tunnel-runtime\python.exe"
+$StageRoot = Join-Path $env:TEMP ("VeraMesh-DesktopCommander-" + [Guid]::NewGuid().ToString("N"))
+$ReceiptPath = Join-Path $Root "desktop-commander-duplicate-activation.json"
+
+$tunnelPackage = $null
+$tunnelPackageBackup = $null
+$tunnelCodeReplaced = $false
+$configBackup = $null
+$wasRunning = $false
+
+function Assert-Administrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw "Run this activation from an elevated Administrator PowerShell window."
+    }
+}
 
 function Add-OrSetProperty {
     param(
@@ -19,66 +39,198 @@ function Add-OrSetProperty {
     )
     if ($Object.PSObject.Properties.Name -contains $Name) {
         $Object.$Name = $Value
-    } else {
+    }
+    else {
         $Object | Add-Member -NotePropertyName $Name -NotePropertyValue $Value
     }
 }
 
 function Get-Sha256([string]$Path) {
-    return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+    (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
 }
 
-$manifestPath = Join-Path $WorkBridgeInstallRoot "workbridge-desktop-commander.manifest.json"
-if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-    throw "Desktop Commander duplicate manifest missing: $manifestPath"
+function Write-Utf8Json([string]$Path, [object]$Value) {
+    $payload = ($Value | ConvertTo-Json -Depth 30) + [Environment]::NewLine
+    [IO.File]::WriteAllText(
+        $Path,
+        $payload,
+        [Text.UTF8Encoding]::new($false)
+    )
 }
-if (-not (Test-Path -LiteralPath $TunnelConfigPath -PathType Leaf)) {
-    throw "VeraMesh tunnel runtime config missing: $TunnelConfigPath"
+
+function Wait-ServiceState([string]$Name, [string]$State, [int]$TimeoutSeconds = 45) {
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        $svc = Get-Service -Name $Name -ErrorAction Stop
+        if ($svc.Status.ToString() -eq $State) { return }
+        Start-Sleep -Milliseconds 500
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "$Name did not reach $State."
+}
+
+function Download-ExactSource([string]$Commit) {
+    if ($Commit -notmatch '^[0-9a-f]{40}$') {
+        throw "VeraMesh source commit must be full lowercase 40-hex."
+    }
+    New-Item -ItemType Directory -Force -Path $StageRoot | Out-Null
+    $zip = Join-Path $StageRoot "veramesh-$Commit.zip"
+    Invoke-WebRequest -UseBasicParsing -Uri ("https://github.com/thebrazenbeard/vera-mesh/archive/" + $Commit + ".zip") -OutFile $zip
+    $expand = Join-Path $StageRoot "source"
+    Expand-Archive -LiteralPath $zip -DestinationPath $expand -Force
+    $dirs = @(Get-ChildItem -LiteralPath $expand -Directory)
+    if ($dirs.Count -ne 1) {
+        throw "Unexpected VeraMesh source archive layout."
+    }
+    $dirs[0].FullName
+}
+
+function Resolve-TunnelPackage {
+    $raw = @(& $TunnelPython -c "import pathlib,veraport_agent; print(pathlib.Path(veraport_agent.__file__).resolve().parent)")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not resolve installed tunnel veraport_agent package."
+    }
+    $resolved = (($raw | ForEach-Object { [string]$_ }) -join "").Trim()
+    if (-not $resolved -or -not (Test-Path -LiteralPath $resolved -PathType Container)) {
+        throw "Installed tunnel package path is invalid: $resolved"
+    }
+    $resolved
+}
+
+function Replace-PackageTree([string]$Current, [string]$Source, [string]$Backup) {
+    if (-not (Test-Path -LiteralPath $Current -PathType Container)) {
+        throw "Installed tunnel package missing: $Current"
+    }
+    if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
+        throw "Pinned tunnel package missing: $Source"
+    }
+    if (Test-Path -LiteralPath $Backup) {
+        throw "Tunnel package backup already exists: $Backup"
+    }
+    Move-Item -LiteralPath $Current -Destination $Backup
+    try {
+        Copy-Item -LiteralPath $Source -Destination $Current -Recurse
+    }
+    catch {
+        if (Test-Path -LiteralPath $Current) {
+            Remove-Item -LiteralPath $Current -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Move-Item -LiteralPath $Backup -Destination $Current
+        throw
+    }
+}
+
+function Restore-PackageTree([string]$Current, [string]$Backup) {
+    if (-not $Backup -or -not (Test-Path -LiteralPath $Backup -PathType Container)) {
+        return
+    }
+    if (Test-Path -LiteralPath $Current) {
+        Remove-Item -LiteralPath $Current -Recurse -Force
+    }
+    Move-Item -LiteralPath $Backup -Destination $Current
+}
+
+function Restore-PreviousState {
+    try {
+        Stop-Service -Name $TunnelServiceName -Force -ErrorAction SilentlyContinue
+    } catch {}
+
+    if ($configBackup -and (Test-Path -LiteralPath $configBackup -PathType Leaf)) {
+        Copy-Item -LiteralPath $configBackup -Destination $TunnelConfigPath -Force
+    }
+
+    if ($tunnelCodeReplaced) {
+        Restore-PackageTree $tunnelPackage $tunnelPackageBackup
+        $script:tunnelCodeReplaced = $false
+    }
+
+    if ($wasRunning) {
+        Start-Service -Name $TunnelServiceName
+        Wait-ServiceState $TunnelServiceName "Running"
+    }
+}
+
+Assert-Administrator
+
+$manifestPath = Join-Path $WorkBridgeInstallRoot "workbridge-desktop-commander.manifest.json"
+foreach ($required in @($manifestPath, $TunnelConfigPath, $TunnelPython)) {
+    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw "Required runtime material missing: $required"
+    }
+}
+if (-not (Get-Service -Name $TunnelServiceName -ErrorAction SilentlyContinue)) {
+    throw "Required tunnel service is missing: $TunnelServiceName"
 }
 
 $manifest = Get-Content -Raw -Encoding UTF8 $manifestPath | ConvertFrom-Json
-if ($manifest.schema -ne $ExpectedSchema) {
-    throw "unexpected WorkBridge duplicate manifest schema: $($manifest.schema)"
+if ($manifest.schema -ne $ExpectedManifestSchema) {
+    throw "Unexpected WorkBridge duplicate manifest schema: $($manifest.schema)"
 }
 if ($manifest.upstream_commit -ne $ExpectedUpstreamCommit) {
     throw "Desktop Commander source pin mismatch: $($manifest.upstream_commit)"
 }
 if ($manifest.unrestricted_command_string_shell -ne $true) {
-    throw "duplicate manifest does not declare unrestricted command-string shell"
+    throw "Duplicate manifest does not declare unrestricted command-string shell."
 }
 
 $nodePath = Join-Path $WorkBridgeInstallRoot $manifest.node_executable_relative
 $entrypointPath = Join-Path $WorkBridgeInstallRoot $manifest.entrypoint_relative
-foreach ($path in @($nodePath, $entrypointPath)) {
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-        throw "required duplicate runtime file missing: $path"
+foreach ($required in @($nodePath, $entrypointPath)) {
+    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw "Required Desktop Commander runtime file missing: $required"
     }
 }
 
 $nodeHash = Get-Sha256 $nodePath
 $entryHash = Get-Sha256 $entrypointPath
 if ($nodeHash -ne $manifest.node_sha256) {
-    throw "packaged Node runtime hash mismatch"
+    throw "Packaged Node runtime hash mismatch."
 }
 if ($entryHash -ne $manifest.entrypoint_sha256) {
-    throw "Desktop Commander entrypoint hash mismatch"
+    throw "Desktop Commander entrypoint hash mismatch."
 }
-
-$tunnelConfig = Get-Content -Raw -Encoding UTF8 $TunnelConfigPath | ConvertFrom-Json
-if ($tunnelConfig.schema -ne "VERAMESH_TUNNEL_RUNTIME_SERVICE_V1") {
-    throw "unexpected tunnel runtime schema: $($tunnelConfig.schema)"
-}
-
-$backupPath = "$TunnelConfigPath.desktop-commander-backup.$([DateTime]::UtcNow.ToString('yyyyMMddHHmmss')).json"
-Copy-Item -LiteralPath $TunnelConfigPath -Destination $backupPath -Force
 
 $service = Get-Service -Name $TunnelServiceName -ErrorAction Stop
-$wasRunning = $service.Status -eq "Running"
+$wasRunning = $service.Status.ToString() -eq "Running"
+$stamp = [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssZ")
+$configBackup = "$TunnelConfigPath.pre-desktop-commander-$stamp.bak"
 
+New-Item -ItemType Directory -Force -Path $StageRoot | Out-Null
 try {
+    Write-Host "=== Stage exact VeraMesh tunnel runtime source ==="
+    $sourceRoot = Download-ExactSource $VeraMeshRuntimeSourceCommit
+    $sourcePackage = Join-Path $sourceRoot "reference\veraport_agent\veraport_agent"
+    $sourceTunnelRuntime = Join-Path $sourcePackage "tunnel_runtime_service.py"
+    if (-not (Test-Path -LiteralPath $sourceTunnelRuntime -PathType Leaf)) {
+        throw "Pinned VeraMesh source lacks tunnel_runtime_service.py."
+    }
+    $sourceText = Get-Content -LiteralPath $sourceTunnelRuntime -Raw -Encoding UTF8
+    foreach ($needle in @("mcp_entrypoint", "mcp_entrypoint_sha256", "mcp_arguments", "def mcp_command")) {
+        if ($sourceText -notmatch [regex]::Escape($needle)) {
+            throw "Pinned tunnel runtime source lacks Desktop Commander support: $needle"
+        }
+    }
+
+    Write-Host "=== Stop tunnel service and replace only its package code ==="
     if ($wasRunning) {
         Stop-Service -Name $TunnelServiceName -Force
-        (Get-Service -Name $TunnelServiceName).WaitForStatus("Stopped", [TimeSpan]::FromSeconds(30))
+        Wait-ServiceState $TunnelServiceName "Stopped"
+    }
+
+    $tunnelPackage = Resolve-TunnelPackage
+    $tunnelPackageBackup = "$tunnelPackage.pre-desktop-commander-$stamp"
+    Replace-PackageTree $tunnelPackage $sourcePackage $tunnelPackageBackup
+    $tunnelCodeReplaced = $true
+
+    $installedTunnelRuntime = Join-Path $tunnelPackage "tunnel_runtime_service.py"
+    if ((Get-Sha256 $installedTunnelRuntime) -ne (Get-Sha256 $sourceTunnelRuntime)) {
+        throw "Installed tunnel runtime does not match pinned VeraMesh source."
+    }
+
+    Write-Host "=== Bind exact Desktop Commander runtime into existing tunnel ==="
+    Copy-Item -LiteralPath $TunnelConfigPath -Destination $configBackup
+    $tunnelConfig = Get-Content -Raw -Encoding UTF8 $TunnelConfigPath | ConvertFrom-Json
+    if ($tunnelConfig.schema -ne "VERAMESH_TUNNEL_RUNTIME_SERVICE_V1") {
+        throw "Unexpected tunnel runtime schema: $($tunnelConfig.schema)"
     }
 
     Add-OrSetProperty $tunnelConfig "mcp_executable" $nodePath
@@ -86,51 +238,71 @@ try {
     Add-OrSetProperty $tunnelConfig "mcp_entrypoint" $entrypointPath
     Add-OrSetProperty $tunnelConfig "mcp_entrypoint_sha256" $entryHash
     Add-OrSetProperty $tunnelConfig "mcp_arguments" @("--no-onboarding")
+    Write-Utf8Json $TunnelConfigPath $tunnelConfig
 
-    $tempPath = "$TunnelConfigPath.tmp.$([Guid]::NewGuid().ToString('N'))"
-    $tunnelConfig | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $tempPath -Encoding UTF8
-    Move-Item -LiteralPath $tempPath -Destination $TunnelConfigPath -Force
+    Write-Host "=== Harden and validate updated tunnel materials ==="
+    $oldConfigEnv = $env:VERAMESH_DESKTOP_COMMANDER_TUNNEL_CONFIG
+    try {
+        $env:VERAMESH_DESKTOP_COMMANDER_TUNNEL_CONFIG = $TunnelConfigPath
+        & $TunnelPython -c "import os; from pathlib import Path; from veraport_agent.tunnel_runtime_service import TunnelRuntimeServiceConfig,harden_service_materials,validate_service_materials; p=Path(os.environ['VERAMESH_DESKTOP_COMMANDER_TUNNEL_CONFIG']); c=TunnelRuntimeServiceConfig.load(p); c.validate_runtime_files(); harden_service_materials(p,c); validate_service_materials(p,c)"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Tunnel runtime material hardening/validation failed."
+        }
+    }
+    finally {
+        $env:VERAMESH_DESKTOP_COMMANDER_TUNNEL_CONFIG = $oldConfigEnv
+    }
 
     if ($StartRuntime) {
+        Write-Host "=== Start exact Desktop Commander through existing Secure MCP Tunnel ==="
         Start-Service -Name $TunnelServiceName
-        (Get-Service -Name $TunnelServiceName).WaitForStatus("Running", [TimeSpan]::FromSeconds(30))
+        Wait-ServiceState $TunnelServiceName "Running"
 
-        $env:TUNNEL_CLIENT_PROFILE_DIR = [string]$tunnelConfig.profile_dir
-        $env:TUNNEL_CLIENT_STATE_DIR = [string]$tunnelConfig.state_dir
-        $statusRaw = & ([string]$tunnelConfig.tunnel_client) runtimes status ([string]$tunnelConfig.alias) --json
+        $activeConfig = Get-Content -Raw -Encoding UTF8 $TunnelConfigPath | ConvertFrom-Json
+        $env:TUNNEL_CLIENT_PROFILE_DIR = [string]$activeConfig.profile_dir
+        $env:TUNNEL_CLIENT_STATE_DIR = [string]$activeConfig.state_dir
+        $statusRaw = @(& ([string]$activeConfig.tunnel_client) runtimes status ([string]$activeConfig.alias) --json)
         if ($LASTEXITCODE -ne 0) {
-            throw "tunnel-client status failed after Desktop Commander activation"
+            throw "tunnel-client status failed after Desktop Commander activation."
         }
-        $status = ($statusRaw -join [Environment]::NewLine) | ConvertFrom-Json
+        $status = (($statusRaw | ForEach-Object { [string]$_ }) -join [Environment]::NewLine) | ConvertFrom-Json
         if ($status.process_running -ne $true -or $status.healthy -ne $true) {
-            throw "Desktop Commander tunnel runtime did not become running and healthy"
+            throw "Desktop Commander tunnel runtime did not become running and healthy."
         }
     }
 
-    [pscustomobject]@{
-        schema = "VERAMESH_DESKTOP_COMMANDER_DUPLICATE_ACTIVATION_V1"
-        status = "activated"
-        upstream_commit = $ExpectedUpstreamCommit
+    $receipt = [ordered]@{
+        schema = "VERAMESH_DESKTOP_COMMANDER_DUPLICATE_ACTIVATION_V2"
+        status = "PASS"
+        observed_at = (Get-Date).ToString("o")
+        sources = [ordered]@{
+            desktop_commander = $ExpectedUpstreamCommit
+            veramesh_runtime = $VeraMeshRuntimeSourceCommit
+        }
         tunnel_alias = [string]$tunnelConfig.alias
         node_executable = $nodePath
         node_sha256 = $nodeHash
         entrypoint = $entrypointPath
         entrypoint_sha256 = $entryHash
         unrestricted_command_string_shell = $true
+        tunnel_package = $tunnelPackage
+        tunnel_package_backup = $tunnelPackageBackup
         runtime_started = $StartRuntime
-        backup_config = $backupPath
-    } | ConvertTo-Json -Depth 6
+        config_backup = $configBackup
+        next_gate = "CALL_DESKTOP_COMMANDER_TOOL_FROM_CHATGPT_THROUGH_SELECTED_SECURE_MCP_TUNNEL"
+    }
+    Write-Utf8Json $ReceiptPath $receipt
+
+    Write-Host ""
+    Write-Host "DESKTOP COMMANDER DUPLICATE TUNNEL ACTIVATION QUALIFIED."
+    Write-Host "Receipt: $ReceiptPath"
+    $receipt | ConvertTo-Json -Depth 20
 }
 catch {
-    try {
-        Stop-Service -Name $TunnelServiceName -Force -ErrorAction SilentlyContinue
-    } catch {}
-    Copy-Item -LiteralPath $backupPath -Destination $TunnelConfigPath -Force
-    if ($wasRunning) {
-        try {
-            Start-Service -Name $TunnelServiceName
-            (Get-Service -Name $TunnelServiceName).WaitForStatus("Running", [TimeSpan]::FromSeconds(30))
-        } catch {}
-    }
+    Write-Warning ("Desktop Commander activation failed: " + $_.Exception.Message)
+    try { Restore-PreviousState } catch { Write-Warning ("Rollback failed: " + $_.Exception.Message) }
     throw
+}
+finally {
+    Remove-Item -LiteralPath $StageRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
