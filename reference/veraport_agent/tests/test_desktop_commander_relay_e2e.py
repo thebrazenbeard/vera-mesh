@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -42,7 +43,7 @@ async def send(writer: asyncio.StreamWriter, message: dict) -> None:
 
 @pytest.mark.asyncio
 async def test_exact_desktop_commander_executes_command_through_verarelay():
-    node = os.environ.get("DESKTOP_COMMANDER_NODE")
+    node = os.environ.get("DESKTOP_COMMANDER_NODE") or shutil.which("node")
     entrypoint = os.environ.get("DESKTOP_COMMANDER_ENTRYPOINT")
     if not node or not entrypoint:
         pytest.skip("exact Desktop Commander CI paths are not configured")
