@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: thebrazenbeard/WorkBridgeMCP
-          ref: 5670d075306ae82dd9d3c7e2292039d713b5685d
+          ref: d2716a6a2f5e6599334cd5085fa1634b08e16df4
           path: workbridge
           submodules: recursive
 
