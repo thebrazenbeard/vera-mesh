@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import shutil
+import socket
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,12 @@ from veraport_agent.desktop_commander_stdio_host import (
     DesktopCommanderStdioHostConfig,
 )
 from veraport_agent.verarelay_live_edge import LiveEdgeConfig
+
+
+def free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
 
 
 async def read_response(
@@ -54,7 +61,7 @@ async def test_exact_desktop_commander_executes_command_through_verarelay():
     host = DesktopCommanderStdioHost(
         DesktopCommanderStdioHostConfig(
             listen_host="127.0.0.1",
-            listen_port=0,
+            listen_port=free_port(),
             executable=executable,
             entrypoint=entry,
             cwd=entry.parent.parent,
@@ -66,7 +73,7 @@ async def test_exact_desktop_commander_executes_command_through_verarelay():
     relay = DesktopCommanderRelay(
         LiveEdgeConfig(
             listen_host="127.0.0.1",
-            listen_port=0,
+            listen_port=free_port(),
             upstream_host="127.0.0.1",
             upstream_port=host_port,
         )
