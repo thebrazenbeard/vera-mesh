@@ -213,6 +213,7 @@ jobs:
           $text = [IO.File]::ReadAllText(".\tools\Install-DesktopCommander-PortableUser.ps1")
           foreach ($required in @(
             '550a0b3e31da18b7cf25e87ed840e3d953b6da42',
+            '477dd6e26e1095cff06bdea832be1c66086f7a39',
             'CURRENT_WINDOWS_USER',
             'BT2_PORTABLE_DESKTOP_COMMANDER_PLAN_V1',
             '$env:LOCALAPPDATA',
