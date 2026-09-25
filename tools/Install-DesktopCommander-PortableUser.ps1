@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$TunnelId = "",
-    [string]$Alias = ""
+    [string]$Alias = "",
+    [switch]$PlanOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,6 +28,7 @@ $ConfigFile = Join-Path $RtRoot "runtime.json"
 $ReceiptFile = Join-Path $RtRoot "install-receipt.json"
 $StartupFile = Join-Path ([Environment]::GetFolderPath("Startup")) "BT2-DesktopCommander-Tunnel.cmd"
 $Tmp = Join-Path $env:TEMP ("bt2-dc-portable-" + [guid]::NewGuid().ToString("N"))
+$CurrentPowerShell = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
 
 function Sha([string]$p) {
     (Get-FileHash -Algorithm SHA256 -LiteralPath $p).Hash.ToLowerInvariant()
@@ -75,6 +77,23 @@ if ([string]::IsNullOrWhiteSpace($Alias)) {
 if ($Alias -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') {
     throw "Invalid alias."
 }
+if ($PlanOnly) {
+    [ordered]@{
+        schema = "BT2_PORTABLE_DESKTOP_COMMANDER_PLAN_V1"
+        admin_required = $false
+        git_required = $false
+        windows_services_installed = $false
+        authority = "CURRENT_WINDOWS_USER"
+        root = $RtRoot
+        desktop_commander_root = $DcRoot
+        alias = $Alias
+        desktop_commander_commit = $DcCommit
+        workbridge_commit = $WorkBridgeCommit
+        tunnel_client_version = $TunnelVersion
+    } | ConvertTo-Json -Depth 8
+    exit 0
+}
+
 if ((Test-Path $DcRoot) -or (Test-Path $RtRoot)) {
     throw "BT2 portable Desktop Commander already has state under $Bt2. Refusing to overwrite it."
 }
@@ -106,7 +125,7 @@ try {
     $wb = (Get-ChildItem $wbDir -Directory | Select-Object -First 1).FullName
     $installer = Join-Path $wb "scripts\Install-DesktopCommanderDuplicate.ps1"
     $probe = Join-Path $wb "scripts\Test-DesktopCommanderDuplicate.mjs"
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -InstallRoot $DcRoot -NodeExe $node -NpmExe $npm
+    & $CurrentPowerShell -NoProfile -ExecutionPolicy Bypass -File $installer -InstallRoot $DcRoot -NodeExe $node -NpmExe $npm
     if ($LASTEXITCODE -ne 0) { throw "Desktop Commander install failed." }
 
     $manifest = Get-Content -Raw (Join-Path $DcRoot "workbridge-desktop-commander.manifest.json") | ConvertFrom-Json
@@ -198,7 +217,7 @@ try {
         '$env:TUNNEL_CLIENT_PROFILE_DIR=$c.profile_dir;$env:TUNNEL_CLIENT_STATE_DIR=$c.state_dir;' +
         '& $c.tunnel_client runtimes connect --alias $c.alias --tunnel-id $c.tunnel_id --runtime-api-key ("file:"+$c.runtime_api_key_file) --profile $c.alias --profile-dir $c.profile_dir --mcp-command $c.mcp_command'
     [IO.File]::WriteAllText($startPs,$start,[Text.UTF8Encoding]::new($false))
-    $startup = '@echo off' + [Environment]::NewLine + 'start "" /min powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $startPs + '"'
+    $startup = '@echo off' + [Environment]::NewLine + 'start "" /min "' + $CurrentPowerShell + '" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $startPs + '"'
     [IO.File]::WriteAllText($StartupFile,$startup,[Text.UTF8Encoding]::new($false))
 
     $receipt=[ordered]@{
