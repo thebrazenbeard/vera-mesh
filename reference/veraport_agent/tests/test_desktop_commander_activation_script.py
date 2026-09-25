@@ -23,6 +23,9 @@ def test_desktop_commander_activation_polls_for_full_runtime_readiness():
     assert "Start-Sleep -Milliseconds 500" in text
     assert "runtime_status = if ($null -ne $runtimeStatus)" in text
     assert "remote tunnel metadata lookup reported" in text
+    assert "LOCAL_PASS_REMOTE_AUTH_PENDING" in text
+    assert "remote_transport_qualified" in text
+    assert "REPAIR_CONTROL_PLANE_AUTH_THEN_CALL_DESKTOP_COMMANDER_FROM_CHATGPT" in text
     assert "CALL_DESKTOP_COMMANDER_TOOL_FROM_CHATGPT_THROUGH_SELECTED_SECURE_MCP_TUNNEL" in text
 
 
