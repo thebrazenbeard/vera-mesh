@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $DcCommit = "550a0b3e31da18b7cf25e87ed840e3d953b6da42"
-$WorkBridgeCommit = "cda1e513b5fe31fc0f5114ff2e3f15ac6733f12e"
+$WorkBridgeCommit = "477dd6e26e1095cff06bdea832be1c66086f7a39"
 $NodeVersion = "24.19.0"
 $NodeExeSha256 = "3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237"
 $TunnelVersion = "v0.0.14"
