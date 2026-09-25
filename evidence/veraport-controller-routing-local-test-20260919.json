@@ -1,0 +1,20 @@
+{
+  "schema": "VERAPORT_CONTROLLER_ROUTING_LOCAL_TEST_V1",
+  "date": "2026-09-19",
+  "status": "FOCUSED_LOCAL_TEST_PASS_ONLY",
+  "subject": "reference/veraport_agent/veraport_agent/controller.py",
+  "result": {"passed": 5, "failed": 0, "duration_seconds_observed": 0.07},
+  "coverage_claims": [
+    "direct authenticated hot session is preferred over edge even when edge RTT is lower",
+    "mutation may fail over with exact request reuse when durable idempotency protects the target agent",
+    "mutation failover is blocked as ambiguous when durable idempotency is absent",
+    "read-only request may fail over across a lost direct path",
+    "expired application sessions are not selected"
+  ],
+  "non_claims": [
+    "no production MCP adapter yet",
+    "no QUIC/TLS transport yet",
+    "no live Lappy failover measurement",
+    "no end-to-end deployment"
+  ]
+}

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "veraport-agent-reference"
+version = "0.3.0"
+description = "Reference VeraPort persistent workstation bridge for VeraMesh"
+requires-python = ">=3.11"
+dependencies = [
+  "cryptography>=42,<49"
+]
+
+[project.optional-dependencies]
+windows-service = [
+  "pywin32>=311"
+]
+mcp = [
+  "mcp>=1.27.2,<2",
+  "uvicorn>=0.30,<1"
+]
+test = [
+  "pytest>=8,<10",
+  "pytest-asyncio>=0.23,<2"
+]
+
+[project.scripts]
+veraport-agent = "veraport_agent.stdio:main"
+veraport-service = "veraport_agent.windows_service:service_cli"
+veraport-mcp = "veraport_agent.mcp_server:main"
+veraport-mcp-stdio = "veraport_agent.mcp_server:stdio_main"
+veraport-live-edge = "veraport_agent.verarelay_live_edge:main"
+verarelay-desktop-commander = "veraport_agent.desktop_commander_relay:main"
+veramesh-desktop-commander-host = "veraport_agent.desktop_commander_stdio_host:main"
+veramesh-tunnel-service = "veraport_agent.tunnel_runtime_service:service_cli"
+veraport-provision-local = "veraport_agent.provision:main"
+veramesh-bootstrap-local = "veraport_agent.bootstrap:main"
+veramesh-oauth-qualify = "veraport_agent.oauth_qualification:main"
+veramesh-public-gateway = "veraport_agent.public_gateway_runtime:main"
+veraport-prepare-workstation = "veraport_agent.prepare_workstation:main"
+veraport-qualify-service = "veraport_agent.qualify_service:main"
+veraport-doctor = "veraport_agent.doctor:main"
+veraport-mcp-service = "veraport_agent.windows_mcp_service:service_cli"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"

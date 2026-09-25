@@ -1,0 +1,260 @@
+{
+  "schema_version": 1,
+  "protocol_version": "v1",
+  "authentication_grants_nothing": true,
+  "principal_classes": {
+    "phone-client": {
+      "remote_application": true,
+      "allowed_scopes": [
+        "mailbox:submit",
+        "mailbox:fetch:self",
+        "receipt:create:self"
+      ],
+      "legal_recipient_class": "vera-host",
+      "derived_direction": "phone-to-host"
+    },
+    "vera-host": {
+      "remote_application": true,
+      "allowed_scopes": [
+        "mailbox:submit",
+        "mailbox:fetch:self",
+        "receipt:create:self"
+      ],
+      "legal_recipient_class": "phone-client",
+      "derived_direction": "host-to-phone"
+    },
+    "relay-admin": {
+      "remote_application": false,
+      "allowed_scopes": [
+        "pairing:create",
+        "principal:revoke",
+        "diagnostics:read",
+        "recovery:execute",
+        "transport:configure",
+        "support:export"
+      ],
+      "legal_recipient_class": null,
+      "derived_direction": null
+    }
+  },
+  "operations": [
+    {
+      "id": "submit_envelope",
+      "method": "POST",
+      "path": "/v1/mailbox/envelopes",
+      "authentication": "required",
+      "body_schema": "message-envelope.schema.json",
+      "allow": [
+        {
+          "principal_class": "phone-client",
+          "required_scope": "mailbox:submit",
+          "sender_principal": "authenticated_principal",
+          "recipient_class": "vera-host",
+          "direction": "phone-to-host"
+        },
+        {
+          "principal_class": "vera-host",
+          "required_scope": "mailbox:submit",
+          "sender_principal": "authenticated_principal",
+          "recipient_class": "phone-client",
+          "direction": "host-to-phone"
+        }
+      ],
+      "derive": [
+        "sender_principal",
+        "sender_role",
+        "direction",
+        "legal_recipient_class"
+      ],
+      "reject_if": [
+        "body contains direction",
+        "body contains sender_role",
+        "body recipient is not the opposite endpoint class",
+        "authenticated principal differs from body sender_principal",
+        "authenticated principal lacks mailbox:submit"
+      ]
+    },
+    {
+      "id": "fetch_envelope",
+      "method": "GET",
+      "path": "/v1/mailbox/envelopes/{message_id}",
+      "authentication": "required",
+      "body_schema": null,
+      "allow": [
+        {
+          "principal_class": "phone-client",
+          "required_scope": "mailbox:fetch:self",
+          "recipient_principal": "authenticated_principal"
+        },
+        {
+          "principal_class": "vera-host",
+          "required_scope": "mailbox:fetch:self",
+          "recipient_principal": "authenticated_principal"
+        }
+      ],
+      "derive": [
+        "recipient_principal from authenticated principal"
+      ],
+      "reject_if": [
+        "message recipient differs from authenticated principal",
+        "authenticated principal lacks mailbox:fetch:self",
+        "protected endpoint has a semantically meaningful query"
+      ]
+    },
+    {
+      "id": "create_recipient_receipt",
+      "method": "POST",
+      "path": "/v1/mailbox/envelopes/{message_id}/receipts",
+      "authentication": "required",
+      "body_schema": "receipt.schema.json",
+      "allow": [
+        {
+          "principal_class": "phone-client",
+          "required_scope": "receipt:create:self",
+          "receipt_signer": "authenticated_principal",
+          "recipient_principal": "authenticated_principal",
+          "receipt_types": [
+            "recipient_storage",
+            "recipient_processed"
+          ]
+        },
+        {
+          "principal_class": "vera-host",
+          "required_scope": "receipt:create:self",
+          "receipt_signer": "authenticated_principal",
+          "recipient_principal": "authenticated_principal",
+          "receipt_types": [
+            "recipient_storage",
+            "recipient_processed"
+          ]
+        }
+      ],
+      "derive": [
+        "receipt signer from authenticated principal"
+      ],
+      "reject_if": [
+        "relay-custody receipt submitted by endpoint",
+        "receipt signer differs from authenticated principal",
+        "receipt recipient differs from authenticated principal",
+        "receipt transition regresses or skips required predecessor"
+      ]
+    },
+    {
+      "id": "redeem_pairing",
+      "method": "POST",
+      "path": "/v1/pairing/redeem",
+      "authentication": "pairing-proof",
+      "body_schema": "pairing.schema.json#Pairing redemption",
+      "allow": [
+        {
+          "principal_class": "unenrolled-device",
+          "required_scope": null,
+          "role": "derived from unexpired pairing session",
+          "scopes": "derived from unexpired pairing session"
+        }
+      ],
+      "derive": [
+        "enrollment_role",
+        "enrollment_scopes",
+        "principal_id from verified signing key"
+      ],
+      "reject_if": [
+        "redeem body requests a role",
+        "redeem body requests scopes",
+        "redeem body requests direction",
+        "token is expired, mismatched, already consumed, or concurrently consumed",
+        "signing key is not EC P-256",
+        "signing_key_id does not equal SHA-256(SPKI)",
+        "proof does not verify with supplied signing key"
+      ]
+    },
+    {
+      "id": "create_pairing_session",
+      "method": "POST",
+      "path": "/v1/admin/pairing-sessions",
+      "authentication": "local-admin-only",
+      "body_schema": "pairing.schema.json#Pairing session creation",
+      "allow": [
+        {
+          "principal_class": "relay-admin",
+          "required_scope": "pairing:create",
+          "transport": "local administration"
+        }
+      ],
+      "derive": [
+        "token_sha256",
+        "one-time session state"
+      ],
+      "reject_if": [
+        "remote VeraMesh application principal",
+        "arbitrary remote role or scope grant"
+      ]
+    },
+    {
+      "id": "health",
+      "method": "GET",
+      "path": "/v1/health",
+      "authentication": "none",
+      "body_schema": null,
+      "allow": [
+        {
+          "principal_class": "private-transport-observer",
+          "scope": "health:read-only"
+        }
+      ],
+      "derive": [],
+      "reject_if": [
+        "health response is treated as authorization",
+        "health response exposes endpoint plaintext or private keys",
+        "health response includes endpoint plaintext, private keys, principal inventory, or message metadata"
+      ],
+      "public_response_fields": [
+        "overall_state",
+        "process",
+        "database",
+        "audit",
+        "storage",
+        "auth",
+        "transport",
+        "pairing",
+        "write_availability",
+        "degraded_reasons"
+      ],
+      "response_policy": {
+        "public": true,
+        "allow_endpoint_plaintext": false,
+        "allow_private_keys": false,
+        "allow_principal_inventory": false,
+        "allow_message_metadata": false
+      }
+    },
+    {
+      "id": "admin_operations",
+      "method": "varies",
+      "path": "/v1/admin/*",
+      "authentication": "local-admin-only",
+      "body_schema": null,
+      "allow": [
+        {
+          "principal_class": "relay-admin",
+          "required_scope": "operation-specific",
+          "transport": "local administration"
+        }
+      ],
+      "derive": [],
+      "reject_if": [
+        "remote phone-client",
+        "remote vera-host",
+        "tailnet membership used as Vera authorization"
+      ]
+    }
+  ],
+  "global_invariants": [
+    "The request signer is authenticated before operation authorization.",
+    "A valid signature, transport membership, or enrolled identity does not grant a scope absent from the principal record.",
+    "Direction is derived from the authenticated endpoint role and operation contract; it is never accepted as a caller-authoritative claim.",
+    "relay-admin is not a normal remote VeraMesh application principal in V1.",
+    "Recipient authorization is exact-principal authorization, not merely endpoint-class authorization.",
+    "Authorization failures are deterministic and do not mutate message, pairing, nonce, or receipt state."
+  ]
+}

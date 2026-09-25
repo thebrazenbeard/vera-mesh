@@ -1,0 +1,51 @@
+{
+  "evidence_type": "PROTOTYPE_EVIDENCE",
+  "component": "VeraRelay",
+  "version": "0.3.0-0005",
+  "artifact": {
+    "name": "VeraRelay-0.3.0-0005-armada38x.spk",
+    "sha256": "58ee94b3f2ba99e8e0db835e22d5432a093e9852c6910f213cf5acc0188d00a0",
+    "bytes": 102400,
+    "package_validation": "PASS"
+  },
+  "source_provenance": {
+    "status": "UNPINNED_LOCAL_TREE",
+    "local_root": "C:\\Vera\\VeraRelay",
+    "branch_observed": "work/vera-relay-0.3.0",
+    "source_commit": null,
+    "note": "The observed local repository had no commits. No source commit is invented or inferred for 0005."
+  },
+  "verification": {
+    "node_tests": {"passed": 24, "failed": 0},
+    "python_tests": {"passed": 13, "failed": 0},
+    "nas_start_observation": {
+      "status": "RUNNING_OBSERVED",
+      "reported_version": "0.3.0-0005",
+      "startup_log_observation": "vera-relay-started pid=1283"
+    }
+  },
+  "known_defects": [
+    "algorithm label ES256 does not enforce EC P-256 key type/curve; P-384 and RSA verification were accepted in hostile probes",
+    "no real role/scope/recipient authorization boundary",
+    "recipient acknowledgement can regress from processed to delivered",
+    "same message ID with different immutable content is treated as a duplicate rather than an idempotency conflict",
+    "audit corruption turns health red but does not block queue mutations",
+    "corrupt queue JSON can poison fetch while overall health remains ok",
+    "current implementation does not quarantine corrupt queue records",
+    "current audit has no new bounded rotation",
+    "request rate limiting present in predecessor work was not restored",
+    "several queue/core validation errors fall through to HTTP 500",
+    "npm validate references a stale non-0005 artifact path",
+    "postupgrade writes a stale 0.3.0-0001 upgrade marker",
+    "design/plan text contains stale Ed25519 references while implementation uses P-256",
+    "deployment preflight evidence in dist is stale and refers to 0001",
+    "relay stores a field named ciphertext but does not itself establish end-to-end encryption",
+    "source tree lacks immutable Git commit provenance"
+  ],
+  "disposition": {
+    "status": "FROZEN_PREDECESSOR",
+    "may_be_modified_in_place": false,
+    "successor": "VeraRelay 0.4.0",
+    "meaning": "0005 is preserved as prototype/runtime evidence. Security and protocol fixes belong to the 0.4.0 successor cut."
+  }
+}

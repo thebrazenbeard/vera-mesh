@@ -1,0 +1,39 @@
+{
+  "schema": "VERAPORT_CONTROLLER_MCP_CONFIG_V1",
+  "controller_key": "C:\\ProgramData\\VeraMesh\\identity\\controller-key.pem",
+  "tls_ca": "C:\\ProgramData\\VeraMesh\\identity\\tls-ca.pem",
+  "workstation_public_key": "C:\\ProgramData\\VeraMesh\\identity\\workstation-public.pem",
+  "requested_capabilities": [
+    "fs.read",
+    "fs.write"
+  ],
+  "gateway_operations": [
+    "lane.list",
+    "lane.open",
+    "lane.renew",
+    "lane.close",
+    "fs.read_text",
+    "fs.read_bytes",
+    "fs.stat",
+    "fs.list_dir",
+    "fs.search",
+    "fs.write_text",
+    "fs.append_text",
+    "fs.mkdir",
+    "fs.move",
+    "fs.replace_text"
+  ],
+  "endpoints": [
+    {
+      "endpoint_id": "lappy-direct",
+      "mode": "DIRECT_STREAM",
+      "host": "127.0.0.1",
+      "port": 17444,
+      "server_hostname": "localhost",
+      "durable_idempotency": true
+    }
+  ],
+  "max_path_age_ms": 5000,
+  "connect_timeout_s": 5,
+  "request_timeout_s": 5
+}

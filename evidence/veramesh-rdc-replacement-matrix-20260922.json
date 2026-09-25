@@ -1,0 +1,194 @@
+{
+  "schema": "VERAMESH_RDC_REPLACEMENT_MATRIX_V1",
+  "date": "2026-09-22",
+  "subject": {
+    "repository": "thebrazenbeard/vera-mesh",
+    "branch": "work/veramesh-rdc-replacement-v1-20260922",
+    "qualification_ceiling": "SOURCE_AND_CI_ONLY_NOT_INSTALLED"
+  },
+  "status_legend": {
+    "SOURCE_IMPLEMENTED": "Equivalent core workflow exists in VeraMesh source.",
+    "SOURCE_PARTIAL": "Useful equivalent exists but RDC convenience/shape is not fully copied.",
+    "DELIBERATELY_OMITTED": "Omitted to avoid unnecessary authority or product-specific behavior.",
+    "NOT_REPLACEMENT_REQUIREMENT": "RDC product/account helper, not needed for workstation control."
+  },
+  "rows": [
+    {
+      "rdc": "list_devices",
+      "veramesh": "machine_info + authenticated workstation principal/path state",
+      "status": "SOURCE_PARTIAL",
+      "notes": "Current cut targets Lappy; no general multi-device directory UI yet."
+    },
+    {
+      "rdc": "who_am_i",
+      "veramesh": "n/a",
+      "status": "NOT_REPLACEMENT_REQUIREMENT",
+      "notes": "RDC account/usage metadata is product-specific."
+    },
+    {
+      "rdc": "ping",
+      "veramesh": "authenticated application lane.list/data-plane health probe",
+      "status": "SOURCE_IMPLEMENTED",
+      "notes": "VeraMesh treats authenticated app response as health, not transport reachability alone."
+    },
+    {
+      "rdc": "shutdown",
+      "veramesh": "local SCM/service administration",
+      "status": "DELIBERATELY_OMITTED",
+      "notes": "Remote self-shutdown is not required for control parity."
+    },
+    {
+      "rdc": "get_config",
+      "veramesh": "source-controlled/local protected service and controller configs",
+      "status": "SOURCE_PARTIAL",
+      "notes": "Remote config mutation is intentionally not a normal workstation tool."
+    },
+    {
+      "rdc": "set_config_value",
+      "veramesh": "local protected config change + service restart",
+      "status": "DELIBERATELY_OMITTED",
+      "notes": "Avoids remotely widening allowed roots/process authority."
+    },
+    {
+      "rdc": "read_file",
+      "veramesh": "fs_read_text + version-bound fs_read_bytes",
+      "status": "SOURCE_IMPLEMENTED",
+      "notes": "Special PDF/DOCX/XLSX decoding is not part of the remote-control primitive."
+    },
+    {
+      "rdc": "read_multiple_files",
+      "veramesh": "parallel bounded file calls",
+      "status": "SOURCE_PARTIAL",
+      "notes": "No dedicated batching primitive yet."
+    },
+    {
+      "rdc": "write_file",
+      "veramesh": "fs_write_text + fs_append_text",
+      "status": "SOURCE_IMPLEMENTED",
+      "notes": "Write is capability/claim/fence gated."
+    },
+    {
+      "rdc": "write_pdf",
+      "veramesh": "n/a",
+      "status": "NOT_REPLACEMENT_REQUIREMENT",
+      "notes": "Artifact rendering is separate from workstation transport/control."
+    },
+    {
+      "rdc": "create_directory",
+      "veramesh": "fs_mkdir",
+      "status": "SOURCE_IMPLEMENTED"
+    },
+    {
+      "rdc": "list_directory",
+      "veramesh": "fs_list_dir",
+      "status": "SOURCE_IMPLEMENTED",
+      "notes": "Paginated deterministic one-directory listing; recursion can be composed."
+    },
+    {
+      "rdc": "move_file",
+      "veramesh": "fs_move",
+      "status": "SOURCE_IMPLEMENTED"
+    },
+    {
+      "rdc": "start_search",
+      "veramesh": "fs_search",
+      "status": "SOURCE_PARTIAL",
+      "notes": "Bounded synchronous search instead of server-side search sessions."
+    },
+    {
+      "rdc": "get_more_search_results",
+      "veramesh": "fs_search offset pagination",
+      "status": "SOURCE_IMPLEMENTED"
+    },
+    {
+      "rdc": "stop_search",
+      "veramesh": "n/a",
+      "status": "DELIBERATELY_OMITTED",
+      "notes": "Search is bounded per request and creates no background search worker."
+    },
+    {
+      "rdc": "list_searches",
+      "veramesh": "n/a",
+      "status": "DELIBERATELY_OMITTED",
+      "notes": "No background search sessions exist."
+    },
+    {
+      "rdc": "get_file_info",
+      "veramesh": "fs_stat",
+      "status": "SOURCE_IMPLEMENTED"
+    },
+    {
+      "rdc": "edit_block",
+      "veramesh": "fs_replace_text expected_count",
+      "status": "SOURCE_IMPLEMENTED",
+      "notes": "Atomic write; mismatch is no-effect."
+    },
+    {
+      "rdc": "start_process",
+      "veramesh": "process_start / process_exec",
+      "status": "SOURCE_IMPLEMENTED",
+      "notes": "argv only; no implicit shell."
+    },
+    {
+      "rdc": "read_process_output",
+      "veramesh": "process_output byte-offset chunks",
+      "status": "SOURCE_IMPLEMENTED"
+    },
+    {
+      "rdc": "interact_with_process",
+      "veramesh": "process_input + process_output",
+      "status": "SOURCE_IMPLEMENTED",
+      "notes": "Input has separate process.interact capability and a 65536-byte per-call bound."
+    },
+    {
+      "rdc": "force_terminate",
+      "veramesh": "process_terminate",
+      "status": "SOURCE_IMPLEMENTED",
+      "notes": "Only lane/fence-owned managed processes."
+    },
+    {
+      "rdc": "list_sessions",
+      "veramesh": "process_list",
+      "status": "SOURCE_IMPLEMENTED",
+      "notes": "Only managed processes owned by the lane/fence."
+    },
+    {
+      "rdc": "list_processes",
+      "veramesh": "n/a",
+      "status": "DELIBERATELY_OMITTED",
+      "notes": "Host-wide process inventory would widen authority beyond managed children."
+    },
+    {
+      "rdc": "kill_process",
+      "veramesh": "n/a",
+      "status": "DELIBERATELY_OMITTED",
+      "notes": "Arbitrary host PID kill is intentionally not granted by initial process.control."
+    },
+    {
+      "rdc": "get_usage_stats",
+      "veramesh": "request-ledger health + route/session health",
+      "status": "SOURCE_PARTIAL",
+      "notes": "No RDC-style product telemetry."
+    },
+    {
+      "rdc": "get_recent_tool_calls",
+      "veramesh": "durable mutation idempotency ledger",
+      "status": "SOURCE_PARTIAL",
+      "notes": "Ledger preserves mutation safety, not a user-facing full read/write history."
+    },
+    {
+      "rdc": "give_feedback_to_desktop_commander",
+      "veramesh": "n/a",
+      "status": "NOT_REPLACEMENT_REQUIREMENT"
+    },
+    {
+      "rdc": "get_prompts",
+      "veramesh": "n/a",
+      "status": "NOT_REPLACEMENT_REQUIREMENT"
+    }
+  ],
+  "extension_research": {
+    "windows_ui_automation": "Other Windows MCP projects demonstrate screenshots/accessibility-tree/UI control. VeraMesh may add these later behind distinct capabilities; they are not required for the first RDC filesystem/terminal replacement.",
+    "broad_host_control": "Other MCPs often inherit the full authority of their OS account. VeraMesh deliberately keeps local roots, capability ceilings, lane claims, fences, and process ownership."
+  }
+}

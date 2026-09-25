@@ -1,0 +1,22 @@
+{
+  "schema": "VERAPORT_SYNCHRONY_SELECTOR_LOCAL_TEST_V1",
+  "date": "2026-09-19",
+  "status": "FOCUSED_LOCAL_TEST_PASS_ONLY",
+  "subject": "reference/veraport_agent/veraport_agent/synchrony.py",
+  "command": "python -m pytest -q test_sync.py",
+  "result": {"passed": 6, "failed": 0, "duration_seconds_observed": 0.06},
+  "coverage_claims": [
+    "direct hot stream outranks lower-RTT durable relay",
+    "edge hot stream is fallback when direct is unhealthy",
+    "durable relay is fallback when hot paths are absent",
+    "unauthenticated direct path never outranks authenticated edge",
+    "stale path is rejected",
+    "same-class selection prefers lower RTT"
+  ],
+  "non_claims": [
+    "no QUIC implementation",
+    "no live network latency measurement",
+    "no combined end-to-end qualification",
+    "no Lappy/Synology deployment"
+  ]
+}

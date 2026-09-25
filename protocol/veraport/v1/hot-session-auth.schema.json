@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:veramesh:veraport:v1:hot-session-auth",
+  "title": "VeraPort V1 hot-session authentication objects",
+  "oneOf": [
+    {"$ref": "#/$defs/server_challenge"},
+    {"$ref": "#/$defs/client_auth"},
+    {"$ref": "#/$defs/server_accept"}
+  ],
+  "$defs": {
+    "b64u": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+    "principal": {"type": "string", "pattern": "^(controller|workstation):[0-9a-f]{64}$"},
+    "key_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["fs.read", "fs.write", "process.exec"]}
+    },
+    "server_challenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "workstation_principal", "workstation_key_id", "challenge"],
+      "properties": {
+        "protocol_version": {"const": "veraport-v1"},
+        "workstation_principal": {"$ref": "#/$defs/principal"},
+        "workstation_key_id": {"$ref": "#/$defs/key_id"},
+        "challenge": {"$ref": "#/$defs/b64u"}
+      }
+    },
+    "client_auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "controller_principal", "controller_key_id", "workstation_principal", "server_challenge", "client_nonce", "requested_capabilities", "signature"],
+      "properties": {
+        "protocol_version": {"const": "veraport-v1"},
+        "controller_principal": {"$ref": "#/$defs/principal"},
+        "controller_key_id": {"$ref": "#/$defs/key_id"},
+        "workstation_principal": {"$ref": "#/$defs/principal"},
+        "server_challenge": {"$ref": "#/$defs/b64u"},
+        "client_nonce": {"$ref": "#/$defs/b64u"},
+        "requested_capabilities": {"$ref": "#/$defs/capabilities"},
+        "signature": {"$ref": "#/$defs/b64u"}
+      }
+    },
+    "server_accept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "session_id", "controller_principal", "workstation_principal", "workstation_key_id", "server_challenge", "client_nonce", "granted_capabilities", "expires_at_ms", "signature"],
+      "properties": {
+        "protocol_version": {"const": "veraport-v1"},
+        "session_id": {"$ref": "#/$defs/b64u"},
+        "controller_principal": {"$ref": "#/$defs/principal"},
+        "workstation_principal": {"$ref": "#/$defs/principal"},
+        "workstation_key_id": {"$ref": "#/$defs/key_id"},
+        "server_challenge": {"$ref": "#/$defs/b64u"},
+        "client_nonce": {"$ref": "#/$defs/b64u"},
+        "granted_capabilities": {"$ref": "#/$defs/capabilities"},
+        "expires_at_ms": {"type": "integer", "minimum": 1},
+        "signature": {"$ref": "#/$defs/b64u"}
+      }
+    }
+  }
+}

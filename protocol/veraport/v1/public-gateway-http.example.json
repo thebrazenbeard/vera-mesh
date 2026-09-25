@@ -1,0 +1,12 @@
+{
+  "schema": "VERAMESH_PUBLIC_GATEWAY_HTTP_V1",
+  "public_mcp_url": "https://mesh.example.com/mcp",
+  "issuer_url": "https://login.example.com",
+  "allowed_hosts": [
+    "mesh.example.com"
+  ],
+  "allowed_origins": [],
+  "bind_host": "127.0.0.1",
+  "bind_port": 17446,
+  "resource_name": "VeraMesh Workstation"
+}

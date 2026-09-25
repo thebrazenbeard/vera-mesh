@@ -1,0 +1,19 @@
+{
+  "schema": "VERAPORT_GATEWAY_LOCAL_TEST_V1",
+  "date": "2026-09-19",
+  "status": "FOCUSED_LOCAL_TEST_PASS_ONLY",
+  "subject": "reference/veraport_agent/veraport_agent/gateway.py",
+  "result": {"passed": 4, "failed": 0, "duration_seconds_observed": 0.06},
+  "coverage_claims": [
+    "gateway projects tool calls into an existing hot-session pool instead of owning a connection",
+    "read-only gateway policy blocks mutations before pool dispatch",
+    "process execution requires explicit gateway operation grant",
+    "unknown operation grants reject at gateway construction"
+  ],
+  "non_claims": [
+    "no live MCP server implementation",
+    "no ChatGPT connector registration",
+    "no Secure MCP Tunnel configuration",
+    "no Lappy deployment"
+  ]
+}
