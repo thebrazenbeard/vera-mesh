@@ -1,0 +1,121 @@
+# VeraMesh RDC replacement evaluation — 2026-09-22
+
+Status: SOURCE WORKING / NOT INSTALLED / NOT CURRENT CHATGPT ROUTE
+
+## Objective
+
+Replace the practical Remote Desktop Commander workflow with a zero-new-spend,
+source-controlled VeraMesh path while preserving a stricter authority model:
+
+`ChatGPT phone/web -> public OAuth MCP on Synology -> VeraPort controller -> private VeraPort stream -> Lappy service`
+
+The Synology Python SPK remains the always-on execution substrate and can also provide
+an alternate `EDGE_STREAM` proxy. VeraRelay Node.js remains a separate durable fallback.
+
+The chat being open on Lappy is intentionally irrelevant. The workstation bridge is a
+persistent Windows service.
+
+## Current external comparison
+
+Research checked on 2026-09-22:
+
+- Remote Desktop Commander: installed ChatGPT plugin plus a workstation agent. Useful
+  surface includes filesystem reads/writes/search, process execution/control, device
+  status/config, and product-specific helpers. If its foreground agent is stopped, the
+  device becomes unreachable.
+- `leonovee/winfs-mcp`: Windows filesystem/process/git-oriented MCP with allowed roots,
+  hard bounds, atomic writes, process control, and a large local tool surface.
+- `deploymenttheory/windows-mcp-server`: broad Windows UI/system automation including
+  accessibility-tree UI control, screenshots, PowerShell, registry, filesystem,
+  processes, services, network diagnostics, policy gating, and tamper-evident audit.
+  Its released server is primarily a local stdio surface.
+- `openhammer.dev`: deliberately small authenticated filesystem + shell MCP surface
+  with workspace scoping.
+- `venkey123456789/local-computer-full-access-mcp`: Windows-first filesystem, shell,
+  drive, and process surface with local audit and an HTTP/tunnel option; authority is
+  broad under the account running it.
+- `modelcontextprotocol/servers` filesystem server: useful local allowed-directory
+  filesystem reference, not an RDC-equivalent remote workstation fabric.
+
+These projects are implementation references, not authority dependencies.
+
+## VeraMesh differentiators that must not be traded away for parity
+
+- cryptographic controller/workstation application identity above transport;
+- session capability ceilings;
+- per-lane capabilities and resource claims;
+- fencing tokens and lease expiry;
+- durable mutation request identity/idempotency;
+- direct/edge route separation and ambiguous-mutation fail-closed behavior;
+- allowed workstation roots;
+- local opt-in for process authority;
+- opaque process handles bound to the owning lane/fence;
+- process watchdog termination when lane authority expires;
+- transport/path reachability never grants application authority;
+- VeraRelay live edge does not terminate VeraPort TLS or see plaintext commands.
+
+## Current replacement surface
+
+Implemented and CI-covered:
+
+- machine/session/path info;
+- lane open/list/renew/close;
+- bounded text reads;
+- version-bound ranged byte reads;
+- file metadata;
+- bounded directory listing;
+- bounded path search;
+- atomic text writes plus append;
+- native directory creation, move/rename, and expected-count text replacement;
+- bounded one-shot argv process execution;
+- managed process start/list/status/output/input/terminate;
+- automatic managed-process reap on lane close or application-session disconnect;
+- direct TLS hot path;
+- transparent VeraMesh Python SPK live edge carrying the same end-to-end TLS session;
+- independent in-repo Python live-edge carrier retained as a conformance/reference implementation, not the production VeraRelay runtime;
+- MCP Streamable HTTP adapter over the controller runtime;
+- persistent Windows Service host for Lappy.
+
+## Deliberate non-parity / remaining work
+
+Not required for the first useful replacement cut:
+
+- RDC product telemetry, prompts, feedback, or usage-account helpers;
+- format-specific PDF/DOCX/XLSX convenience transforms.
+
+Useful parity still missing:
+
+- multi-file reads;
+- host-wide process inventory/kill separate from VeraPort-managed children;
+- optional recursive directory-tree convenience surface.
+
+Potential later extension, informed by other Windows MCP projects:
+
+- screenshot/UI observation and Windows accessibility-tree control.
+
+These later features must remain capability-gated and must not bypass VeraPort claims,
+fencing, process ownership, or local workstation policy.
+
+## ChatGPT route constraint
+
+The primary Plus/phone route is a published plugin backed by a stable public HTTPS MCP
+resource server on Synology. The source listener remains loopback-only and must sit
+behind a reviewed HTTPS reverse proxy. OAuth authorization, endpoint publication,
+plugin submission, and live ChatGPT routing are separate effects.
+
+Secure MCP Tunnel remains an optional source-supported route for products/plans where
+full custom MCP access is available; it is not the primary Plus cutover.
+
+## Exact current qualification ceiling
+
+A green source/CI run proves only the exact source under test. It does not prove:
+
+- Lappy production installation;
+- current-head VeraMesh Synology SPK deployment;
+- VeraRelay Node.js durable-courier deployment;
+- public/private tunnel setup;
+- ChatGPT app/plugin registration;
+- end-to-end operation from a live ChatGPT tool call;
+- production cutover from RDC.
+
+Those are separate gates.

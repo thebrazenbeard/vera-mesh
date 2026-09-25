@@ -1,0 +1,19 @@
+{
+  "schema": "VERAPORT_CRYPTOGRAPHY_RANGE_REVIEW_V1",
+  "date": "2026-09-19",
+  "status": "PASS_EXACT",
+  "old_range": "cryptography>=42,<47",
+  "new_range": "cryptography>=42,<49",
+  "exact_qualified_head": "07ff6643b7aec5e47106b6f58e2bf42ec38d820f",
+  "exact_qualified_tree": "41447e1cba477b77fdf7ca77b759f2fbe61e6cb5",
+  "observed_version": "48.0.1",
+  "basis": [
+    "VeraPort uses P-256 ECDSA, SPKI/PEM serialization/loading, X.509 test certificates, and DSS signature conversion",
+    "reviewed 47.x/48.x breaking changes do not target the used VeraPort surface",
+    "the combined exact candidate passed whole-chain execution under cryptography 48.0.1",
+    "the exact Windows SCM/ACL qualification passed under cryptography 48.0.1",
+    "49.x remains outside the declared boundary pending a future review"
+  ],
+  "test_dependency_change": "pytest and pytest-asyncio are declared under optional test dependencies",
+  "claim_ceiling": "cryptography 48.x admitted for this exact candidate family; 49.x requires fresh review"
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "VERAPORT_WINDOWS_SCM_ASYNC_REPAIR_V1",
+  "date": "2026-09-19",
+  "status": "PASS_EXACT_WINDOWS_SCM",
+  "exact_qualified_head": "07ff6643b7aec5e47106b6f58e2bf42ec38d820f",
+  "exact_qualified_tree": "41447e1cba477b77fdf7ca77b759f2fbe61e6cb5",
+  "defect": "pythonservice.exe invokes SvcDoRun outside the interpreter main thread; asyncio.run attempted Windows Proactor loop initialization and failed at signal.set_wakeup_fd",
+  "repair": [
+    "Windows SCM service mode uses an explicit SelectorEventLoop",
+    "Windows process.exec delegates subprocess.run(shell=False) to a worker thread so subprocess execution remains supported under SelectorEventLoop"
+  ],
+  "focused_regression": "2/2 PASS inside combined 4/4 Windows ACL/service-runtime set",
+  "actual_scm_result": {
+    "install": "PASS",
+    "start": "PASS",
+    "live_round_trip": "PASS",
+    "stop": "PASS",
+    "delete": "PASS"
+  }
+}

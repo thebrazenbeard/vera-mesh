@@ -1,0 +1,42 @@
+{
+  "schema": "VERAPORT_CONTROLLER_MCP_CONFIG_V1",
+  "controller_key": "credentials/controller-key.pem",
+  "tls_ca": "credentials/veraport-ca.pem",
+  "workstation_public_key": "credentials/workstation-public.pem",
+  "requested_capabilities": [
+    "fs.read"
+  ],
+  "gateway_operations": [
+    "lane.list",
+    "lane.open",
+    "lane.renew",
+    "lane.close",
+    "fs.read_text",
+    "fs.read_bytes",
+    "fs.stat",
+    "fs.list_dir",
+    "fs.search",
+    "fs.search_content"
+  ],
+  "endpoints": [
+    {
+      "endpoint_id": "lappy-direct",
+      "mode": "DIRECT_STREAM",
+      "host": "LAPPY_PRIVATE_ADDRESS",
+      "port": 17444,
+      "server_hostname": "veraport.local",
+      "durable_idempotency": false
+    },
+    {
+      "endpoint_id": "lappy-edge",
+      "mode": "EDGE_STREAM",
+      "host": "127.0.0.1",
+      "port": 17445,
+      "server_hostname": "veraport.local",
+      "durable_idempotency": false
+    }
+  ],
+  "max_path_age_ms": 5000,
+  "connect_timeout_s": 5,
+  "request_timeout_s": 5
+}

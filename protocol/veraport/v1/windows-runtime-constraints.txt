@@ -1,0 +1,11 @@
+# VeraPort persistent Windows runtime lock — 2026-09-22
+# Used by tools/windows_install_veraport_service.ps1.
+# Development dependency ranges remain in pyproject.toml.
+
+cryptography==48.0.1
+cffi==2.1.1
+pycparser==3.0
+pywin32==312
+
+# Local WorkBridge adapter is qualified against this MCP client/server API.
+mcp==1.27.2

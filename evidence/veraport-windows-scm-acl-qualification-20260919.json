@@ -1,0 +1,111 @@
+{
+  "schema": "VERAPORT_WINDOWS_SCM_ACL_QUALIFICATION_V1",
+  "date": "2026-09-19",
+  "status": "PASS_EXACT",
+  "executable_subject": {
+    "repository": "thebrazenbeard/vera-mesh",
+    "branch": "work/veraport-rdc-v1-20260919",
+    "head": "07ff6643b7aec5e47106b6f58e2bf42ec38d820f",
+    "tree": "41447e1cba477b77fdf7ca77b759f2fbe61e6cb5"
+  },
+  "execution_surface": {
+    "device": "Lappy",
+    "os": "Windows",
+    "python": "3.11.9",
+    "cryptography": "48.0.1",
+    "declared_cryptography_range": ">=42,<49",
+    "pywin32": "present"
+  },
+  "dependency_boundary": {
+    "status": "RESOLVED_FOR_EXACT_SUBJECT",
+    "old_range": ">=42,<47",
+    "new_range": ">=42,<49",
+    "reason": "47.x/48.x upstream breaking changes do not target VeraPort's P-256/PEM/X.509/DSS surface, and exact candidate execution passed under cryptography 48.0.1"
+  },
+  "pre_scm_regressions": {
+    "windows_acl_and_service_runtime": {
+      "passed": 4,
+      "failed": 0
+    }
+  },
+  "acl_profile": {
+    "service_account": "LocalSystem",
+    "allowed_sids": [
+      "S-1-5-18",
+      "S-1-5-32-544"
+    ],
+    "allowed_principals": [
+      "NT AUTHORITY\\SYSTEM",
+      "BUILTIN\\Administrators"
+    ],
+    "directories_protected": true,
+    "files_protected": true,
+    "owner_rule": "SYSTEM or Built-in Administrators",
+    "sensitive_file_system_access": "SYSTEM Read/Synchronize; Administrators FullControl",
+    "protected_directory_access": "SYSTEM FullControl; Administrators FullControl",
+    "inheritance": "protected/non-inherited"
+  },
+  "scm_qualification": {
+    "temporary_service_name": "VeraPortAgentQualification",
+    "production_service_name_used": false,
+    "install": "PASS",
+    "start_account": "LocalSystem",
+    "start": "PASS",
+    "authenticated_live_round_trip": "PASS",
+    "stop": "PASS",
+    "delete": "PASS",
+    "post_delete_listener": "ABSENT",
+    "bind_host": "127.0.0.1",
+    "process_exec_enabled": false
+  },
+  "live_round_trip": [
+    "SCM-hosted LocalSystem service",
+    "TLS 1.3 VeraPort listener on loopback",
+    "P-256 mutual application authentication",
+    "controller-bound HotSessionPool",
+    "VeraPortGateway",
+    "lane open",
+    "real allowed-root filesystem write",
+    "real allowed-root filesystem readback",
+    "lane close"
+  ],
+  "defects_found_and_repaired_before_pass": [
+    {
+      "defect": "File-only ACL protection left parent-directory replacement risk",
+      "repair_head_component": "db00aa77a64a4ae79534e6b04007df9c3418f04b",
+      "repair": "Protect private/config/state directories as well as files; validate owner and exact ACL principals"
+    },
+    {
+      "defect": "pythonservice.exe invokes SvcDoRun on a service worker thread; asyncio.run selected Windows Proactor loop and failed at signal.set_wakeup_fd",
+      "repair_head_component": "07ff6643b7aec5e47106b6f58e2bf42ec38d820f",
+      "repair": "Use explicit SelectorEventLoop for Windows SCM service mode; delegate Windows process execution to subprocess.run(shell=False) in a worker thread"
+    }
+  ],
+  "cleanup_readback": {
+    "qualification_service": "ABSENT",
+    "production_service": "ABSENT",
+    "programdata_veramesh": "ABSENT",
+    "qualification_wrapper": "ABSENT",
+    "pythonservice_processes": "NONE",
+    "veraport_firewall_rules": "NONE",
+    "python_service_event_source": "ABSENT",
+    "pywin32_import": "PASS",
+    "root_pythonservice_helper": "ABSENT",
+    "site_packages_pythonservice_helper": "RESTORED",
+    "root_pywintypes_copy": "ABSENT",
+    "site_packages_pywintypes_source": "PRESENT",
+    "git_worktree": "CLEAN",
+    "git_head": "07ff6643b7aec5e47106b6f58e2bf42ec38d820f",
+    "git_tree": "41447e1cba477b77fdf7ca77b759f2fbe61e6cb5"
+  },
+  "non_claims": [
+    "production VeraPortAgent is not installed",
+    "no production persistent credentials were provisioned",
+    "no non-loopback listener was opened",
+    "no firewall, VLAN, Tailscale, or other network configuration was changed",
+    "process.exec was not enabled in the SCM qualification",
+    "no Synology edge runtime was deployed",
+    "no ChatGPT/MCP end-to-end production path was installed",
+    "LocalSystem qualification does not qualify a future lower-privilege service account"
+  ]
+}

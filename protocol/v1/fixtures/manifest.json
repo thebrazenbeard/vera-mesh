@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "path": "messages/valid-phone-to-host.json",
+      "schema": "message-envelope.schema.json",
+      "expected": "valid"
+    },
+    {
+      "path": "messages/valid-host-to-phone.json",
+      "schema": "message-envelope.schema.json",
+      "expected": "valid"
+    },
+    {
+      "path": "messages/invalid-caller-direction.json",
+      "schema": "message-envelope.schema.json",
+      "expected": "invalid"
+    },
+    {
+      "path": "messages/invalid-cross-role.json",
+      "schema": "message-envelope.schema.json",
+      "expected": "invalid"
+    },
+    {
+      "path": "receipts/valid-relay-custody.json",
+      "schema": "receipt.schema.json",
+      "expected": "valid"
+    },
+    {
+      "path": "receipts/valid-recipient-storage.json",
+      "schema": "receipt.schema.json",
+      "expected": "valid"
+    },
+    {
+      "path": "receipts/valid-recipient-processed.json",
+      "schema": "receipt.schema.json",
+      "expected": "valid"
+    },
+    {
+      "path": "receipts/invalid-regressed-transition.json",
+      "schema": "receipt.schema.json",
+      "expected": "invalid"
+    },
+    {
+      "path": "pairing/valid-redeem.json",
+      "schema": "pairing.schema.json",
+      "expected": "valid"
+    },
+    {
+      "path": "pairing/valid-create-session.json",
+      "schema": "pairing.schema.json",
+      "expected": "valid"
+    },
+    {
+      "path": "pairing/invalid-role-escalation.json",
+      "schema": "pairing.schema.json",
+      "expected": "invalid"
+    },
+    {
+      "path": "pairing/invalid-short-token.json",
+      "schema": "pairing.schema.json",
+      "expected": "invalid"
+    },
+    {
+      "path": "messages/invalid-jcs-integer-boundary.json",
+      "schema": "message-envelope.schema.json",
+      "expected": "invalid"
+    }
+  ],
+  "scenarios": [
+    {
+      "path": "scenarios/idempotency-conflict.json",
+      "kind": "same_sender_message_id_different_envelope",
+      "expected": "409 idempotency_conflict"
+    },
+    {
+      "path": "scenarios/sequence-gap-observable.json",
+      "kind": "sequence_gap_does_not_deadlock_later_delivery",
+      "expected": "deliver_with_gap_evidence"
+    }
+  ]
+}

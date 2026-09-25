@@ -1,0 +1,61 @@
+name: Desktop Commander duplicate E2E
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "work/desktop-commander-duplicate-*"
+
+permissions:
+  contents: read
+
+jobs:
+  verarelay-desktop-commander:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout VeraMesh
+        uses: actions/checkout@v4
+
+      - name: Checkout exact WorkBridge duplicate
+        uses: actions/checkout@v4
+        with:
+          repository: thebrazenbeard/WorkBridgeMCP
+          ref: 35a26c5b72b5110612efa7abdb63f4323c2a1650
+          path: workbridge
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: workbridge/upstream/DesktopCommanderMCP/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify exact Desktop Commander source pin
+        shell: bash
+        run: |
+          test "$(git -C workbridge/upstream/DesktopCommanderMCP rev-parse HEAD)" = "550a0b3e31da18b7cf25e87ed840e3d953b6da42"
+          test "$(node -p "require('./workbridge/upstream/DesktopCommanderMCP/package.json').version")" = "0.2.51"
+
+      - name: Build exact upstream Desktop Commander
+        working-directory: workbridge/upstream/DesktopCommanderMCP
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+
+      - name: Install VeraMesh relay test runtime
+        run: python -m pip install "./reference/veraport_agent[test]"
+
+      - name: Execute unrestricted command through VeraRelay and exact Desktop Commander
+        shell: bash
+        env:
+          DESKTOP_COMMANDER_ENTRYPOINT: ${{ github.workspace }}/workbridge/upstream/DesktopCommanderMCP/dist/index.js
+        run: |
+          python -m pytest -q reference/veraport_agent/tests/test_desktop_commander_relay_e2e.py

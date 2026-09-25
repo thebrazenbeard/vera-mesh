@@ -1,0 +1,73 @@
+{
+  "schema": "VERAMESH_LAPPY_LIVE_CONNECTION_EVIDENCE_V1",
+  "observed_at_utc": "2026-09-22T21:47:45Z",
+  "captured_from": "user-run tools/synology_authorize_lappy_veramesh_connection.sh output on TheSimsVault",
+  "connector_source": {
+    "repository": "thebrazenbeard/vera-mesh",
+    "commit": "0cee5504d4caa9c84f63bc82b7b30bb5e3626d05",
+    "path": "tools/synology_authorize_lappy_veramesh_connection.sh",
+    "exact_head_ci": "PASS"
+  },
+  "result": {
+    "changed": false,
+    "config_target": {
+      "host": "100.88.50.35",
+      "port": 17444
+    },
+    "expected_target": {
+      "host": "100.88.50.35",
+      "port": 17444
+    },
+    "control_error": null,
+    "control_status": {
+      "schema": "VERA_MESH_EDGE_STATUS_V1",
+      "package_runtime": "RUNNING",
+      "mesh_semantic_state": "READY",
+      "reason": "LIVE_EDGE_PROXY_READY_DURABLE_RELAY_NOT_IMPLEMENTED",
+      "pairing_implemented": false,
+      "tcp_mesh_listener": true,
+      "mesh_delivery_implemented": true,
+      "edge_proxy_implemented": true,
+      "durable_relay_implemented": false,
+      "end_to_end_veraport_auth_preserved": true,
+      "package_version": "0.1.0-0017",
+      "lifecycle_profile_id": "VERA_MESH_FIRST_SLICE_LIFECYCLE_PROFILE_V1",
+      "lifecycle_profile_sha256": "3a33143546bb9796a1fd931b319941628bf7b40b1b82ac40738676836ea50046",
+      "installation_incarnation_id": "de40ec818a293d01f50f94d7817b790d",
+      "start_generation": 5,
+      "start_transition_id": "9378b3d32352a7baa9325c3d540cadbd",
+      "process_instance_id": "c10a0ffd2744b50b8bddd44f908d3e70"
+    },
+    "direct_target_tcp": true,
+    "local_edge_tcp": true,
+    "direct_tls_version": "TLSv1.3",
+    "edge_tls_version": "TLSv1.3",
+    "direct_cert_sha256": "5231599cb289eac7d383a32078311fa5899debe8e10b002e2e62ffabf8621e2a",
+    "edge_cert_sha256": "5231599cb289eac7d383a32078311fa5899debe8e10b002e2e62ffabf8621e2a",
+    "certificate_match": true,
+    "tls_error": null,
+    "lappy_identity_changed": false,
+    "process_execution_changed": false
+  },
+  "interpretation": {
+    "nas_edge_target": "QUALIFIED",
+    "lappy_tailnet_tcp": "QUALIFIED",
+    "nas_local_edge_tcp": "QUALIFIED",
+    "tls_through_edge": "QUALIFIED",
+    "direct_vs_edge_certificate_identity": "EXACT_MATCH",
+    "nas_edge_semantic_state": "READY",
+    "configuration_mutation_performed": false,
+    "lappy_identity_mutation_performed": false,
+    "process_execution_policy_mutated": false,
+    "current_veraport_application_authentication": "NOT_ESTABLISHED_BY_THIS_PROBE",
+    "current_lane_list_data_plane": "NOT_ESTABLISHED_BY_THIS_PROBE"
+  },
+  "claim_ceiling": [
+    "Qualifies the current NAS VeraMesh edge target as 100.88.50.35:17444.",
+    "Qualifies current direct and edge TCP reachability to the Lappy VeraPort listener.",
+    "Qualifies TLS 1.3 on both direct and edge paths and exact SHA-256 equality of the presented VeraPort certificate.",
+    "Qualifies the current VeraMesh edge control status as RUNNING/READY for package version 0.1.0-0017.",
+    "No configuration change was required because the installed edge was already pointed at Lappy.",
+    "Does not by itself establish a fresh VeraPort application-layer controller authentication or lane.list response."
+  ]
+}

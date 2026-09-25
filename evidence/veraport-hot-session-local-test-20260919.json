@@ -1,0 +1,35 @@
+{
+  "schema": "VERAPORT_HOT_SESSION_LOCAL_TEST_V1",
+  "date": "2026-09-19",
+  "status": "FOCUSED_LOCAL_TEST_PASS_ONLY",
+  "subjects": [
+    "reference/veraport_agent/veraport_agent/hot_session.py",
+    "reference/veraport_agent/veraport_agent/stream.py"
+  ],
+  "environment": {
+    "python": "3.13.5",
+    "cryptography": "available in local test environment"
+  },
+  "result": {"passed": 11, "failed": 0, "duration_seconds_observed": 0.24},
+  "coverage_claims": [
+    "mutual P-256 proof binds controller, workstation, both nonces, session expiry, and granted capability subset",
+    "non-P256 controller keys reject",
+    "wrong protocol version rejects",
+    "capability escalation above local workstation policy rejects",
+    "client-auth replay against a fresh workstation challenge rejects",
+    "unknown controller principal rejects",
+    "tampering with signed client capability content rejects",
+    "server acceptance cannot add a capability the controller did not request",
+    "one persistent stream dispatches multiple requests concurrently",
+    "out-of-order completion preserves request/result correlation",
+    "duplicate in-flight request IDs and oversized frames fail closed"
+  ],
+  "non_claims": [
+    "no QUIC/TLS adapter yet",
+    "loopback byte-stream test does not qualify raw TCP for deployment",
+    "no Lappy installation",
+    "no Synology edge deployment",
+    "no MCP registration",
+    "no end-to-end ChatGPT-to-Lappy qualification"
+  ]
+}

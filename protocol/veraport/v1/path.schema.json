@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:veramesh:veraport:v1:path-observation",
+  "title": "VeraPort V1 path observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["path_id", "mode", "authenticated", "healthy", "observed_at_ms"],
+  "properties": {
+    "path_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "mode": {"enum": ["DIRECT_STREAM", "EDGE_STREAM", "DURABLE_RELAY"]},
+    "authenticated": {"type": "boolean"},
+    "healthy": {"type": "boolean"},
+    "observed_at_ms": {"type": "integer", "minimum": 0},
+    "rtt_ms": {"type": ["number", "null"], "minimum": 0}
+  }
+}
