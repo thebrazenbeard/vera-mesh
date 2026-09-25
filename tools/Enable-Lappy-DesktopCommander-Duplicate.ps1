@@ -22,6 +22,7 @@ $tunnelPackageBackup = $null
 $tunnelCodeReplaced = $false
 $configBackup = $null
 $wasRunning = $false
+$runtimeStatus = $null
 
 function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -66,6 +67,48 @@ function Wait-ServiceState([string]$Name, [string]$State, [int]$TimeoutSeconds =
         Start-Sleep -Milliseconds 500
     } while ([DateTime]::UtcNow -lt $deadline)
     throw "$Name did not reach $State."
+}
+
+function Wait-TunnelRuntimeReady([object]$Config, [int]$TimeoutSeconds = 45) {
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    $lastStatus = $null
+    $lastError = $null
+
+    do {
+        $statusRaw = @(& ([string]$Config.tunnel_client) runtimes status ([string]$Config.alias) --json)
+        if ($LASTEXITCODE -eq 0) {
+            try {
+                $candidate = (($statusRaw | ForEach-Object { [string]$_ }) -join [Environment]::NewLine) | ConvertFrom-Json
+                $lastStatus = $candidate
+                if (
+                    $candidate.process_running -eq $true -and
+                    $candidate.healthy -eq $true -and
+                    $candidate.ready -eq $true
+                ) {
+                    return $candidate
+                }
+            }
+            catch {
+                $lastError = $_.Exception.Message
+            }
+        }
+        else {
+            $lastError = "tunnel-client status rc=$LASTEXITCODE"
+        }
+
+        Start-Sleep -Milliseconds 500
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    if ($null -ne $lastStatus) {
+        $summary = "process_running=$($lastStatus.process_running) healthy=$($lastStatus.healthy) ready=$($lastStatus.ready)"
+    }
+    elseif ($lastError) {
+        $summary = "no parseable status; last_error=$lastError"
+    }
+    else {
+        $summary = "no status observed"
+    }
+    throw "Desktop Commander tunnel runtime did not become running, healthy, and ready within $TimeoutSeconds seconds ($summary)."
 }
 
 function Download-ExactSource([string]$Commit) {
@@ -261,19 +304,31 @@ try {
         $activeConfig = Get-Content -Raw -Encoding UTF8 $TunnelConfigPath | ConvertFrom-Json
         $env:TUNNEL_CLIENT_PROFILE_DIR = [string]$activeConfig.profile_dir
         $env:TUNNEL_CLIENT_STATE_DIR = [string]$activeConfig.state_dir
-        $statusRaw = @(& ([string]$activeConfig.tunnel_client) runtimes status ([string]$activeConfig.alias) --json)
-        if ($LASTEXITCODE -ne 0) {
-            throw "tunnel-client status failed after Desktop Commander activation."
-        }
-        $status = (($statusRaw | ForEach-Object { [string]$_ }) -join [Environment]::NewLine) | ConvertFrom-Json
-        if ($status.process_running -ne $true -or $status.healthy -ne $true) {
-            throw "Desktop Commander tunnel runtime did not become running and healthy."
+        $runtimeStatus = Wait-TunnelRuntimeReady $activeConfig 45
+        if (
+            $runtimeStatus.PSObject.Properties.Name -contains "remote_error" -and
+            -not [string]::IsNullOrWhiteSpace([string]$runtimeStatus.remote_error)
+        ) {
+            Write-Warning (
+                "Desktop Commander runtime is locally running/healthy/ready, " +
+                "but remote tunnel metadata lookup reported: " +
+                [string]$runtimeStatus.remote_error
+            )
         }
     }
 
     $receipt = [ordered]@{
         schema = "VERAMESH_DESKTOP_COMMANDER_DUPLICATE_ACTIVATION_V2"
-        status = "PASS"
+        status = if (
+            $null -ne $runtimeStatus -and
+            $runtimeStatus.PSObject.Properties.Name -contains "remote_error" -and
+            -not [string]::IsNullOrWhiteSpace([string]$runtimeStatus.remote_error)
+        ) {
+            "LOCAL_PASS_REMOTE_AUTH_PENDING"
+        }
+        else {
+            "PASS"
+        }
         observed_at = (Get-Date).ToString("o")
         sources = [ordered]@{
             desktop_commander = $ExpectedUpstreamCommit
@@ -288,8 +343,38 @@ try {
         tunnel_package = $tunnelPackage
         tunnel_package_backup = $tunnelPackageBackup
         runtime_started = $StartRuntime
+        runtime_status = if ($null -ne $runtimeStatus) {
+            [ordered]@{
+                process_running = [bool]$runtimeStatus.process_running
+                healthy = [bool]$runtimeStatus.healthy
+                ready = [bool]$runtimeStatus.ready
+                runtime_state = [string]$runtimeStatus.runtime_state
+                remote_error = [string]$runtimeStatus.remote_error
+            }
+        }
+        else {
+            $null
+        }
         config_backup = $configBackup
-        next_gate = "CALL_DESKTOP_COMMANDER_TOOL_FROM_CHATGPT_THROUGH_SELECTED_SECURE_MCP_TUNNEL"
+        remote_transport_qualified = (
+            $StartRuntime -and
+            $null -ne $runtimeStatus -and
+            (
+                -not ($runtimeStatus.PSObject.Properties.Name -contains "remote_error") -or
+                [string]::IsNullOrWhiteSpace([string]$runtimeStatus.remote_error)
+            )
+        )
+        next_gate = if (
+            $StartRuntime -and
+            $null -ne $runtimeStatus -and
+            $runtimeStatus.PSObject.Properties.Name -contains "remote_error" -and
+            -not [string]::IsNullOrWhiteSpace([string]$runtimeStatus.remote_error)
+        ) {
+            "REPAIR_CONTROL_PLANE_AUTH_THEN_CALL_DESKTOP_COMMANDER_FROM_CHATGPT"
+        }
+        else {
+            "CALL_DESKTOP_COMMANDER_TOOL_FROM_CHATGPT_THROUGH_SELECTED_SECURE_MCP_TUNNEL"
+        }
     }
     Write-Utf8Json $ReceiptPath $receipt
 
