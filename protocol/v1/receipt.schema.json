@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:veramesh:protocol:v1:receipt",
+  "title": "VeraMesh V1 delivery receipt",
+  "description": "An append-only signed proposition about one immutable message. Receipt type, signer class, and transition are coupled; a projection must not infer a stronger state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol_version",
+    "receipt_id",
+    "receipt_type",
+    "message_id",
+    "envelope_sha256",
+    "stream_id",
+    "message_sequence",
+    "sender_principal",
+    "recipient_principal",
+    "issued_at",
+    "signer",
+    "transition",
+    "signature"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": "v1"
+    },
+    "receipt_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "receipt_type": {
+      "enum": [
+        "relay_custody",
+        "recipient_storage",
+        "recipient_processed"
+      ]
+    },
+    "message_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "envelope_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "stream_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "message_sequence": {
+      "$ref": "#/$defs/jcsPositiveInteger"
+    },
+    "sender_principal": {
+      "$ref": "#/$defs/endpointPrincipal"
+    },
+    "recipient_principal": {
+      "$ref": "#/$defs/endpointPrincipal"
+    },
+    "issued_at": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "relay_installation_id": {
+      "$ref": "#/$defs/installationId"
+    },
+    "signer_binding": {
+      "enum": [
+        "relay_custody",
+        "recipient"
+      ]
+    },
+    "signer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "principal",
+        "key_id",
+        "key_epoch"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "relay-custody",
+            "phone-client",
+            "vera-host"
+          ]
+        },
+        "principal": {
+          "$ref": "#/$defs/anySignerPrincipal"
+        },
+        "key_id": {
+          "$ref": "#/$defs/keyId"
+        },
+        "key_epoch": {
+          "$ref": "#/$defs/jcsPositiveInteger"
+        }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "enum": [
+            "none",
+            "relay_accepted",
+            "recipient_stored",
+            "recipient_processed"
+          ]
+        },
+        "to": {
+          "enum": [
+            "relay_accepted",
+            "recipient_stored",
+            "recipient_processed"
+          ]
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "encoding",
+        "key_id",
+        "signature_base64"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "ecdsa-p256-sha256"
+        },
+        "encoding": {
+          "const": "p1363"
+        },
+        "key_id": {
+          "$ref": "#/$defs/keyId"
+        },
+        "signature_base64": {
+          "$ref": "#/$defs/p1363Signature"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "receipt_type": {
+            "const": "relay_custody"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "relay_installation_id",
+          "signer_binding"
+        ],
+        "properties": {
+          "signer_binding": {
+            "const": "relay_custody"
+          },
+          "signer": {
+            "properties": {
+              "role": {
+                "const": "relay-custody"
+              },
+              "principal": {
+                "pattern": "^relay:"
+              }
+            }
+          },
+          "transition": {
+            "properties": {
+              "from": {
+                "const": "none"
+              },
+              "to": {
+                "const": "relay_accepted"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "receipt_type": {
+            "const": "recipient_storage"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "signer_binding"
+        ],
+        "properties": {
+          "signer_binding": {
+            "const": "recipient"
+          },
+          "signer": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "phone-client",
+                  "vera-host"
+                ]
+              }
+            }
+          },
+          "transition": {
+            "properties": {
+              "from": {
+                "const": "relay_accepted"
+              },
+              "to": {
+                "const": "recipient_stored"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "receipt_type": {
+            "const": "recipient_processed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "signer_binding"
+        ],
+        "properties": {
+          "signer_binding": {
+            "const": "recipient"
+          },
+          "signer": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "phone-client",
+                  "vera-host"
+                ]
+              }
+            }
+          },
+          "transition": {
+            "properties": {
+              "from": {
+                "const": "recipient_stored"
+              },
+              "to": {
+                "const": "recipient_processed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "receipt_type": {
+            "enum": [
+              "recipient_storage",
+              "recipient_processed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "relay_installation_id"
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "keyId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "endpointPrincipal": {
+      "type": "string",
+      "pattern": "^(phone|host):[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "anySignerPrincipal": {
+      "type": "string",
+      "pattern": "^(phone|host|relay):[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "installationId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "p1363Signature": {
+      "type": "string",
+      "minLength": 88,
+      "maxLength": 88,
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+    },
+    "jcsPositiveInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "description": "I-JSON/JCS safe positive integer; values above 2^53-1 are rejected for interoperability."
+    }
+  },
+  "$comment": "Signed-object canonical bytes are normative in protocol/v1/signed-object-profile.md; integer fields use the I-JSON/JCS safe range and reject values above 2^53-1."
+}

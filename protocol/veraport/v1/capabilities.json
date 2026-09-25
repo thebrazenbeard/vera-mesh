@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "protocol_version": "veraport-v1",
+  "principle": "capabilities_narrow_only",
+  "capabilities": {
+    "fs.read": {
+      "class": "read",
+      "reference_agent": "implemented",
+      "resource_namespace": "fs",
+      "notes": "covers bounded text/byte reads, stat, directory listing, and bounded path search"
+    },
+    "fs.write": {
+      "class": "mutation",
+      "reference_agent": "implemented",
+      "resource_namespace": "fs"
+    },
+    "process.exec": {
+      "class": "broad_host_mutation",
+      "reference_agent": "implemented_local_gate_required",
+      "resource_namespace": "cwd",
+      "notes": "authorizes starting argv-vector processes; no implicit shell; cwd claim is not an OS sandbox; local workstation policy must explicitly enable process operations"
+    },
+    "process.inspect": {
+      "class": "read",
+      "reference_agent": "implemented_local_gate_required",
+      "resource_namespace": "cwd",
+      "notes": "inspect/list/status/output is limited to opaque process handles owned by the same lane/fence"
+    },
+    "process.control": {
+      "class": "mutation",
+      "reference_agent": "implemented_local_gate_required",
+      "resource_namespace": "cwd",
+      "notes": "termination is limited to opaque process handles owned by the same lane/fence"
+    },
+    "screen.capture": {
+      "class": "read",
+      "reference_agent": "planned"
+    },
+    "ui.observe": {
+      "class": "read",
+      "reference_agent": "planned"
+    },
+    "ui.control": {
+      "class": "mutation",
+      "reference_agent": "planned"
+    },
+    "process.interact": {
+      "class": "mutation",
+      "reference_agent": "implemented_local_gate_required",
+      "resource_namespace": "cwd",
+      "notes": "bounded stdin writes only to opaque managed process handles owned by the same lane/fence"
+    }
+  },
+  "invariants": [
+    "A lane capability set MUST be a subset of the authenticated session capability ceiling.",
+    "A child or parallel lane MUST NOT synthesize authority absent from its session ceiling.",
+    "Filesystem operations MUST be constrained by local workstation policy in addition to remote capability claims.",
+    "A cwd resource claim is collision/accounting metadata and MUST NOT be represented as sandboxing arbitrary process side effects.",
+    "process.exec, process.inspect, process.interact, and process.control MUST remain unavailable unless local workstation process policy is explicitly enabled.",
+    "Managed process handles MUST remain bound to their owning lane and fencing token.",
+    "Network or transport membership MUST NOT itself grant any VeraPort capability."
+  ]
+}

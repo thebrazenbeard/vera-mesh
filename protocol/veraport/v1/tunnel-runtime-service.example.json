@@ -1,0 +1,15 @@
+{
+  "schema": "VERAMESH_TUNNEL_RUNTIME_SERVICE_V1",
+  "tunnel_client": "C:\\ProgramData\\VeraMesh\\bin\\tunnel-client.exe",
+  "tunnel_client_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "alias": "veramesh-lappy",
+  "tunnel_id": "tunnel_REPLACE_WITH_EXISTING_ID",
+  "runtime_api_key_file": "C:\\ProgramData\\VeraMesh\\secrets\\tunnel-runtime.key",
+  "controller_config": "C:\\ProgramData\\VeraMesh\\controller.json",
+  "mcp_executable": "C:\\\\Program Files\\\\VeraMesh\\\\veraport-mcp-stdio.exe",
+  "mcp_executable_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "profile_dir": "C:\\ProgramData\\VeraMesh\\tunnel-profiles",
+  "state_dir": "C:\\ProgramData\\VeraMesh\\tunnel-state",
+  "status_interval_s": 5,
+  "command_timeout_s": 60
+}

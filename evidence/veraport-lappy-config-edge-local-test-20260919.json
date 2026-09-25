@@ -1,0 +1,25 @@
+{
+  "schema": "VERAPORT_LAPPY_CONFIG_EDGE_LOCAL_TEST_V1",
+  "date": "2026-09-19",
+  "status": "FOCUSED_LOCAL_TEST_PASS_ONLY",
+  "subjects": [
+    "reference/veraport_agent/veraport_agent/service_config.py",
+    "reference/veraport_agent/veraport_agent/edge_adapter.py"
+  ],
+  "result": {"passed": 7, "failed": 0, "duration_seconds_observed": 0.08},
+  "coverage_claims": [
+    "service defaults loopback/process-exec/network-exposure fail closed",
+    "non-loopback binding requires explicit override",
+    "missing identity/TLS material blocks runtime validation",
+    "valid explicit file material and roots pass structural validation",
+    "live edge path forwards actual synchronous result",
+    "durable fallback returns QUEUED_NOT_EXECUTED custody only",
+    "unauthenticated live and durable edge paths reject"
+  ],
+  "non_claims": [
+    "no Windows service installed",
+    "no listener exposed",
+    "no Synology edge deployed",
+    "placeholder-file validation does not cryptographically validate identity material"
+  ]
+}

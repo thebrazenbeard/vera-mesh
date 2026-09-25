@@ -1,0 +1,21 @@
+{
+  "schema": "VERAPORT_TLS_HOT_TRANSPORT_LOCAL_TEST_V1",
+  "date": "2026-09-19",
+  "status": "LOOPBACK_INTEGRATION_PASS_ONLY",
+  "subject": "reference/veraport_agent/veraport_agent/tls_transport.py",
+  "result": {"passed": 2, "failed": 0, "duration_seconds_observed": 0.25},
+  "coverage_claims": [
+    "TLS 1.3 plus veraport/1 ALPN carries VeraPort hot-session mutual authentication",
+    "accepted session capability ceiling is available before request handler construction",
+    "one established TLS session carries concurrent requests",
+    "unenrolled controller is rejected before application request handling"
+  ],
+  "non_claims": [
+    "no production certificate provisioning",
+    "no public/private network listener deployment",
+    "no Lappy service installation",
+    "no Synology edge deployment",
+    "no QUIC qualification",
+    "no ChatGPT/MCP end-to-end qualification"
+  ]
+}

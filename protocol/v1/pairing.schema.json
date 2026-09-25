@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:veramesh:protocol:v1:pairing",
+  "title": "VeraMesh V1 pairing objects",
+  "description": "Local administration creates a predetermined enrollment. A remote redeem request proves possession of its P-256 signing key and binds its HPKE public key without carrying role, scope, or direction claims.",
+  "oneOf": [
+    {
+      "title": "Pairing session creation",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "operation",
+        "session_id",
+        "enrollment_role",
+        "enrollment_scopes",
+        "token_sha256",
+        "created_at",
+        "expires_at",
+        "relay_installation_id",
+        "relay_custody_public_key_spki_base64",
+        "relay_custody_key_id",
+        "relay_custody_key_epoch"
+      ],
+      "properties": {
+        "protocol_version": {
+          "const": "v1"
+        },
+        "operation": {
+          "const": "create_session"
+        },
+        "session_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "enrollment_role": {
+          "enum": [
+            "phone-client",
+            "vera-host"
+          ]
+        },
+        "enrollment_scopes": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "enum": [
+              "mailbox:submit",
+              "mailbox:fetch:self",
+              "receipt:create:self"
+            ]
+          }
+        },
+        "token_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "created_at": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "relay_installation_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "relay_custody_public_key_spki_base64": {
+          "type": "string",
+          "minLength": 50,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+        },
+        "relay_custody_key_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "relay_custody_key_epoch": {
+          "$ref": "#/$defs/jcsPositiveInteger"
+        }
+      }
+    },
+    {
+      "title": "Pairing redemption",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "operation",
+        "session_id",
+        "pairing_token",
+        "signing_public_key_spki_base64",
+        "signing_key_id",
+        "hpke_public_key_base64",
+        "hpke_key_id",
+        "proof"
+      ],
+      "properties": {
+        "protocol_version": {
+          "const": "v1"
+        },
+        "operation": {
+          "const": "redeem_session"
+        },
+        "session_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "pairing_token": {
+          "$ref": "#/$defs/token"
+        },
+        "signing_public_key_spki_base64": {
+          "type": "string",
+          "minLength": 50,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+        },
+        "signing_key_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "hpke_public_key_base64": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{43}=$"
+        },
+        "hpke_key_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "proof": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "context",
+            "algorithm",
+            "encoding",
+            "signature_base64"
+          ],
+          "properties": {
+            "context": {
+              "const": "veramesh-v1/pairing-redeem"
+            },
+            "algorithm": {
+              "const": "ecdsa-p256-sha256"
+            },
+            "encoding": {
+              "const": "p1363"
+            },
+            "signature_base64": {
+              "$ref": "#/$defs/p1363Signature"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "token": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 86,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "p1363Signature": {
+      "type": "string",
+      "minLength": 88,
+      "maxLength": 88,
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+    },
+    "jcsPositiveInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "description": "I-JSON/JCS safe positive integer; values above 2^53-1 are rejected for interoperability."
+    }
+  },
+  "$comment": "Signed-object canonical bytes are normative in protocol/v1/signed-object-profile.md; integer fields use the I-JSON/JCS safe range and reject values above 2^53-1."
+}

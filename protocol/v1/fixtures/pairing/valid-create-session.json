@@ -1,0 +1,18 @@
+{
+  "protocol_version": "v1",
+  "operation": "create_session",
+  "session_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "enrollment_role": "phone-client",
+  "enrollment_scopes": [
+    "mailbox:submit",
+    "mailbox:fetch:self",
+    "receipt:create:self"
+  ],
+  "token_sha256": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+  "created_at": "2026-09-13T18:00:00Z",
+  "expires_at": "2026-09-13T18:05:00Z",
+  "relay_installation_id": "relay-ds216",
+  "relay_custody_public_key_spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEEMg+4byOgKhjhaLnrH0tEUk6CI7ZCbOZHhMqXnMK0srUTq+r5+0L94Urpewx4VDjM0hdW68lBZnESjLrX+V+Jg==",
+  "relay_custody_key_id": "50b1b0ca61ee2b9b2a48fc24f2ecf779a7f3f345e02df9807ed6d4820c59caee",
+  "relay_custody_key_epoch": 1
+}

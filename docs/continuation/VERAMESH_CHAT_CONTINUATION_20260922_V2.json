@@ -1,0 +1,65 @@
+{
+  "schema": "VERAMESH_CHAT_CONTINUATION_MANIFEST_V2",
+  "project": "VeraMesh",
+  "repository": "thebrazenbeard/vera-mesh",
+  "branch": "work/veramesh-rdc-replacement-v1-20260922",
+  "draft_pr": 25,
+  "checkpoint_date": "2026-09-22",
+  "primary": "docs/continuation/VERAMESH_CHAT_CONTINUATION_20260922_V2.md",
+  "backup": "docs/continuation/VERAMESH_CHAT_CONTINUATION_20260922_V2_BACKUP.md",
+  "last_fully_verified_code_head": "66eca84708bb16d85556560f18143e2a5ada2d0a",
+  "verified_workflows": {
+    "veraport_reference": {
+      "run_number": 416,
+      "conclusion": "success"
+    },
+    "verarelay_snapshot": {
+      "run_number": 99,
+      "conclusion": "success"
+    }
+  },
+  "current_evidence": [
+    "evidence/lappy-existing-veraport-inspection-20260922.json",
+    "evidence/lappy-existing-veraport-source-binding-20260922.json",
+    "evidence/synology-readonly-inspection-20260922.json",
+    "evidence/synology-runtime-owner-source-binding-20260922.json"
+  ],
+  "synology": {
+    "package_manager_status": "STOP_REPORTED",
+    "edge_process_observed": true,
+    "tailscale_tcp_17445_to": "127.0.0.1:17445",
+    "source_binding": {
+      "repository": "thebrazenbeard/vera-synology",
+      "head": "553e3a637833c5469f6b99fbc4d597755a0c9a5e",
+      "exact_files": 5,
+      "source_declared_package_version": "0.1.0-0017",
+      "live_package_version": "UNQUALIFIED_PENDING_READBACK"
+    },
+    "semantic_lifecycle": "UNQUALIFIED_PENDING_PERMISSION_CORRECT_READBACK"
+  },
+  "go_gateway": {
+    "runnable_main": true,
+    "oauth_mcp_wired": true,
+    "multipath_read_failover": true,
+    "mutation_replay_disabled": true,
+    "restart_safe_logical_fences": true,
+    "nas_installed": false,
+    "public_endpoint": false,
+    "end_to_end_chatgpt": false
+  },
+  "protected_effects_not_authorized": [
+    "merge",
+    "NAS install/deploy",
+    "package start/stop/restart",
+    "public endpoint creation",
+    "reverse proxy mutation",
+    "OAuth provider configuration",
+    "firewall or Tailscale mutation",
+    "credential rotation",
+    "controller-key transfer",
+    "ChatGPT plugin registration",
+    "Lappy process execution enablement",
+    "destructive cleanup",
+    "Lappy service replacement"
+  ]
+}

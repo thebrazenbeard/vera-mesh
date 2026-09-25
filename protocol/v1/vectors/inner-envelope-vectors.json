@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "profile": "protocol/v1/inner-envelope-profile.md",
+  "vectors": [
+    {
+      "id": "inner-jws-reserialization-001",
+      "expected": "ACCEPT_ORIGINAL_BYTES_ONLY",
+      "key": {
+        "curve": "P-256",
+        "spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQ7yx9o+SSBk9OKwv9a0Up4v8U1m/j2UIL5CVM0V5M23RhTBKFlRkW2al3BjIUe2b+ZPmmPFGkafY4NocWUEPVw==",
+        "key_id": "82e5789bd9a4437db9a59fd7f64237f0b721298f8fb105e7183ca028f9749b41"
+      },
+      "protected_header_utf8": "{\"alg\":\"ES256\",\"kid\":\"82e5789bd9a4437db9a59fd7f64237f0b721298f8fb105e7183ca028f9749b41\",\"typ\":\"veramesh-v1-inner\"}",
+      "protected_header_base64url": "eyJhbGciOiJFUzI1NiIsImtpZCI6IjgyZTU3ODliZDlhNDQzN2RiOWE1OWZkN2Y2NDIzN2YwYjcyMTI5OGY4ZmIxMDVlNzE4M2NhMDI4Zjk3NDliNDEiLCJ0eXAiOiJ2ZXJhbWVzaC12MS1pbm5lciJ9",
+      "payload_utf8": "{\n  \"z\": 1,\n  \"message\": \"hello\"\n}",
+      "payload_base64url": "ewogICJ6IjogMSwKICAibWVzc2FnZSI6ICJoZWxsbyIKfQ",
+      "signing_input": "eyJhbGciOiJFUzI1NiIsImtpZCI6IjgyZTU3ODliZDlhNDQzN2RiOWE1OWZkN2Y2NDIzN2YwYjcyMTI5OGY4ZmIxMDVlNzE4M2NhMDI4Zjk3NDliNDEiLCJ0eXAiOiJ2ZXJhbWVzaC12MS1pbm5lciJ9.ewogICJ6IjogMSwKICAibWVzc2FnZSI6ICJoZWxsbyIKfQ",
+      "signature_base64url": "USv7Wv_k09RC1-4MereCVOcd8DeLiH6gzIUzbxuwGe9NKPg1urFhisctwRBUm-QsEnQumz9TW64dHnhpdk6wvw",
+      "compact_jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6IjgyZTU3ODliZDlhNDQzN2RiOWE1OWZkN2Y2NDIzN2YwYjcyMTI5OGY4ZmIxMDVlNzE4M2NhMDI4Zjk3NDliNDEiLCJ0eXAiOiJ2ZXJhbWVzaC12MS1pbm5lciJ9.ewogICJ6IjogMSwKICAibWVzc2FnZSI6ICJoZWxsbyIKfQ.USv7Wv_k09RC1-4MereCVOcd8DeLiH6gzIUzbxuwGe9NKPg1urFhisctwRBUm-QsEnQumz9TW64dHnhpdk6wvw",
+      "reserialized_payload_utf8": "{\"message\":\"hello\",\"z\":1}",
+      "expected_reserialized_result": "REJECT"
+    }
+  ]
+}
