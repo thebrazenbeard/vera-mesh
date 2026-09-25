@@ -319,7 +319,16 @@ try {
 
     $receipt = [ordered]@{
         schema = "VERAMESH_DESKTOP_COMMANDER_DUPLICATE_ACTIVATION_V2"
-        status = "PASS"
+        status = if (
+            $null -ne $runtimeStatus -and
+            $runtimeStatus.PSObject.Properties.Name -contains "remote_error" -and
+            -not [string]::IsNullOrWhiteSpace([string]$runtimeStatus.remote_error)
+        ) {
+            "LOCAL_PASS_REMOTE_AUTH_PENDING"
+        }
+        else {
+            "PASS"
+        }
         observed_at = (Get-Date).ToString("o")
         sources = [ordered]@{
             desktop_commander = $ExpectedUpstreamCommit
@@ -347,7 +356,25 @@ try {
             $null
         }
         config_backup = $configBackup
-        next_gate = "CALL_DESKTOP_COMMANDER_TOOL_FROM_CHATGPT_THROUGH_SELECTED_SECURE_MCP_TUNNEL"
+        remote_transport_qualified = (
+            $StartRuntime -and
+            $null -ne $runtimeStatus -and
+            (
+                -not ($runtimeStatus.PSObject.Properties.Name -contains "remote_error") -or
+                [string]::IsNullOrWhiteSpace([string]$runtimeStatus.remote_error)
+            )
+        )
+        next_gate = if (
+            $StartRuntime -and
+            $null -ne $runtimeStatus -and
+            $runtimeStatus.PSObject.Properties.Name -contains "remote_error" -and
+            -not [string]::IsNullOrWhiteSpace([string]$runtimeStatus.remote_error)
+        ) {
+            "REPAIR_CONTROL_PLANE_AUTH_THEN_CALL_DESKTOP_COMMANDER_FROM_CHATGPT"
+        }
+        else {
+            "CALL_DESKTOP_COMMANDER_TOOL_FROM_CHATGPT_THROUGH_SELECTED_SECURE_MCP_TUNNEL"
+        }
     }
     Write-Utf8Json $ReceiptPath $receipt
 
