@@ -1,0 +1,22 @@
+{
+  "schema": "VERAPORT_SHARED_RUNTIME_LOCAL_TEST_V1",
+  "date": "2026-09-19",
+  "status": "FOCUSED_LOCAL_TEST_PASS_ONLY",
+  "subject": "reference/veraport_agent/veraport_agent/runtime.py",
+  "result": {"passed": 7, "failed": 0, "duration_seconds_observed": 0.07},
+  "coverage_claims": [
+    "different sessions share one global resource collision domain",
+    "lane identifiers are isolated by application session",
+    "same controller request ID maps to the same durable namespace across reconnect",
+    "different controllers have separate durable request namespaces",
+    "session capability ceiling rejects expansion before shared-agent dispatch",
+    "lane listing filters other sessions and removes internal namespace",
+    "expired session rejects before shared-agent dispatch"
+  ],
+  "non_claims": [
+    "focused tests use a fake shared agent for session-wrapper semantics",
+    "no Windows service installation",
+    "no production listener deployment",
+    "no end-to-end multi-controller qualification"
+  ]
+}

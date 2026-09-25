@@ -1,0 +1,17 @@
+{
+  "schema": "VERAPORT_WINDOWS_SERVICE_LOCAL_TEST_V1",
+  "date": "2026-09-19",
+  "status": "NON_WINDOWS_LIFECYCLE_SURFACE_PASS_ONLY",
+  "subject": "reference/veraport_agent/veraport_agent/windows_service.py",
+  "result": {"passed": 3, "failed": 0, "duration_seconds_observed": 0.05},
+  "coverage_claims": [
+    "fixed ProgramData config path",
+    "service mode explicitly fails when pywin32 is unavailable",
+    "service CLI explicitly fails when pywin32 is unavailable"
+  ],
+  "non_claims": [
+    "not executed on Windows",
+    "no SCM install/start/stop qualification",
+    "no Windows ACL/firewall qualification"
+  ]
+}

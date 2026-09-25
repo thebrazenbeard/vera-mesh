@@ -1,0 +1,213 @@
+name: Lappy activation packet
+
+on:
+  push:
+    branches:
+      - "work/**"
+      - "deploy/**"
+      - "feature/**"
+      - "vera/**"
+    paths:
+      - "tools/windows_activate_lappy_veramesh.ps1"
+      - "tools/windows_*.ps1"
+      - "tools/Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1"
+      - "tools/Enable-Lappy-CVera-WorkBridgeRead.ps1"
+      - "tools/Enable-Lappy-DesktopCommander-Duplicate.ps1"
+      - "reference/veraport_agent/**"
+      - "docs/LAPPY_VERAMESH_ACTIVATION_PACKET_V1.md"
+      - ".github/workflows/lappy-activation.yml"
+  pull_request:
+    paths:
+      - "tools/windows_activate_lappy_veramesh.ps1"
+      - "tools/windows_*.ps1"
+      - "tools/Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1"
+      - "tools/Enable-Lappy-DesktopCommander-Duplicate.ps1"
+      - "reference/veraport_agent/**"
+      - "docs/LAPPY_VERAMESH_ACTIVATION_PACKET_V1.md"
+      - ".github/workflows/lappy-activation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: Windows activation packet qualification
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install VeraPort reference test dependencies
+        run: python -m pip install -e "./reference/veraport_agent[test,mcp,windows-service]"
+      - name: Parse PowerShell sources
+        shell: pwsh
+        run: |
+          $failed = $false
+          $scripts = @(
+            Get-ChildItem .\tools -Filter "windows_*.ps1"
+            Get-Item .\tools\Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1
+            Get-Item .\tools\Enable-Lappy-CVera-WorkBridgeRead.ps1
+            Get-Item .\tools\Enable-Lappy-DesktopCommander-Duplicate.ps1
+          )
+          $scripts | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              Write-Host "Parser errors in $($_.FullName)"
+              $errors | ForEach-Object { Write-Error $_ }
+            }
+          }
+          if ($failed) { exit 1 }
+      - name: Run activation/security regressions
+        run: |
+          python -m pytest -q ^
+            reference/veraport_agent/tests/test_lappy_activation_packet.py ^
+            reference/veraport_agent/tests/test_existing_lappy_tunnel_attach_packet.py ^
+            reference/veraport_agent/tests/test_existing_lappy_tunnel_resume_packet.py ^
+            reference/veraport_agent/tests/test_controller_capability_upgrade.py ^
+            reference/veraport_agent/tests/test_windows_acl.py ^
+            reference/veraport_agent/tests/test_tunnel_runtime_service.py ^
+            reference/veraport_agent/tests/test_windows_service.py ^
+            reference/veraport_agent/tests/test_windows_service_runtime.py
+        shell: cmd
+      - name: Execute activation plan only
+        shell: pwsh
+        run: |
+          $output = & .\tools\windows_activate_lappy_veramesh.ps1 *>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error $output
+            exit $LASTEXITCODE
+          }
+          foreach ($required in @(
+            "VERAMESH_LAPPY_ACTIVATION_PLAN_V1",
+            '"process_execution": false',
+            '"inbound_non_loopback_listener": false',
+            "PLAN ONLY"
+          )) {
+            if (-not $output.Contains($required)) {
+              Write-Error "Plan output missing required marker: $required"
+              Write-Host $output
+              exit 1
+            }
+          }
+          if ($output.Contains("Downloading pinned portable Python")) {
+            Write-Error "Plan-only execution crossed into apply/download effects"
+            exit 1
+          }
+          Write-Host $output
+
+      - name: Execute tunnel-resume plan only
+        shell: pwsh
+        run: |
+          $output = & .\tools\windows_resume_existing_lappy_tunnel.ps1 *>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error $output
+            exit $LASTEXITCODE
+          }
+          foreach ($required in @(
+            "VERAMESH_EXISTING_LAPPY_TUNNEL_RESUME_PLAN_V1",
+            '"module_only": true',
+            '"veraport_restart": false',
+            '"credentials_changed": false',
+            "PLAN ONLY"
+          )) {
+            if (-not $output.Contains($required)) {
+              Write-Error "Resume plan output missing required marker: $required"
+              Write-Host $output
+              exit 1
+            }
+          }
+          if ($output.Contains("Invoke-WebRequest")) {
+            Write-Error "Resume plan-only execution crossed into apply/download effects"
+            exit 1
+          }
+          Write-Host $output
+
+      - name: Verify one-shot full read-write installer contract
+        shell: pwsh
+        run: |
+          $text = [IO.File]::ReadAllText(".\tools\Install-Lappy-WorkBridge-VeraMesh-FullRW.ps1")
+          foreach ($required in @(
+            'db56871f74f641a0819a601fe166e3241352edaf',
+            '432e870eff5d230ce33089f669ef9a7e8ef755af',
+            'fs.read,fs.write',
+            'process_enabled = $false',
+            'roots_broadened = $false',
+            'veraport-doctor --live --tunnel-status'
+          )) {
+            if (-not $text.Contains($required)) {
+              Write-Error "One-shot installer missing required marker: $required"
+              exit 1
+            }
+          }
+          if ($text.Contains('"process.exec"') -or $text.Contains('"process.start"')) {
+            Write-Error "One-shot installer unexpectedly contains process gateway operations"
+            exit 1
+          }
+
+      - name: Verify C Vera read activation contract
+        shell: pwsh
+        run: |
+          $text = [IO.File]::ReadAllText(".\tools\Enable-Lappy-CVera-WorkBridgeRead.ps1")
+          foreach ($required in @(
+            '6c38e45d59f4cbdcc827effe905d04574b92b6db',
+            'C:\Vera',
+            'http://127.0.0.1:8765/mcp',
+            'mcp==1.27.2',
+            'workbridge_local_qualification',
+            'delegated_c_vera_access = "READ_ONLY"',
+            'firewall_changed = $false',
+            'tailscale_changed = $false'
+          )) {
+            if (-not $text.Contains($required)) {
+              Write-Error "C Vera activation script missing required marker: $required"
+              exit 1
+            }
+          }
+          if ($text.Contains('"process.exec"') -or $text.Contains('"process.start"')) {
+            Write-Error "C Vera activation unexpectedly contains process gateway operations"
+            exit 1
+          }
+
+      - name: Verify Desktop Commander duplicate activation contract
+        shell: pwsh
+        run: |
+          $text = [IO.File]::ReadAllText(".\tools\Enable-Lappy-DesktopCommander-Duplicate.ps1")
+          foreach ($required in @(
+            '550a0b3e31da18b7cf25e87ed840e3d953b6da42',
+            '6f2d813b59fe2ff0f0aafa6a60feaacc7eea0de7',
+            'Resolve-TunnelPackage',
+            'Replace-PackageTree',
+            'Restore-PackageTree',
+            'mcp_entrypoint',
+            'mcp_entrypoint_sha256',
+            'mcp_arguments',
+            'unrestricted_command_string_shell',
+            'harden_service_materials',
+            'CALL_DESKTOP_COMMANDER_TOOL_FROM_CHATGPT_THROUGH_SELECTED_SECURE_MCP_TUNNEL'
+          )) {
+            if (-not $text.Contains($required)) {
+              Write-Error "Desktop Commander activation script missing required marker: $required"
+              exit 1
+            }
+          }
+
+      - name: Publish C Vera activation packet
+        uses: actions/upload-artifact@v4
+        with:
+          name: lappy-cvera-workbridge-read-activation
+          path: tools/Enable-Lappy-CVera-WorkBridgeRead.ps1
+          if-no-files-found: error

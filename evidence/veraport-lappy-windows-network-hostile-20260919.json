@@ -1,0 +1,46 @@
+{
+  "schema": "VERAPORT_LAPPY_WINDOWS_NETWORK_HOSTILE_V1",
+  "date": "2026-09-19",
+  "status": "PASS_WITH_ENVIRONMENT_QUALIFICATION_CAVEAT",
+  "subject": {
+    "repository": "thebrazenbeard/vera-mesh",
+    "head": "fe6245fc9bf6392355bb9f13a88e010476ebdb89",
+    "tree": "91d123408201b80a8d6edd7c4fbc20824fc3b330"
+  },
+  "execution_surface": "Lappy Windows isolated detached checkout",
+  "authored_boundary_suite": {
+    "pytest_result": {"passed": 12, "skipped": 7, "failed": 0},
+    "skip_reason_summary": [
+      "five async cases skipped because pytest-asyncio is not installed",
+      "two Windows-service fallback cases skip when pywin32 is present"
+    ],
+    "direct_execution_of_skipped_async_boundary_cases": {"passed": 5, "failed": 0}
+  },
+  "live_hostile_network_checks": {
+    "passed": 8,
+    "failed": 0,
+    "checks": [
+      "non-loopback bind rejected by default",
+      "non-loopback bind requires explicit configuration opt-in",
+      "actual start_host listener bound to 127.0.0.1 only",
+      "TLS 1.2 downgrade rejected",
+      "ALPN mismatch rejected",
+      "unenrolled controller rejected",
+      "enrolled controller accepted",
+      "listener unreachable after shutdown"
+    ]
+  },
+  "machine_readback": {
+    "VeraPortAgent_service_registered": false,
+    "VeraPort_firewall_rules_found": false,
+    "pywin32_service_support_present": true,
+    "fixed_service_config_path": "C:\\ProgramData\\VeraMesh\\veraport.json"
+  },
+  "caveats": [
+    "cryptography 48.0.1 is outside the candidate-declared >=42,<47 dependency range",
+    "Windows SCM install/register/start/stop was intentionally not performed",
+    "no non-loopback listener was opened",
+    "no firewall, VLAN, Tailscale, certificate-store, credential, or service configuration was mutated",
+    "no Synology edge runtime or ChatGPT/MCP end-to-end connection was exercised"
+  ]
+}

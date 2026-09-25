@@ -1,0 +1,35 @@
+name: OpenAI Responses VeraMesh operator
+
+on:
+  push:
+    paths:
+      - "tools/openai_responses_veramesh_operator.py"
+      - "tools/test_openai_responses_veramesh_operator.py"
+      - "docs/OPENAI_RESPONSES_VERAMESH_OPERATOR_V1.md"
+      - ".github/workflows/openai-responses-operator.yml"
+  pull_request:
+    paths:
+      - "tools/openai_responses_veramesh_operator.py"
+      - "tools/test_openai_responses_veramesh_operator.py"
+      - "docs/OPENAI_RESPONSES_VERAMESH_OPERATOR_V1.md"
+      - ".github/workflows/openai-responses-operator.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile operator
+        run: python -m py_compile tools/openai_responses_veramesh_operator.py tools/test_openai_responses_veramesh_operator.py
+      - name: Run operator tests
+        run: python tools/test_openai_responses_veramesh_operator.py -v

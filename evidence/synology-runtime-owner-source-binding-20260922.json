@@ -1,0 +1,78 @@
+{
+  "schema": "VERAMESH_SYNOLOGY_RUNTIME_OWNER_SOURCE_BINDING_V1",
+  "observed_at_utc": "2026-09-22T19:32:55Z",
+  "observation_source": {
+    "user_transcript": "Pasted text(20260922-193443).txt",
+    "probe_commit": "c81e7c52b6898e8a9135e62771b49474d18a12a2",
+    "probe_path": "tools/synology_runtime_owner_probe.sh"
+  },
+  "runtime_observation": {
+    "hostname": "TheSimsVault",
+    "machine": "armv7l",
+    "synopkg_reported_status": "stop",
+    "edge_process": {
+      "pid": 25544,
+      "command": "/var/packages/python311/target/bin/python3.11 /var/packages/VeraMesh/target/bin/veramesh_edge.py serve",
+      "observed_start_label": "Sep20"
+    },
+    "listeners": [
+      "127.0.0.1:17445",
+      "100.115.152.20:17445",
+      "127.0.0.1:17443",
+      "fd7a:115c:a1e0::c:17445"
+    ],
+    "tailscale_serve": {
+      "tcp_port": 17445,
+      "forward": "127.0.0.1:17445"
+    },
+    "lifecycle_status_rc": 4,
+    "control_socket_probe_result": "UNRELIABLE_NONROOT_ABSENCE_TEST",
+    "private_state_probe_result": "UNREADABLE_OR_INACCESSIBLE_AS_NONROOT"
+  },
+  "bounded_source_binding": {
+    "repository": "thebrazenbeard/vera-synology",
+    "source_head": "553e3a637833c5469f6b99fbc4d597755a0c9a5e",
+    "source_declared_package_version": "0.1.0-0017",
+    "exact_observed_file_matches": [
+      {
+        "installed": "/var/packages/VeraMesh/target/bin/veramesh_edge.py",
+        "source": "payload/bin/veramesh_edge.py",
+        "sha256": "1374d263213fceb125a4052b4e306e5200d61621087b313ef119182dd8df8dca"
+      },
+      {
+        "installed": "/var/packages/VeraMesh/target/bin/veramesh_lifecycle.py",
+        "source": "payload/bin/veramesh_lifecycle.py",
+        "sha256": "e649c5e7a6be90d1777326efcd7ddc66656675f10d1e3e742506dbfa84102487"
+      },
+      {
+        "installed": "/var/packages/VeraMesh/target/bin/veramesh_start_readiness.py",
+        "source": "payload/bin/veramesh_start_readiness.py",
+        "sha256": "8643035ca181b8b8c4d35127e01c950e824a324ae756cc919ddbf862b8691bd5"
+      },
+      {
+        "installed": "/var/packages/VeraMesh/target/bin/veramesh_state.py",
+        "source": "payload/bin/veramesh_state.py",
+        "sha256": "4d2f02da113b27c343bb98e07fa13807e764b515f0bd6e2945492b66797d8a08"
+      },
+      {
+        "installed": "/var/packages/VeraMesh/conf/systemd/pkguser-veramesh.service",
+        "source": "spk/conf/systemd/pkguser-veramesh.service",
+        "sha256": "8ab9c2549b6532f855f7d5d50c39090f5fffe9c20debed7a47d13b4692d09f96"
+      }
+    ]
+  },
+  "interpretation": {
+    "package_manager_vs_process": "DIVERGENT",
+    "tailscale_forwarding_config": "OBSERVED",
+    "edge_process_presence": "OBSERVED",
+    "semantic_edge_health": "NOT_YET_QUALIFIED",
+    "live_package_version": "NOT_YET_READ_BACK"
+  },
+  "claim_ceiling": [
+    "The five observed installed files exactly match the named vera-synology source head for those paths.",
+    "This does not prove all installed package files match that source head.",
+    "The source head declares 0.1.0-0017, but live package metadata version remains unqualified until read back.",
+    "A running process and bound listener do not prove the private lifecycle control-socket contract or VeraPort application authentication.",
+    "No package, Tailscale, firewall, credential, or service mutation is authorized or performed by this evidence."
+  ]
+}

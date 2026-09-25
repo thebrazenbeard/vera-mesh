@@ -1,0 +1,166 @@
+{
+  "schema": "VERAPORT_LAPPY_EXISTING_INSTALL_INSPECTION_EVIDENCE_V1",
+  "captured_from": "user-run tools/windows_inspect_existing_veraport.ps1 output",
+  "observed_at_utc": "2026-09-22T18:53:07.4048464Z",
+  "inspection_source_head": "6869ab669e23f8b887ee219994efc93794ed8ca3",
+  "result_class": "READ_ONLY_INSPECTION",
+  "host": {
+    "computer_name": "LAPPY",
+    "os": "Microsoft Windows 11 Home",
+    "os_version": "10.0.26200"
+  },
+  "service": {
+    "present": true,
+    "name": "VeraPortAgent",
+    "display_name": "VeraMesh VeraPort Agent",
+    "state": "Running",
+    "start_mode": "Auto",
+    "start_name": "LocalSystem",
+    "path_name": "\"C:\\Users\\patri\\AppData\\Local\\Programs\\Python\\Python311\\pythonservice.exe\"",
+    "process_id": 27460,
+    "python_class": "veraport_agent.windows_service.VeraPortWindowsService"
+  },
+  "config": {
+    "path": "C:\\ProgramData\\VeraMesh\\veraport.json",
+    "bind_host": "127.0.0.1",
+    "bind_port": 17444,
+    "allowed_roots": [
+      "C:\\Users\\patri",
+      "C:\\Temp"
+    ],
+    "state_db": "C:\\ProgramData\\VeraMesh\\state\\agent.sqlite3",
+    "tls_cert": "C:\\ProgramData\\VeraMesh\\identity\\tls-cert.pem",
+    "tls_key": "C:\\ProgramData\\VeraMesh\\identity\\tls-key.pem",
+    "workstation_key": "C:\\ProgramData\\VeraMesh\\identity\\workstation.pem",
+    "controller_trust": "C:\\ProgramData\\VeraMesh\\identity\\controllers.json",
+    "allow_process_exec": false,
+    "allow_non_loopback_listener": false,
+    "max_lanes": 32,
+    "max_inflight": 64,
+    "max_read_bytes": null
+  },
+  "listeners": [
+    {
+      "local_address": "fd7a:115c:a1e0::e901:32df",
+      "local_port": 17444,
+      "owning_pid": 32384,
+      "process_name": "tailscaled",
+      "process_path": "C:\\Program Files\\Tailscale\\tailscaled.exe"
+    },
+    {
+      "local_address": "127.0.0.1",
+      "local_port": 17444,
+      "owning_pid": 27460,
+      "process_name": "pythonservice",
+      "process_path": "C:\\Users\\patri\\AppData\\Local\\Programs\\Python\\Python311\\pythonservice.exe"
+    },
+    {
+      "local_address": "100.88.50.35",
+      "local_port": 17444,
+      "owning_pid": 32384,
+      "process_name": "tailscaled",
+      "process_path": "C:\\Program Files\\Tailscale\\tailscaled.exe"
+    }
+  ],
+  "state": {
+    "path": "C:\\ProgramData\\VeraMesh\\state\\agent.sqlite3",
+    "exists": true,
+    "length": 20480,
+    "last_write_time_utc": "2026-09-19T17:49:46.9142174Z",
+    "sha256": null,
+    "hash_may_be_null_when_live_locked": true,
+    "inspection_hash_error": "Get-FileHash could not read the live SQLite file because another process held it."
+  },
+  "identity_files": [
+    {
+      "name": "controllers.json",
+      "length": 557,
+      "sha256": "252aab1aa1146ca7b9d1fc54b09ad73c609f0901edd2e17f277590296df7d0f3",
+      "last_write_time_utc": "2026-09-19T17:49:04.4132551Z"
+    },
+    {
+      "name": "tls-cert.pem",
+      "length": 652,
+      "sha256": "256c5a3ef7143b0fc2b798a363dc71fe30feba898f1feac313a3bf37fd36d287",
+      "last_write_time_utc": "2026-09-19T17:49:46.6517280Z"
+    },
+    {
+      "name": "tls-key.pem",
+      "length": 241,
+      "sha256": "a009da14441eff37db6f295de44b7469b15f2c9d0a7b1bea02d9564c8830db0e",
+      "last_write_time_utc": "2026-09-19T17:49:04.3748181Z"
+    },
+    {
+      "name": "workstation.pem",
+      "length": 241,
+      "sha256": "b1939d6163aa9ba490fc875cf963bb40c604d1d02b7f477a35b5bd5917a30150",
+      "last_write_time_utc": "2026-09-19T17:49:04.3748181Z"
+    }
+  ],
+  "controller_files": [
+    {
+      "name": "ds216-v16-deploy-ed25519",
+      "length": 387,
+      "sha256": "20c5a3bf590a665335fae80e2efcc0a735c6c0ed9896c1498c9c5337630d348e",
+      "last_write_time_utc": "2026-09-19T18:51:27.7368376Z"
+    },
+    {
+      "name": "ds216-v16-deploy-ed25519.pub",
+      "length": 109,
+      "sha256": "d5cf160741468398d42aa4bead3346647c983f343250f6241266ab8b9a36d980",
+      "last_write_time_utc": "2026-09-19T18:51:27.7382072Z"
+    },
+    {
+      "name": "vera-controller-bootstrap.pem",
+      "length": 241,
+      "sha256": "a06bc020f1617c9cabe4839a88d5b1614a76b75d520af5a44627e34faa03f8d8",
+      "last_write_time_utc": "2026-09-19T17:49:04.3748181Z"
+    },
+    {
+      "name": "vera-controller-bootstrap.pub.pem",
+      "length": 182,
+      "sha256": "b36c2a0fea56aeba4b19eee6ba4c2fdd33cf6472d63a3e33d69571b22bcf2096",
+      "last_write_time_utc": "2026-09-19T17:49:04.3944274Z"
+    }
+  ],
+  "package_provenance": {
+    "program_root": "C:\\Program Files\\VeraMesh\\VeraPortAgent",
+    "observed_implementation_hashes": {
+      "windows_service_py": "378b8f2a71fe3724944e1b6e16e6c712700c84939fdccde0f94503adb612ad1b",
+      "lappy_host_py": "1c237117b75a4c12a1e4491ff1555ae6fe831fca7235709203af78cb6af65546",
+      "service_config_py": "9cda2cafc20a1b74557726bde5b9fd8221caeff196645043de5cfe5fac493b5b",
+      "protocol_py": "2b22208435b56f0ee668e19229febd91ab6eaf16bb0a82e764450a2d5a38a0c4",
+      "executor_py": "6b90d3f79de8e76bb18e02808e29e09b8e49fc65d5ca3212f28ec8d220457de4",
+      "hot_session_py": "e8a52f8744e4cb509389b54f50cb81f60473b0a2aeb68a68556a607b29a8fe93",
+      "tls_transport_py": "11b016cadd0c70ba4621381e39ee34296e39288e92dbd0e96b26d0d6015b09e0"
+    }
+  },
+  "acl_summary": {
+    "paths": [
+      "C:\\ProgramData\\VeraMesh",
+      "C:\\ProgramData\\VeraMesh\\identity",
+      "C:\\ProgramData\\VeraMesh\\controller"
+    ],
+    "owner": "BUILTIN\\Administrators",
+    "allowed_principals": [
+      "NT AUTHORITY\\SYSTEM",
+      "BUILTIN\\Administrators"
+    ],
+    "inheritance": false
+  },
+  "effects": {
+    "service_stopped": false,
+    "service_started": false,
+    "files_written": false,
+    "firewall_changed": false,
+    "state_database_opened": false
+  },
+  "claim_ceiling": [
+    "This is a read-only inspection snapshot of a pre-existing Lappy installation.",
+    "It proves service/config/listener/file/ACL observations only.",
+    "It does not prove the installed package is source-identical to the current VeraMesh branch.",
+    "It does not qualify authenticated VeraPort behavior on the existing installation.",
+    "It does not qualify Tailscale end-to-end forwarding despite observing tailscaled listeners on port 17444.",
+    "It does not authorize overwriting, reinstalling, stopping, migrating, deleting, or rotating the existing installation."
+  ]
+}

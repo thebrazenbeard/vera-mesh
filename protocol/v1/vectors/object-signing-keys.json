@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "endpoint_test_signing_key": {
+    "curve": "P-256",
+    "spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEUNRnC951JE8o0oOKDSVVinpyaG1FItTIJz+2RCrr+pPb3TdVGv0mO139YX85YMZajCmIUP+Z8gNm3OfUNnIX9A==",
+    "key_id": "1f3398e6e278f68a15b7fe32236933b8b2f86a6cb02415c57ecc7e1b9b0f16c3"
+  },
+  "relay_test_custody_key": {
+    "curve": "P-256",
+    "spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEEMg+4byOgKhjhaLnrH0tEUk6CI7ZCbOZHhMqXnMK0srUTq+r5+0L94Urpewx4VDjM0hdW68lBZnESjLrX+V+Jg==",
+    "key_id": "50b1b0ca61ee2b9b2a48fc24f2ecf779a7f3f345e02df9807ed6d4820c59caee"
+  },
+  "inner_test_signing_key": {
+    "curve": "P-256",
+    "spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQ7yx9o+SSBk9OKwv9a0Up4v8U1m/j2UIL5CVM0V5M23RhTBKFlRkW2al3BjIUe2b+ZPmmPFGkafY4NocWUEPVw==",
+    "key_id": "82e5789bd9a4437db9a59fd7f64237f0b721298f8fb105e7183ca028f9749b41"
+  }
+}
