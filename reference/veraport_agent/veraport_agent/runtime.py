@@ -36,10 +36,17 @@ class SessionBoundHandler:
     now_ms: Callable[[], int]
 
     async def __call__(self, request: dict[str, Any]) -> dict[str, Any]:
-        if self.now_ms() >= self.binding.expires_at_ms:
-            return self._error(request.get("request_id"), SessionExpired.code, "VeraPort session expired")
         if not isinstance(request, dict):
             return self._error(None, "INVALID_REQUEST", "request must be an object")
+
+        observed_now_ms = self.now_ms()
+        if observed_now_ms >= self.binding.expires_at_ms:
+            await self.close_session()
+            return self._error(
+                request.get("request_id"),
+                SessionExpired.code,
+                "VeraPort session expired",
+            )
 
         external_request_id = request.get("request_id")
         operation = request.get("operation")
@@ -62,6 +69,21 @@ class SessionBoundHandler:
 
         internal = dict(request)
         internal["request_id"] = _request_prefix(self.binding) + external_request_id
+        if operation in {"lane.open", "lane.renew"}:
+            requested_ttl = request.get("ttl_s", 300.0)
+            if type(requested_ttl) not in {int, float} or requested_ttl <= 0:
+                return self._error(
+                    external_request_id,
+                    "INVALID_REQUEST",
+                    "ttl_s must be a positive number",
+                )
+            remaining_session_s = (
+                self.binding.expires_at_ms - observed_now_ms
+            ) / 1000.0
+            internal["ttl_s"] = min(
+                float(requested_ttl),
+                remaining_session_s,
+            )
         if "lane_id" in internal:
             lane_id = internal["lane_id"]
             if not isinstance(lane_id, str) or not lane_id:

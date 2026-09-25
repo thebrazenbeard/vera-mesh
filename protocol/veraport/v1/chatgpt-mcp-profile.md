@@ -66,7 +66,10 @@ Conditionally registered only when controller policy explicitly includes the ope
 Process capabilities remain additionally gated by Lappy local policy. Tool discovery does
 not enable them. Managed process handles are opaque and bound to the owning lane/fence. Interactive input
 requires a distinct `process.interact` capability and is bounded to 65,536 bytes per call.
-Lane close and application-session disconnect reap owned children.
+Lane close and application-session disconnect reap owned children. Lane open/renew TTL is
+clamped to the remaining authenticated application-session lifetime, so an idle connection
+cannot leave a session-owned lane or resource claim valid beyond its session expiry. An
+expired request triggers exact-session teardown before returning `SESSION_EXPIRED`.
 
 The current source also includes an independent Python reference live-edge carrier.
 Production `EDGE_STREAM` on Synology is the VeraMesh Python 3.11 SPK edge, not

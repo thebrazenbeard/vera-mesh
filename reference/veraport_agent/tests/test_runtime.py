@@ -9,6 +9,7 @@ class FakeGlobalAgent:
         self.requests = []
         self.lanes = {}
         self.next_fence = 0
+        self.closed_sessions = []
 
     async def handle(self, request):
         self.requests.append(dict(request))
@@ -54,6 +55,23 @@ class FakeGlobalAgent:
             }
 
         return {"request_id": request_id, "ok": True, "result": {}}
+
+    async def close_session(self, session_id):
+        self.closed_sessions.append(session_id)
+        prefix = session_id + "::"
+        closed = [
+            lane_id
+            for lane_id in tuple(self.lanes)
+            if lane_id.startswith(prefix)
+        ]
+        for lane_id in closed:
+            self.lanes.pop(lane_id)
+        return {
+            "session_id": session_id,
+            "closed_lanes": sorted(closed),
+            "unresolved_lanes": [],
+            "drained": True,
+        }
 
 
 def binding(session, controller="controller:a", caps=frozenset({"fs.read", "fs.write"}), expires=5000):
@@ -191,6 +209,99 @@ async def test_expired_session_rejects_before_agent():
         binding("session", expires=1000)
     )
 
+    agent.lanes["session::owned"] = {
+        "lane_id": "session::owned",
+        "claims": (),
+        "fencing_token": 1,
+    }
+    agent.lanes["other::preserved"] = {
+        "lane_id": "other::preserved",
+        "claims": (),
+        "fencing_token": 2,
+    }
+
     response = await handler({"request_id": "x", "operation": "lane.list"})
     assert response["error"]["code"] == "SESSION_EXPIRED"
+    assert agent.requests == []
+    assert agent.closed_sessions == ["session"]
+    assert "session::owned" not in agent.lanes
+    assert "other::preserved" in agent.lanes
+
+
+@pytest.mark.asyncio
+async def test_lane_open_ttl_is_clamped_to_remaining_session_lifetime():
+    agent = FakeGlobalAgent()
+    handler = WorkstationHandlerFactory(agent, now_ms=lambda: 1000)(
+        binding("session", expires=2500)
+    )
+
+    response = await handler({
+        "request_id": "open",
+        "operation": "lane.open",
+        "lane_id": "lane",
+        "capabilities": ["fs.read"],
+        "claims": [],
+        "ttl_s": 300.0,
+    })
+
+    assert response["ok"] is True
+    assert agent.requests[-1]["ttl_s"] == pytest.approx(1.5)
+
+
+@pytest.mark.asyncio
+async def test_lane_renew_ttl_is_clamped_to_remaining_session_lifetime():
+    agent = FakeGlobalAgent()
+    handler = WorkstationHandlerFactory(agent, now_ms=lambda: 4000)(
+        binding("session", expires=5000)
+    )
+
+    response = await handler({
+        "request_id": "renew",
+        "operation": "lane.renew",
+        "lane_id": "lane",
+        "fencing_token": 1,
+        "ttl_s": 60.0,
+    })
+
+    assert response["ok"] is True
+    assert agent.requests[-1]["ttl_s"] == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_shorter_lane_ttl_is_preserved_inside_session_lifetime():
+    agent = FakeGlobalAgent()
+    handler = WorkstationHandlerFactory(agent, now_ms=lambda: 1000)(
+        binding("session", expires=5000)
+    )
+
+    await handler({
+        "request_id": "open-short",
+        "operation": "lane.open",
+        "lane_id": "lane",
+        "capabilities": ["fs.read"],
+        "claims": [],
+        "ttl_s": 0.5,
+    })
+
+    assert agent.requests[-1]["ttl_s"] == pytest.approx(0.5)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ttl_s", [0, -1, "300", None, True])
+async def test_invalid_lane_ttl_is_rejected_before_agent(ttl_s):
+    agent = FakeGlobalAgent()
+    handler = WorkstationHandlerFactory(agent, now_ms=lambda: 1000)(
+        binding("session", expires=5000)
+    )
+
+    response = await handler({
+        "request_id": "bad-ttl",
+        "operation": "lane.open",
+        "lane_id": "lane",
+        "capabilities": ["fs.read"],
+        "claims": [],
+        "ttl_s": ttl_s,
+    })
+
+    assert response["error"]["code"] == "INVALID_REQUEST"
     assert agent.requests == []
