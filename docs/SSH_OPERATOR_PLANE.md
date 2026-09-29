@@ -16,7 +16,7 @@ It does not create an Administrator account or add a non-admin user to Administr
 
 DSM owns its SSH daemon. `tools/synology_install_ssh_authorized_key.sh` only installs a supplied public key for an existing DSM administrator account. It does not edit DSM sshd configuration, enable root SSH login, or create another daemon.
 
-Run it through sudo/root after enabling SSH in DSM Control Panel if SSH is not already enabled. Root administration remains `sudo -i` after logging in as the admin account.
+Run it through sudo/root after enabling SSH in DSM Control Panel if SSH is not already enabled. Normal mode leaves root administration at `sudo -i`. With the explicit `--root-key` switch, the same operator public key is also installed under `/root/.ssh/authorized_keys`, following Synology's documented key-pair root-login path for current DSM. This is the unattended full-root mode and should be treated as equivalent to possession of a root credential.
 
 ## Keys and network
 
