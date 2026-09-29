@@ -45,6 +45,19 @@ func TestWorkBridgeClientDiscoversAndMapsTools(t *testing.T) {
 	}) (*mcp.CallToolResult, map[string]any, error) {
 		return nil, map[string]any{"created": true}, nil
 	})
+	mcp.AddTool(server, &mcp.Tool{Name: "workspace_move"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct {
+		Source string `json:"source"`
+		Destination string `json:"destination"`
+	}) (*mcp.CallToolResult, map[string]any, error) {
+		return nil, map[string]any{"moved": true, "source": in.Source, "destination": in.Destination}, nil
+	})
+	mcp.AddTool(server, &mcp.Tool{Name: "process_run"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct {
+		Executable string `json:"executable"`
+		Args []string `json:"args"`
+		WorkingDir string `json:"working_dir"`
+	}) (*mcp.CallToolResult, map[string]any, error) {
+		return nil, map[string]any{"exit_code": 0, "stdout": in.Executable + ":" + in.WorkingDir}, nil
+	})
 
 	stream := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true})
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +82,8 @@ func TestWorkBridgeClientDiscoversAndMapsTools(t *testing.T) {
 	}
 	defer client.Close()
 
-	if !client.SupportsPublic("read_file") || !client.SupportsPublic("write_file") {
+	if !client.SupportsPublic("read_file") || !client.SupportsPublic("write_file") ||
+		!client.SupportsPublic("move_path") || !client.SupportsPublic("run_granted_process") {
 		t.Fatal("expected mapped WorkBridge tools to be discovered")
 	}
 	read, err := client.CallPublic(context.Background(), "read_file", map[string]any{"path": "/tmp/x", "encoding": "utf-8"})
@@ -78,6 +92,20 @@ func TestWorkBridgeClientDiscoversAndMapsTools(t *testing.T) {
 	}
 	if read["content"] != "hello:/tmp/x" || read["backend"] != "workbridge" {
 		t.Fatalf("unexpected read result: %#v", read)
+	}
+	moved, err := client.CallPublic(context.Background(), "move_path", map[string]any{
+		"source": "/tmp/a", "destination": "/tmp/b",
+	})
+	if err != nil || moved["backend"] != "workbridge" {
+		t.Fatalf("unexpected move result: %#v err=%v", moved, err)
+	}
+	granted, err := client.CallPublic(context.Background(), "run_granted_process", map[string]any{
+		"executable_grant": "shell",
+		"args": []any{"-lc", "pwd"},
+		"working_dir": "/tmp",
+	})
+	if err != nil || granted["backend"] != "workbridge" {
+		t.Fatalf("unexpected granted-process result: %#v err=%v", granted, err)
 	}
 	listed, err := client.CallPublic(context.Background(), "list_directory", map[string]any{"path": "/tmp", "offset": 1, "max_entries": 1})
 	if err != nil {

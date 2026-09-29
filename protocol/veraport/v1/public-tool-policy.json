@@ -217,6 +217,22 @@
       }
     },
     {
+      "name": "run_granted_process",
+      "operation": "workbridge.process_run",
+      "scopes": [
+        "computer.process"
+      ],
+      "capabilities": [
+        "process.exec"
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
       "name": "start_process",
       "operation": "process.start",
       "scopes": [

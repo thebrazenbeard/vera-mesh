@@ -26,3 +26,19 @@ func TestWorkBridgeCannotWidenVeraMeshPublicPolicy(t *testing.T) {
 		t.Fatal("WorkBridge widened public policy to write_file")
 	}
 }
+
+
+func TestGrantedProcessRequiresOuterProcessCapabilityAndUpstreamTool(t *testing.T) {
+	controller := &Controller{cfg:&Config{
+		RequestedCapabilities: []string{"process.exec"},
+		GatewayOperations: []string{"lane.open","lane.close"},
+	}}
+	gateway := &MCPGateway{controller:controller, workbridge:wideningWorkBridgeStub{}}
+	if !gateway.supportsPolicy(PublicToolByName["run_granted_process"]) {
+		t.Fatal("granted process unavailable despite explicit outer process capability and upstream tool")
+	}
+	controller.cfg.RequestedCapabilities = []string{"fs.read"}
+	if gateway.supportsPolicy(PublicToolByName["run_granted_process"]) {
+		t.Fatal("granted process widened outer process capability")
+	}
+}

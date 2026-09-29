@@ -204,11 +204,13 @@ func (w *WorkBridgeClient) Close() error {
 }
 
 var workBridgePublicToolMap = map[string]string{
-	"read_file":      "workspace_read_text",
-	"stat_path":      "workspace_stat",
-	"list_directory": "workspace_list",
-	"write_file":     "workspace_write_text",
-	"make_directory": "workspace_mkdir",
+	"read_file":            "workspace_read_text",
+	"stat_path":            "workspace_stat",
+	"list_directory":       "workspace_list",
+	"write_file":           "workspace_write_text",
+	"make_directory":       "workspace_mkdir",
+	"move_path":            "workspace_move",
+	"run_granted_process":  "process_run",
 }
 
 func (w *WorkBridgeClient) SupportsPublic(publicName string) bool {
@@ -286,19 +288,49 @@ func (w *WorkBridgeClient) CanHandlePublic(publicName string, args map[string]an
 	if !w.SupportsPublic(publicName) {
 		return false
 	}
-	pathValue, err := reqString(args, "path")
-	if err != nil || !w.pathAllowed(pathValue) {
-		return false
-	}
 	switch publicName {
 	case "read_file", "write_file":
+		pathValue, err := reqString(args, "path")
+		if err != nil || !w.pathAllowed(pathValue) {
+			return false
+		}
 		encoding := optString(args, "encoding", "utf-8")
 		return strings.EqualFold(encoding, "utf-8") || strings.EqualFold(encoding, "utf8")
+	case "stat_path", "list_directory":
+		pathValue, err := reqString(args, "path")
+		return err == nil && w.pathAllowed(pathValue)
 	case "make_directory":
+		pathValue, err := reqString(args, "path")
+		if err != nil || !w.pathAllowed(pathValue) {
+			return false
+		}
 		parents, err := optBool(args, "parents", true)
 		return err == nil && !parents
-	default:
+	case "move_path":
+		source, sourceErr := reqString(args, "source")
+		destination, destinationErr := reqString(args, "destination")
+		return sourceErr == nil && destinationErr == nil &&
+			w.pathAllowed(source) && w.pathAllowed(destination)
+	case "run_granted_process":
+		if _, err := reqString(args, "executable_grant"); err != nil {
+			return false
+		}
+		workingDir, err := reqString(args, "working_dir")
+		if err != nil || !w.pathAllowed(workingDir) {
+			return false
+		}
+		rawArgs, ok := args["args"].([]any)
+		if !ok {
+			return false
+		}
+		for _, raw := range rawArgs {
+			if _, ok := raw.(string); !ok {
+				return false
+			}
+		}
 		return true
+	default:
+		return false
 	}
 }
 
@@ -408,6 +440,49 @@ func (w *WorkBridgeClient) CallPublic(
 			return nil, err
 		}
 		out["path"] = path
+		out["backend"] = "workbridge"
+		return out, nil
+	case "move_path":
+		source, err := reqString(args, "source")
+		if err != nil {
+			return nil, err
+		}
+		destination, err := reqString(args, "destination")
+		if err != nil {
+			return nil, err
+		}
+		out, err := w.call(ctx, "workspace_move", map[string]any{"source": source, "destination": destination})
+		if err != nil {
+			return nil, err
+		}
+		out["source"] = source
+		out["destination"] = destination
+		out["backend"] = "workbridge"
+		return out, nil
+	case "run_granted_process":
+		executable, err := reqString(args, "executable_grant")
+		if err != nil {
+			return nil, err
+		}
+		workingDir, err := reqString(args, "working_dir")
+		if err != nil {
+			return nil, err
+		}
+		rawArgs, _ := args["args"].([]any)
+		argv := make([]string, len(rawArgs))
+		for i, raw := range rawArgs {
+			argv[i], _ = raw.(string)
+		}
+		out, err := w.call(ctx, "process_run", map[string]any{
+			"executable": executable,
+			"args": argv,
+			"working_dir": workingDir,
+		})
+		if err != nil {
+			return nil, err
+		}
+		out["executable_grant"] = executable
+		out["working_dir"] = workingDir
 		out["backend"] = "workbridge"
 		return out, nil
 	default:
