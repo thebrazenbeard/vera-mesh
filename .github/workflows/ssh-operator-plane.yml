@@ -1,0 +1,38 @@
+name: SSH operator plane
+
+on:
+  pull_request:
+    paths:
+      - "tools/windows_configure_ssh_operator.ps1"
+      - "tools/synology_install_ssh_authorized_key.sh"
+      - "docs/SSH_OPERATOR_PLANE.md"
+      - "reference/veraport_agent/tests/test_ssh_operator_plane.py"
+      - ".github/workflows/ssh-operator-plane.yml"
+  push:
+    branches:
+      - "work/ssh-operator-plane-20260929"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-parse:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Windows installer in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path ".\tools\windows_configure_ssh_operator.ps1"),[ref]$tokens,[ref]$errors) | Out-Null
+          if($errors.Count -gt 0){ $errors | Format-List | Out-String | Write-Error; exit 1 }
+
+  dsm-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse DSM installer
+        run: sh -n tools/synology_install_ssh_authorized_key.sh
+      - name: Run static guard tests
+        run: python -m pytest reference/veraport_agent/tests/test_ssh_operator_plane.py -q
