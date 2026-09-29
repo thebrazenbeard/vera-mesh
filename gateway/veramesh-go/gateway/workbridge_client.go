@@ -288,15 +288,22 @@ func (w *WorkBridgeClient) CanHandlePublic(publicName string, args map[string]an
 	if !w.SupportsPublic(publicName) {
 		return false
 	}
-	pathValue, err := reqString(args, "path")
-	if err != nil || !w.pathAllowed(pathValue) {
-		return false
-	}
 	switch publicName {
 	case "read_file", "write_file":
+		pathValue, err := reqString(args, "path")
+		if err != nil || !w.pathAllowed(pathValue) {
+			return false
+		}
 		encoding := optString(args, "encoding", "utf-8")
 		return strings.EqualFold(encoding, "utf-8") || strings.EqualFold(encoding, "utf8")
+	case "stat_path", "list_directory":
+		pathValue, err := reqString(args, "path")
+		return err == nil && w.pathAllowed(pathValue)
 	case "make_directory":
+		pathValue, err := reqString(args, "path")
+		if err != nil || !w.pathAllowed(pathValue) {
+			return false
+		}
 		parents, err := optBool(args, "parents", true)
 		return err == nil && !parents
 	case "move_path":
@@ -323,7 +330,7 @@ func (w *WorkBridgeClient) CanHandlePublic(publicName string, args map[string]an
 		}
 		return true
 	default:
-		return true
+		return false
 	}
 }
 
