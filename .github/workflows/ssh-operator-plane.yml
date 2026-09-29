@@ -20,6 +20,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Parse Windows installer in Windows PowerShell 5.1
         shell: powershell
         run: |
@@ -35,4 +37,4 @@ jobs:
       - name: Parse DSM installer
         run: sh -n tools/synology_install_ssh_authorized_key.sh
       - name: Run static guard tests
-        run: python -m pytest reference/veraport_agent/tests/test_ssh_operator_plane.py -q
+        run: python -m unittest reference.veraport_agent.tests.test_ssh_operator_plane -v
