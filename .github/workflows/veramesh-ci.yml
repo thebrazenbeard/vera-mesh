@@ -118,7 +118,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Test portable plugin renderer
-        run: python -m unittest -v tools/test_render_veramesh_plugin.py
+      - name: Test portable plugin renderers
+        run: python -m unittest -v tools/test_render_veramesh_plugin.py tools/test_render_lappy_desktop_commander_v3.py
       - name: Compile repository Python tools
         run: python -m compileall -q tools

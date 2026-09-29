@@ -1,0 +1,35 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "lappy-desktop-commander-v3",
+  "version": "1.2.0",
+  "description": "Operate Lappy through the self-hosted VeraMesh/VeraPort connector with filesystem and managed-process tools.",
+  "author": {
+    "name": "Patrick Sims"
+  },
+  "repository": "https://github.com/thebrazenbeard/vera-mesh",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Lappy Desktop Commander V3",
+        "shortDescription": "Self-hosted Lappy control",
+        "longDescription": "Connects ChatGPT and Codex directly to Patrick's self-hosted VeraMesh/VeraPort MCP endpoint. The live MCP tools/list is authoritative, including the currently granted filesystem and managed-process schema; this release intentionally does not bind the stale V2 Apps SDK app.",
+        "developerName": "Patrick Sims",
+        "category": "Productivity",
+        "capabilities": [
+          "Inspect and edit authorized files on Lappy",
+          "Search authorized workstation paths",
+          "Run bounded managed processes",
+          "Start and inspect long-running managed processes",
+          "Read process output and provide process input",
+          "Terminate managed processes",
+          "Use fenced VeraPort lanes and verification"
+        ],
+        "defaultPrompt": [
+          "Inspect Lappy and continue the active work using the self-hosted connector.",
+          "Run the required command on Lappy, inspect its output, and verify the result.",
+          "Use separate fenced lanes for independent Lappy tasks when useful."
+        ]
+      }
+    }
+  }
+}
