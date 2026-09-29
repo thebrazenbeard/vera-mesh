@@ -88,8 +88,17 @@ func newMCPGateway(
 func (g *MCPGateway) Server() *mcp.Server { return g.server }
 
 func (g *MCPGateway) supportsPolicy(policy ToolPolicy) bool {
-	// WorkBridge is an implementation substitute below the existing VeraMesh
-	// public-policy ceiling. Backend substitution must never widen a tool/scope.
+	// WorkBridge is normally an implementation substitute below the existing
+	// VeraMesh public-policy ceiling. run_granted_process is intentionally a
+	// separate narrower WorkBridge-native tool and still requires the outer
+	// process capability plus an actually discovered upstream tool.
+	if policy.Name == "run_granted_process" {
+		if g.workbridge == nil || !g.workbridge.SupportsPublic(policy.Name) {
+			return false
+		}
+		_, ok := g.controller.Config().RequestedSet()["process.exec"]
+		return ok
+	}
 	return ToolSupported(g.controller.Config(), policy)
 }
 
@@ -630,6 +639,12 @@ func inputSchema(name string) map[string]any {
 		return obj(map[string]any{"path":nonEmptyString(),"old_string":stringProp(),"new_string":stringProp(),"expected_count":integer(0),"encoding":nonEmptyString()},"path","old_string","new_string")
 	case "run_process":
 		return obj(map[string]any{"argv":argv,"cwd":nonEmptyString(),"timeout_s":number(0.01)},"argv","cwd")
+	case "run_granted_process":
+		return obj(map[string]any{
+			"executable_grant":nonEmptyString(),
+			"args":map[string]any{"type":"array","items":map[string]any{"type":"string"}},
+			"working_dir":nonEmptyString(),
+		},"executable_grant","args","working_dir")
 	case "start_process":
 		return obj(map[string]any{"argv":argv,"cwd":nonEmptyString(),"max_runtime_s":number(0.01)},"argv","cwd")
 	case "process_status", "release_process":
