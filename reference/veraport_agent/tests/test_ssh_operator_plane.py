@@ -22,6 +22,10 @@ def test_dsm_script_preserves_synology_ssh_authority():
     assert "synopkg" not in text and "synosystemctl start" not in text
     assert "permitrootlogin" not in text and "passwordauthentication" not in text
     assert "sshd_config" not in text
+    assert "--root-key" in text
+    assert "/root/.ssh" in text
+    assert "root:root" in text
+    assert "sudoers" not in text
 
 def test_no_private_key_material_is_embedded():
     joined = WIN.read_text(encoding="utf-8") + DSM.read_text(encoding="utf-8")
