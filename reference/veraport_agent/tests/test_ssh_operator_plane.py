@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 WIN = ROOT / "tools" / "windows_configure_ssh_operator.ps1"
 DSM = ROOT / "tools" / "synology_install_ssh_authorized_key.sh"
+CLIENT = ROOT / "tools" / "windows_bootstrap_dsm_ssh_client.ps1"
 
 class SSHOperatorPlaneTests(unittest.TestCase):
     def test_windows_ssh_operator_is_keyed_narrow_and_validates_config(self):
@@ -38,8 +39,20 @@ class SSHOperatorPlaneTests(unittest.TestCase):
         self.assertIn("root:root", text)
         self.assertNotIn("sudoers", text)
 
+    def test_windows_dsm_client_pins_host_key_and_keeps_private_key_local(self):
+        text = CLIENT.read_text(encoding="utf-8").lower()
+        self.assertIn("ssh-keyscan.exe", text)
+        self.assertIn("expectedhostkeyfingerprint", text)
+        self.assertIn("stricthostkeychecking yes", text)
+        self.assertIn("batchmode yes", text)
+        self.assertIn("identitiesonly yes", text)
+        self.assertIn("s-1-5-18", text)
+        self.assertIn("s-1-5-32-544", text)
+        self.assertIn("-root", text)
+        self.assertNotIn("get-content -literalpath $keypath -raw", text)
+
     def test_no_private_key_material_is_embedded(self):
-        joined = WIN.read_text(encoding="utf-8") + DSM.read_text(encoding="utf-8")
+        joined = WIN.read_text(encoding="utf-8") + DSM.read_text(encoding="utf-8") + CLIENT.read_text(encoding="utf-8")
         self.assertNotIn("BEGIN OPENSSH PRIVATE KEY", joined)
         self.assertNotIn("BEGIN RSA PRIVATE KEY", joined)
 

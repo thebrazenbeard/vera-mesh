@@ -25,3 +25,11 @@ Private keys are never committed. Hold the private key on the trusted operator/c
 Ordinary OpenSSH can be reached over LAN or Tailscale networking when host policy permits. This design does not depend on Tailscale SSH.
 
 SSH and VeraMesh/WorkBridge are intentionally independent so either plane can repair the other. Source, build, install, runtime, and effect remain separate.
+
+## Lappy to DS216 SSH hop
+
+`tools/windows_bootstrap_dsm_ssh_client.ps1` creates a machine-held Ed25519 client identity under ProgramData, protected to SYSTEM and Administrators. It never prints the private key.
+
+Host trust is two-phase. `-InspectHostKey` performs a read-only key scan and reports SHA-256 fingerprints. `-Apply` refuses to proceed without an explicit expected fingerprint and stores only the matching host-key line. It then writes strict admin and `-root` SSH aliases using BatchMode, IdentitiesOnly, and StrictHostKeyChecking.
+
+The generated public key is emitted so it can be installed on DSM with `synology_install_ssh_authorized_key.sh`. If DSM was configured with `--root-key`, the `<alias>-root` target provides noninteractive root once the key is installed. Possession of the machine-held private key is therefore root-equivalent for the NAS in that mode.
