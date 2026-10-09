@@ -53,6 +53,8 @@ class LappyPluginRenderTests(unittest.TestCase):
             "https://mesh.example:99999/token/mcp",
             "https://mesh.example:invalid/token/mcp",
             "https://mesh.example:0/token/mcp",
+            "https://[::1/token/mcp",
+            "https://[::1]]/token/mcp",
             "https://mesh.example/path\\n/mcp",
             "https://mesh.example\\\\attacker/token/mcp",
         ):
