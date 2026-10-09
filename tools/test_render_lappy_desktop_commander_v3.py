@@ -50,6 +50,11 @@ class LappyPluginRenderTests(unittest.TestCase):
             "https://mesh.example/token",
             "https://user@mesh.example/token/mcp",
             "https://mesh.example/token/mcp?x=1",
+            "https://mesh.example:99999/token/mcp",
+            "https://mesh.example:invalid/token/mcp",
+            "https://mesh.example:0/token/mcp",
+            "https://mesh.example/path\\n/mcp",
+            "https://mesh.example\\\\attacker/token/mcp",
         ):
             with self.subTest(value=value):
                 with self.assertRaises(LappyPluginRenderError):
