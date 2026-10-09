@@ -14,9 +14,17 @@ class LappyPluginRenderError(RuntimeError):
 def validate_mcp_url(value: str) -> str:
     if not isinstance(value, str) or not value:
         raise LappyPluginRenderError("MCP URL is required")
+    if any(ch.isspace() or ord(ch) < 32 or ch == "\\\\" for ch in value):
+        raise LappyPluginRenderError("MCP URL contains whitespace, controls, or backslash")
     parsed = urlsplit(value)
     if parsed.scheme != "https" or not parsed.hostname:
         raise LappyPluginRenderError("MCP URL must be absolute HTTPS")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise LappyPluginRenderError("MCP URL port is malformed") from exc
+    if port == 0:
+        raise LappyPluginRenderError("MCP URL port must be nonzero")
     if not parsed.path or not parsed.path.endswith("/mcp"):
         raise LappyPluginRenderError("MCP URL path must end with /mcp")
     if parsed.path.endswith("//mcp"):
