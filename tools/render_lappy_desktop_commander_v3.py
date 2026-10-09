@@ -14,7 +14,7 @@ class LappyPluginRenderError(RuntimeError):
 def validate_mcp_url(value: str) -> str:
     if not isinstance(value, str) or not value:
         raise LappyPluginRenderError("MCP URL is required")
-    if any(ch.isspace() or ord(ch) < 32 or ch == "\\\\" for ch in value):
+    if any(ch.isspace() or ord(ch) < 32 or ch == "\\" for ch in value):
         raise LappyPluginRenderError("MCP URL contains whitespace, controls, or backslash")
     parsed = urlsplit(value)
     if parsed.scheme != "https" or not parsed.hostname:
