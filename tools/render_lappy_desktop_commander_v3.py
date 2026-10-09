@@ -16,8 +16,12 @@ def validate_mcp_url(value: str) -> str:
         raise LappyPluginRenderError("MCP URL is required")
     if any(ch.isspace() or ord(ch) < 32 or ch == "\\" for ch in value):
         raise LappyPluginRenderError("MCP URL contains whitespace, controls, or backslash")
-    parsed = urlsplit(value)
-    if parsed.scheme != "https" or not parsed.hostname:
+    try:
+        parsed = urlsplit(value)
+        host = parsed.hostname
+    except ValueError as exc:
+        raise LappyPluginRenderError("MCP URL has malformed authority or IPv6 syntax") from exc
+    if parsed.scheme != "https" or not host:
         raise LappyPluginRenderError("MCP URL must be absolute HTTPS")
     try:
         port = parsed.port
