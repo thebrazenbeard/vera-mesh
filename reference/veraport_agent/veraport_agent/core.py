@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+import math
 from dataclasses import dataclass
 from enum import StrEnum
 from threading import RLock
@@ -97,8 +98,8 @@ class LaneRegistry:
     ) -> Lane:
         if not lane_id.strip() or not task_id.strip():
             raise ValueError("lane_id and task_id are required")
-        if ttl_s <= 0:
-            raise ValueError("ttl_s must be positive")
+        if type(ttl_s) not in (int, float) or not math.isfinite(ttl_s) or ttl_s <= 0:
+            raise ValueError("ttl_s must be positive and finite")
         requested = frozenset(capabilities)
         if not requested.issubset(self._session_capabilities):
             extra = sorted(requested - self._session_capabilities)
@@ -138,8 +139,8 @@ class LaneRegistry:
             return lane
 
     def renew(self, lane_id: str, fencing_token: int, *, ttl_s: float = 300.0, now: float | None = None) -> Lane:
-        if ttl_s <= 0:
-            raise ValueError("ttl_s must be positive")
+        if type(ttl_s) not in (int, float) or not math.isfinite(ttl_s) or ttl_s <= 0:
+            raise ValueError("ttl_s must be positive and finite")
         current_time = time.monotonic() if now is None else now
         with self._lock:
             lane = self._require_lane_locked(lane_id, fencing_token, current_time)
