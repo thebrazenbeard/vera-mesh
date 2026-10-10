@@ -1,0 +1,19 @@
+{
+  "schema": "BT2_CROSS_REPO_FRONTIER_V1",
+  "repository": "thebrazenbeard/vera-mesh",
+  "source_baseline": {
+    "observed_sha": "0d22be6fc54243498f9b7db16a7c18eff95d9f33",
+    "source_only": true
+  },
+  "lane": "transport-and-workstation",
+  "objective": "Qualify malformed address/authority inputs before persistent workstation transport setup.",
+  "acceptance_invariant": "Transport connectivity is not application authorization or verified recipient completion.",
+  "release_gates": {
+    "source_test": "REQUIRED",
+    "exact_head_review": "REQUIRED",
+    "installed_runtime": "NOT_CLAIMED",
+    "protected_effect_authority": false
+  },
+  "kind": "ADVISORY_SOURCE_ONLY",
+  "observed_at": "2026-10-09"
+}
