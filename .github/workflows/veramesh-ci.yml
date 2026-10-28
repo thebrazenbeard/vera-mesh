@@ -13,14 +13,14 @@ on:
       - "conformance/**"
       - "gateway/veramesh-go/**"
       - "tools/*.py"
-      - ".github/workflows/veramesh-ci.yml"
+      - ".github/workflows/**"
   pull_request:
     paths:
       - "protocol/**"
       - "conformance/**"
       - "gateway/veramesh-go/**"
       - "tools/*.py"
-      - ".github/workflows/veramesh-ci.yml"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -39,8 +39,8 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -66,8 +66,8 @@ jobs:
       run:
         working-directory: gateway/veramesh-go
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.25.x"
           cache: false
@@ -84,14 +84,14 @@ jobs:
     name: Real WorkBridge / VeraMesh HTTP integration
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: thebrazenbeard/WorkBridgeMCP
           ref: d9e8881ca6ffa17ea5b98a6af8c0ef2b2d171f15
           path: workbridge-source
           persist-credentials: false
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.25.12"
           cache: false
@@ -114,11 +114,13 @@ jobs:
     name: Repository tooling
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
       - name: Test portable plugin renderer
         run: python -m unittest -v tools/test_render_veramesh_plugin.py
+      - name: Verify immutable GitHub Action references
+        run: python -m unittest -v tools/test_workflow_action_pins.py
       - name: Compile repository Python tools
         run: python -m compileall -q tools
