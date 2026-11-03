@@ -244,17 +244,20 @@ async def doctor(
                         DoctorCheck("live_veraport", "FAIL", str(exc))
                     )
                 else:
-                    selected = machine_info.get("selected_path_id")
-                    paths = machine_info.get("paths")
-                    current = next(
-                        (
-                            item
-                            for item in paths
-                            if isinstance(item, dict)
-                            and item.get("path_id") == selected
-                        ),
-                        None,
-                    ) if isinstance(paths, list) else None
+                    selected = machine_info.get("selected_path_id") if isinstance(machine_info, dict) else None
+                    paths = machine_info.get("paths") if isinstance(machine_info, dict) else None
+                    matched = (
+                        [item for item in paths
+                         if isinstance(item, dict)
+                         and type(item.get("path_id")) is str
+                         and item.get("path_id") == selected]
+                        if type(selected) is str and bool(selected.strip())
+                        and isinstance(paths, list) and len(paths) <= 1000
+                        else []
+                    )
+                    # A duplicate selected path is ambiguous: do not take
+                    # whichever unverifiable claim appears first.
+                    current = matched[0] if len(matched) == 1 else None
                     if (
                         not isinstance(current, dict)
                         or current.get("authenticated") is not True
