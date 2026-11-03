@@ -36,6 +36,30 @@ class DoctorCheck:
     detail: str
 
 
+_REMOTE_READY_CHECKS = frozenset({
+    "service_config", "controller_config", "tunnel_config", "cross_binding",
+    "process_policy", "windows_acl", "live_veraport", "tunnel_runtime",
+})
+
+
+def remote_ready_from_checks(checks: list[DoctorCheck] | tuple[DoctorCheck, ...]) -> bool:
+    """Conservative local observation only; never identity/authorization proof.
+
+    A successful offline doctor run intentionally treats unrequested checks as
+    SKIP and returns ``ok=True``. A caller must not promote that result into
+    an available remote host. Require each known check exactly once and PASS,
+    including the live authenticated path and tunnel runtime probes.
+    """
+
+    if not isinstance(checks, (list, tuple)) or len(checks) != len(_REMOTE_READY_CHECKS):
+        return False
+    if any(type(item) is not DoctorCheck or type(item.name) is not str
+           or item.name not in _REMOTE_READY_CHECKS or type(item.state) is not str
+           or item.state != "PASS" for item in checks):
+        return False
+    return len({item.name for item in checks}) == len(_REMOTE_READY_CHECKS)
+
+
 def _public_numbers_from_private(path: Path):
     key = serialization.load_pem_private_key(
         path.read_bytes(),
@@ -304,6 +328,7 @@ async def doctor(
     return {
         "schema": "VERAMESH_DOCTOR_V1",
         "ok": ok,
+        "remote_ready": remote_ready_from_checks(mutable),
         "checks": [asdict(item) for item in mutable],
         "machine_info": machine_info,
         "tunnel_status": tunnel_state,
@@ -312,6 +337,7 @@ async def doctor(
             "A PASS does not install/start services or create a tunnel.",
             "Live VeraPort PASS does not imply ChatGPT tunnel registration.",
             "Tunnel runtime PASS does not imply VeraPort data-plane PASS unless live_veraport also passes.",
+            "remote_ready is a conservative local diagnostic, not signed host attestation or authorization.",
         ],
     }
 
